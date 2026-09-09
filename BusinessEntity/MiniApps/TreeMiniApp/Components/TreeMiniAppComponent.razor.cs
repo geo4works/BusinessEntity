@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.JSInterop;
 using ReactiveUI;
+using System.Globalization;
 using System.Text.Json;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Components
@@ -67,6 +68,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private string ValidationErrorMessage { get; set; } = string.Empty;
         private CancellationTokenSource? _pendingOpenDocumentCts;
         private const int SingleClickOpenDelayMs = 350;
+        private static readonly StringComparer TreeNodeTitleComparer = StringComparer.Create(new CultureInfo("ru-RU"), ignoreCase: true);
         
         protected override async Task OnInitializedAsync()
         {
@@ -266,7 +268,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 childNodes.Add(childNode);
             }
 
-            rootVm.Children = childNodes;
+            rootVm.Children = SortTreeChildren(childNodes);
             // Индексируем корневой элемент пространства
             _nodeById[snapshot.Space.Id] = rootVm;
             return rootVm;
@@ -322,8 +324,45 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 childNodes.Add(childNode);
             }
 
-            treeNodeVm.Children = childNodes;
+            treeNodeVm.Children = SortTreeChildren(childNodes);
             return treeNodeVm;
+        }
+
+        private static List<TreeNodeItemViewModelBase> SortTreeChildren(IEnumerable<TreeNodeItemViewModelBase> children)
+        {
+            return children
+                .OrderBy(GetTreeNodeSortGroup)
+                .ThenBy(GetTreeNodeSortTitle, TreeNodeTitleComparer)
+                .ThenBy(node => node.Entity?.Id ?? Guid.Empty)
+                .ToList();
+        }
+
+        private static int GetTreeNodeSortGroup(TreeNodeItemViewModelBase node)
+        {
+            return node.Entity?.EntityType == BusinessEntityTypeEnum.Folder ? 0 : 1;
+        }
+
+        private static string GetTreeNodeSortTitle(TreeNodeItemViewModelBase node)
+        {
+            return node.Title ?? node.Entity?.Name ?? string.Empty;
+        }
+
+        private static void InsertTreeChildSorted(TreeNodeItemViewModelBase parentNode, TreeNodeItemViewModelBase childNode)
+        {
+            parentNode.Children.Add(childNode);
+            SortTreeChildrenInPlace(parentNode);
+        }
+
+        private static void SortTreeChildrenInPlace(TreeNodeItemViewModelBase? parentNode)
+        {
+            if (parentNode?.Children == null || parentNode.Children.Count < 2)
+            {
+                return;
+            }
+
+            var sortedChildren = SortTreeChildren(parentNode.Children);
+            parentNode.Children.Clear();
+            parentNode.Children.AddRange(sortedChildren);
         }
 
         private string GetEntityIcon(object entityType)
@@ -1055,8 +1094,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                             OnEntityRenameRequested = OnEntityRenameRequestedAsync // Устанавливаем колбэк для переименования новой папки
                         };
                         
-                        // Добавляем новую ноду в дерево
-                        parentNode.Children.Add(childNode);
+                        // Добавляем новую ноду в дерево с учетом общего порядка отображения.
+                        InsertTreeChildSorted(parentNode, childNode);
                         await SetFolderExpandedAsync(parentNode, true);
                         // Индексируем новую ноду
                         _nodeById[newEntity.Id] = childNode;
@@ -1084,7 +1123,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                             };
 
                             // Добавляем в дерево и разворачиваем родителя
-                            parentNode.Children.Add(docNode);
+                            InsertTreeChildSorted(parentNode, docNode);
                             await SetFolderExpandedAsync(parentNode, true);
                             // Индексируем новую ноду
                             _nodeById[newDoc.Id] = docNode;
@@ -1110,7 +1149,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                                 OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync
                             };
 
-                            parentNode.Children.Add(richDocNode);
+                            InsertTreeChildSorted(parentNode, richDocNode);
                             await SetFolderExpandedAsync(parentNode, true);
                             _nodeById[newRichDocument.Id] = richDocNode;
 
@@ -1795,9 +1834,11 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                                     if (renamedEntity != null)
                                     {
                                         WebLogger?.Information($"notnull");
+                                        var parentNode = EditingNode.Parent;
                                         // Обновляем имя в узле дерева
                                         EditingNode.Title = newName;
                                         EditingNode.Entity.Name = newName;
+                                        SortTreeChildrenInPlace(parentNode);
                                         WebLogger?.Information($"Successfully renamed entityData to '{newName}'");
                                     }
                                     else

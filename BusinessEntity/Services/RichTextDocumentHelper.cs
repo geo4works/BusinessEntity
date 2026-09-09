@@ -639,6 +639,13 @@ namespace BusinessEntity.Services
 
                 var converted = await _htmlToRichTextBlocksConverter.ConvertHtmlAsync(draft.Html ?? string.Empty, ct);
                 var blocks = converted.Blocks ?? new List<RichTextBlock>();
+                var dataJson = RichTextChunkStorageSerializer.SerializeChunkData(blocks);
+                var checksum = RichTextChunkStorageSerializer.BuildChecksum(dataJson);
+                if (IsSameChunkData(chunkDto, dataJson, checksum))
+                {
+                    continue;
+                }
+
                 if (converted.Files.Count > 0)
                 {
                     // Inline HTML save may import data-uri/http images into embedded files before chunk JSON references them.
@@ -648,8 +655,6 @@ namespace BusinessEntity.Services
                         replaceExistingFiles: false,
                         ct);
                 }
-
-                var dataJson = RichTextChunkStorageSerializer.SerializeChunkData(blocks);
 
                 var now = DateTime.UtcNow;
                 var newChunkDto = new BusinessEntityDataChunkDto
@@ -666,7 +671,7 @@ namespace BusinessEntity.Services
                     CharCount = RichTextChunkStorageSerializer.BuildCharCount(blocks),
                     DataSizeBytes = DataPayloadEnvelopeSerializer.GetJsonLength(dataJson),
                     Version = nextDocumentVersion,
-                    Checksum = RichTextChunkStorageSerializer.BuildChecksum(dataJson)
+                    Checksum = checksum
                 };
                 newChunkDto.HtmlCache = RichTextChunkStorageSerializer.BuildHtmlCache(entityId, newChunkDto.Id, blocks);
 
@@ -1458,6 +1463,18 @@ namespace BusinessEntity.Services
                     .First())
                 .OrderBy(d => d.SortOrder)
                 .ToList();
+        }
+
+        private static bool IsSameChunkData(BusinessEntityDataChunkDto chunkDto, string dataJson, string checksum)
+        {
+            if (!string.IsNullOrWhiteSpace(chunkDto.Checksum) &&
+                string.Equals(chunkDto.Checksum, checksum, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return string.IsNullOrWhiteSpace(chunkDto.Checksum) &&
+                   string.Equals(chunkDto.Data, dataJson, StringComparison.Ordinal);
         }
 
         /// <summary>

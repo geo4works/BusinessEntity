@@ -165,6 +165,11 @@ const RichTextTableCell = TableCell.extend({
                 default: false,
                 parseHTML: element => element.getAttribute("data-rich-table-row-number") === "true",
                 renderHTML: attributes => attributes.rowNumber ? { "data-rich-table-row-number": "true" } : {}
+            },
+            cellBackground: {
+                default: null,
+                parseHTML: element => readCellBackground(element),
+                renderHTML: attributes => renderCellBackground(attributes)
             }
         };
     }
@@ -186,6 +191,11 @@ const RichTextTableHeader = TableHeader.extend({
                 default: false,
                 parseHTML: element => element.getAttribute("data-rich-table-row-number") === "true",
                 renderHTML: attributes => attributes.rowNumber ? { "data-rich-table-row-number": "true" } : {}
+            },
+            cellBackground: {
+                default: null,
+                parseHTML: element => readCellBackground(element),
+                renderHTML: attributes => renderCellBackground(attributes)
             }
         };
     }
@@ -216,6 +226,19 @@ const extensions = [
 const registries = new Map();
 const editorDebugContexts = new WeakMap();
 let activeImageMenu = null;
+let activeCellBackgroundPalette = null;
+
+const cellBackgroundPalette = [
+    { label: "Без заливки", color: null },
+    { label: "Серый", color: "#f1f3f5" },
+    { label: "Желтый", color: "#fff3bf" },
+    { label: "Красный", color: "#ffe3e3" },
+    { label: "Зеленый", color: "#d3f9d8" },
+    { label: "Синий", color: "#d0ebff" },
+    { label: "Фиолетовый", color: "#e5dbff" },
+    { label: "Розовый", color: "#ffdeeb" },
+    { label: "Оранжевый", color: "#ffe8cc" }
+];
 
 function getRegistry(viewportElementId) {
     let registry = registries.get(viewportElementId);
@@ -282,6 +305,22 @@ function setToolbarTableControlsVisible(toolbar, visible) {
         });
 }
 
+function setToolbarCellBackgroundState(toolbar, editor) {
+    const button = toolbar.querySelector("[data-rich-text-editor-command=\"openCellBackgroundPalette\"]");
+    if (!button) {
+        return;
+    }
+
+    const color = getCurrentCellBackground(editor);
+    const swatch = button.querySelector("[data-rich-text-cell-background-swatch]");
+    if (swatch) {
+        swatch.style.background = color ?? "";
+        swatch.classList.toggle("rich-text-document-editor__cell-fill-swatch--empty", !color);
+    }
+
+    button.classList.toggle("rich-text-document-editor__toggle-button--active", !!color);
+}
+
 function syncToolbarState(viewportElementId, registry, editor) {
     ensureToolbarGuard(viewportElementId, registry);
 
@@ -301,6 +340,7 @@ function syncToolbarState(viewportElementId, registry, editor) {
         toolbar,
         "toggleTableRowNumbers",
         tableInfo && isTableRowNumberingEnabled(tableInfo.node));
+    setToolbarCellBackgroundState(toolbar, editor);
 }
 
 function toSortOrder(value) {
@@ -343,6 +383,71 @@ function normalizeColumnWidths(value) {
 function renderColumnWidths(attributes) {
     const widths = normalizeColumnWidths(attributes?.colwidth);
     return widths ? { "data-colwidth": widths.join(",") } : {};
+}
+
+function normalizeCellBackground(value) {
+    if (value == null) {
+        return null;
+    }
+
+    const text = String(value).trim();
+    if (!text || text.toLowerCase() === "transparent" || text.toLowerCase() === "none") {
+        return null;
+    }
+
+    const match = text.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!match) {
+        return null;
+    }
+
+    const hex = match[1].toLowerCase();
+    return hex.length === 3
+        ? `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`
+        : `#${hex}`;
+}
+
+function readCssDeclaration(styleText, propertyName) {
+    if (typeof styleText !== "string" || styleText.trim().length === 0) {
+        return "";
+    }
+
+    const normalizedPropertyName = propertyName.toLowerCase();
+    for (const declaration of styleText.split(";")) {
+        const separatorIndex = declaration.indexOf(":");
+        if (separatorIndex < 0) {
+            continue;
+        }
+
+        const name = declaration.slice(0, separatorIndex).trim().toLowerCase();
+        if (name !== normalizedPropertyName) {
+            continue;
+        }
+
+        return declaration.slice(separatorIndex + 1).trim();
+    }
+
+    return "";
+}
+
+function readCellBackground(element) {
+    if (!element) {
+        return null;
+    }
+
+    return normalizeCellBackground(element.getAttribute("data-rich-cell-background")) ??
+        normalizeCellBackground(readCssDeclaration(element.getAttribute("style") ?? "", "background-color")) ??
+        normalizeCellBackground(readCssDeclaration(element.getAttribute("style") ?? "", "background")) ??
+        normalizeCellBackground(element.getAttribute("bgcolor"));
+}
+
+function renderCellBackground(attributes) {
+    const color = normalizeCellBackground(attributes?.cellBackground);
+    return color
+        ? {
+            "data-rich-cell-background": color,
+            style: `background-color: ${color};`
+        }
+        : {};
 }
 
 function isTableDebugEnabled() {
@@ -1219,6 +1324,20 @@ function hideImageSizeMenu() {
     menu.element.remove();
 }
 
+function hideCellBackgroundPalette() {
+    if (!activeCellBackgroundPalette) {
+        return;
+    }
+
+    const palette = activeCellBackgroundPalette;
+    activeCellBackgroundPalette = null;
+    document.removeEventListener("mousedown", palette.onDocumentMouseDown, true);
+    document.removeEventListener("keydown", palette.onDocumentKeyDown, true);
+    window.removeEventListener("resize", palette.onWindowChange, true);
+    window.removeEventListener("scroll", palette.onWindowChange, true);
+    palette.element.remove();
+}
+
 function handleImageContextMenu(registry, sortOrder, event) {
     const target = event.target instanceof Element ? event.target : null;
     const image = target?.closest("span.rich-text-inline-image, span.rich-text-inline-image img, img[data-rich-image-id], p.rich-text-image img");
@@ -1277,6 +1396,7 @@ function findImageNodePosition(editor, imageElement) {
 
 function showImageSizeMenu(editor, position, event) {
     hideImageSizeMenu();
+    hideCellBackgroundPalette();
 
     const menu = document.createElement("div");
     menu.style.position = "fixed";
@@ -1394,6 +1514,139 @@ function setImageWidth(editor, position, width) {
     editor.view.dispatch(transaction);
     editor.view.focus();
     hideImageSizeMenu();
+}
+
+function showCellBackgroundPalette(viewportElementId, registry) {
+    hideCellBackgroundPalette();
+    hideImageSizeMenu();
+
+    const editor = getActiveEditor(registry);
+    if (!editor || !findSelectedTable(editor)) {
+        return;
+    }
+
+    const toolbar = getEditorToolbar(viewportElementId);
+    const trigger = toolbar?.querySelector("[data-rich-text-editor-command=\"openCellBackgroundPalette\"]");
+    if (!trigger) {
+        return;
+    }
+
+    const menu = document.createElement("div");
+    menu.className = "rich-text-cell-background-palette";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Заливка ячеек");
+
+    const currentColor = getCurrentCellBackground(editor);
+    for (const item of cellBackgroundPalette) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = item.color
+            ? "rich-text-cell-background-palette__item"
+            : "rich-text-cell-background-palette__item rich-text-cell-background-palette__item--clear";
+        button.title = item.label;
+        button.setAttribute("aria-label", item.label);
+        button.setAttribute("role", "menuitem");
+        button.setAttribute("data-rich-cell-background-color", item.color ?? "");
+        button.classList.toggle("rich-text-cell-background-palette__item--selected", currentColor === item.color);
+        button.addEventListener("mousedown", event => event.preventDefault());
+        button.addEventListener("click", () => setSelectedCellBackground(viewportElementId, registry, item.color));
+
+        const swatch = document.createElement("span");
+        swatch.className = item.color
+            ? "rich-text-cell-background-palette__swatch"
+            : "rich-text-cell-background-palette__swatch rich-text-cell-background-palette__swatch--clear";
+        if (item.color) {
+            swatch.style.backgroundColor = item.color;
+        }
+
+        button.appendChild(swatch);
+        if (!item.color) {
+            const label = document.createElement("span");
+            label.className = "rich-text-cell-background-palette__clear-label";
+            label.textContent = "Сброс";
+            button.appendChild(label);
+        }
+
+        menu.appendChild(button);
+    }
+
+    document.body.appendChild(menu);
+    positionPaletteNearElement(menu, trigger);
+
+    const paletteState = {
+        element: menu,
+        onDocumentMouseDown: event => {
+            if (!menu.contains(event.target) && !trigger.contains(event.target)) {
+                hideCellBackgroundPalette();
+            }
+        },
+        onDocumentKeyDown: event => {
+            if (event.key === "Escape") {
+                hideCellBackgroundPalette();
+            }
+        },
+        onWindowChange: () => hideCellBackgroundPalette()
+    };
+
+    activeCellBackgroundPalette = paletteState;
+    document.addEventListener("mousedown", paletteState.onDocumentMouseDown, true);
+    document.addEventListener("keydown", paletteState.onDocumentKeyDown, true);
+    window.addEventListener("resize", paletteState.onWindowChange, true);
+    window.addEventListener("scroll", paletteState.onWindowChange, true);
+}
+
+function positionPaletteNearElement(menu, trigger) {
+    const margin = 8;
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const left = Math.min(triggerRect.left, window.innerWidth - menuRect.width - margin);
+    const top = Math.min(triggerRect.bottom + 4, window.innerHeight - menuRect.height - margin);
+    menu.style.left = `${Math.max(margin, left)}px`;
+    menu.style.top = `${Math.max(margin, top)}px`;
+}
+
+function setSelectedCellBackground(viewportElementId, registry, color) {
+    const editor = getActiveEditor(registry);
+    if (!editor) {
+        hideCellBackgroundPalette();
+        return;
+    }
+
+    const normalizedColor = normalizeCellBackground(color);
+    if (!findSelectedTable(editor)) {
+        hideCellBackgroundPalette();
+        return;
+    }
+
+    editor.chain().focus().setCellAttribute("cellBackground", normalizedColor).run();
+    syncToolbarState(viewportElementId, registry, editor);
+    hideCellBackgroundPalette();
+}
+
+function getCurrentCellBackground(editor) {
+    if (!editor) {
+        return null;
+    }
+
+    const selection = editor.state.selection;
+    const selectedCellNode = selection?.$anchorCell?.nodeAfter ?? null;
+    if (selectedCellNode?.type?.name === "tableCell" || selectedCellNode?.type?.name === "tableHeader") {
+        return normalizeCellBackground(selectedCellNode.attrs?.cellBackground);
+    }
+
+    const resolved = selection?.$from;
+    if (!resolved) {
+        return null;
+    }
+
+    for (let depth = resolved.depth; depth > 0; depth--) {
+        const node = resolved.node(depth);
+        if (node?.type?.name === "tableCell" || node?.type?.name === "tableHeader") {
+            return normalizeCellBackground(node.attrs?.cellBackground);
+        }
+    }
+
+    return null;
 }
 
 function createEditor(viewportElementId, registry, host, item) {
@@ -1580,6 +1833,7 @@ function collectEditors(viewportElementId) {
 
 function destroyEditors(viewportElementId) {
     hideImageSizeMenu();
+    hideCellBackgroundPalette();
 
     const registry = registries.get(viewportElementId);
     if (!registry) {
@@ -1628,6 +1882,11 @@ function getActiveEditor(registry) {
 function runCommand(viewportElementId, command) {
     const registry = registries.get(viewportElementId);
     if (!registry) {
+        return;
+    }
+
+    if (command === "openCellBackgroundPalette") {
+        showCellBackgroundPalette(viewportElementId, registry);
         return;
     }
 

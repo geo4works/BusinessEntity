@@ -38,6 +38,18 @@
                 data-rich-text-editor-table-control="true"
                 aria-pressed="false"
                 @onclick='@(() => RunEditorCommandAsync("toggleTableRowNumbers"))'>№</button>
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary rich-text-document-editor__toggle-button rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden"
+                title="Заливка ячеек"
+                data-rich-text-editor-command="openCellBackgroundPalette"
+                data-rich-text-editor-table-control="true"
+                aria-haspopup="menu"
+                @onclick='@(() => RunEditorCommandAsync("openCellBackgroundPalette"))'>
+            <span class="rich-text-document-editor__cell-fill-swatch rich-text-document-editor__cell-fill-swatch--empty"
+                  data-rich-text-cell-background-swatch
+                  aria-hidden="true"></span>
+            <span>BG</span>
+        </button>
         <button type="button" class="btn btn-sm btn-outline-secondary rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden" title="Добавить строку" data-rich-text-editor-table-control="true" @onclick='@(() => RunEditorCommandAsync("addTableRow"))'>R+</button>
         <button type="button" class="btn btn-sm btn-outline-secondary rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden" title="Удалить строку" data-rich-text-editor-table-control="true" @onclick='@(() => RunEditorCommandAsync("deleteTableRow"))'>R-</button>
         <button type="button" class="btn btn-sm btn-outline-secondary rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden" title="Добавить столбец" data-rich-text-editor-table-control="true" @onclick='@(() => RunEditorCommandAsync("addTableColumn"))'>C+</button>

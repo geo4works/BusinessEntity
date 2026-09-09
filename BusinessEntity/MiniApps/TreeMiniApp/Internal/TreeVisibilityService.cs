@@ -5,6 +5,7 @@ using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Services;
 using BusinessEntity.WebLogger.Services;
+using System.Globalization;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
 {
@@ -12,6 +13,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
     internal sealed class TreeVisibilityService
     {
         private const bool ShowFoldersWithoutVisibleContent = false;
+        private static readonly StringComparer TreeNameComparer = StringComparer.Create(new CultureInfo("ru-RU"), ignoreCase: true);
 
         private readonly BusinessEntityHelper _businessEntityHelper;
         private readonly IWebLoggerService? _webLogger;
@@ -60,7 +62,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
                 }
             }
 
-            return snapshots;
+            return SortTreeSnapshots(snapshots);
         }
 
         private async Task<bool> CanDisplayTreeEntityAsync(
@@ -117,6 +119,15 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         private static bool IsFolderEntity(BusinessEntityTypeEnum entityType)
         {
             return entityType == BusinessEntityTypeEnum.Folder;
+        }
+
+        private static IReadOnlyList<TreeNodeSnapshot> SortTreeSnapshots(IEnumerable<TreeNodeSnapshot> snapshots)
+        {
+            return snapshots
+                .OrderBy(snapshot => IsFolderEntity(snapshot.Entity.EntityType) ? 0 : 1)
+                .ThenBy(snapshot => snapshot.Entity.Name ?? string.Empty, TreeNameComparer)
+                .ThenBy(snapshot => snapshot.Entity.Id)
+                .ToList();
         }
     }
 }

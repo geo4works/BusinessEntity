@@ -456,6 +456,7 @@ namespace BusinessEntity.Services.RichTextImport
                 AppendPositiveIntAttribute(builder, node, "colspan");
                 AppendPositiveIntAttribute(builder, node, "rowspan");
                 AppendColumnWidthsAttribute(builder, node);
+                AppendCellBackgroundAttribute(builder, node);
                 if (IsTruthyAttribute(node, "data-rich-table-row-number"))
                 {
                     builder.Append(" data-rich-table-row-number=\"true\"");
@@ -492,6 +493,93 @@ namespace BusinessEntity.Services.RichTextImport
                     .Append(value)
                     .Append('"');
             }
+        }
+
+        private static void AppendCellBackgroundAttribute(StringBuilder builder, HtmlNode node)
+        {
+            var value = NormalizeCellBackgroundColor(node.GetAttributeValue("data-rich-cell-background", string.Empty));
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                var style = node.GetAttributeValue("style", string.Empty);
+                value = NormalizeCellBackgroundColor(ReadCssDeclaration(style, "background-color"));
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    value = NormalizeCellBackgroundColor(ReadCssDeclaration(style, "background"));
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                value = NormalizeCellBackgroundColor(node.GetAttributeValue("bgcolor", string.Empty));
+            }
+
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                builder.Append(" data-rich-cell-background=\"")
+                    .Append(value)
+                    .Append('"');
+            }
+        }
+
+        private static string ReadCssDeclaration(string? style, string propertyName)
+        {
+            if (string.IsNullOrWhiteSpace(style))
+            {
+                return string.Empty;
+            }
+
+            foreach (var declaration in style.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var separatorIndex = declaration.IndexOf(':');
+                if (separatorIndex < 0)
+                {
+                    continue;
+                }
+
+                var name = declaration[..separatorIndex].Trim();
+                if (!string.Equals(name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return declaration[(separatorIndex + 1)..].Trim();
+            }
+
+            return string.Empty;
+        }
+
+        private static string NormalizeCellBackgroundColor(string? rawValue)
+        {
+            var value = (rawValue ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(value) ||
+                string.Equals(value, "transparent", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            if (value.Length == 4 &&
+                value[0] == '#' &&
+                IsHex(value[1]) &&
+                IsHex(value[2]) &&
+                IsHex(value[3]))
+            {
+                return $"#{char.ToLowerInvariant(value[1])}{char.ToLowerInvariant(value[1])}{char.ToLowerInvariant(value[2])}{char.ToLowerInvariant(value[2])}{char.ToLowerInvariant(value[3])}{char.ToLowerInvariant(value[3])}";
+            }
+
+            if (value.Length == 7 &&
+                value[0] == '#' &&
+                value.Skip(1).All(IsHex))
+            {
+                return value.ToLowerInvariant();
+            }
+
+            return string.Empty;
+        }
+
+        private static bool IsHex(char value)
+        {
+            return value is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F';
         }
 
         private static string NormalizePositiveIntList(string? rawValue)

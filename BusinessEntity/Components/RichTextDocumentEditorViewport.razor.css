@@ -19,6 +19,22 @@
     line-height: 1;
 }
 
+.rich-text-document-editor__cell-fill-swatch {
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.9rem;
+    border: 1px solid #7d8ca1;
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+    vertical-align: -0.1rem;
+}
+
+.rich-text-document-editor__cell-fill-swatch--empty {
+    background:
+        linear-gradient(135deg, transparent 44%, #b42318 45%, #b42318 55%, transparent 56%),
+        #ffffff;
+}
+
 .rich-text-document-editor__toolbar .rich-text-document-editor__toggle-button.active,
 .rich-text-document-editor__toolbar .rich-text-document-editor__toggle-button.rich-text-document-editor__toggle-button--active {
     color: #ffffff;

@@ -39,9 +39,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.AddSingleton<IEntityDataStorageConverterFactory, EntityDataStorageConverterFactory>();
             services.AddSingleton<EntityDataStorageCodec>();
             services.AddSingleton<RichTextDocumentFileStorageService>();
-            services.AddScoped<IDataProviderCrudService, DataProviderService>();
-            services.AddScoped<DataProviderMessageHandler>();
-            services.AddScoped<IDataProviderMiniApp, Facade.DataProviderMiniApp>();
+            services.AddSingleton<IDataProviderCrudService, DataProviderService>();
+            services.AddSingleton<DataProviderMessageHandler>();
+            services.AddSingleton<IDataProviderMiniApp, Facade.DataProviderMiniApp>();
             services.AddScoped<IDataProviderConnector, DataProviderConnector>();
 
             return services;

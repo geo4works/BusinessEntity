@@ -593,6 +593,16 @@ public sealed class GenericBusinessEntityBackupHandler : IBusinessEntityBackupHa
         {
             AppendPositiveIntAttribute(builder, node, "colspan");
             AppendPositiveIntAttribute(builder, node, "rowspan");
+            var cellBackground = NormalizeCellBackgroundColor(node.GetAttributeValue("data-rich-cell-background", string.Empty));
+            if (!string.IsNullOrWhiteSpace(cellBackground))
+            {
+                builder.Append(" data-rich-cell-background=\"")
+                    .Append(cellBackground)
+                    .Append("\" style=\"background-color: ")
+                    .Append(cellBackground)
+                    .Append('"');
+            }
+
             if (IsTruthyAttribute(node, "data-rich-table-row-number"))
             {
                 builder.Append(" data-rich-table-row-number=\"true\"");
@@ -621,6 +631,40 @@ public sealed class GenericBusinessEntityBackupHandler : IBusinessEntityBackupHa
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(value, name, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeCellBackgroundColor(string? rawValue)
+    {
+        var value = (rawValue ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(value) ||
+            string.Equals(value, "transparent", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        if (value.Length == 4 &&
+            value[0] == '#' &&
+            IsHex(value[1]) &&
+            IsHex(value[2]) &&
+            IsHex(value[3]))
+        {
+            return $"#{char.ToLowerInvariant(value[1])}{char.ToLowerInvariant(value[1])}{char.ToLowerInvariant(value[2])}{char.ToLowerInvariant(value[2])}{char.ToLowerInvariant(value[3])}{char.ToLowerInvariant(value[3])}";
+        }
+
+        if (value.Length == 7 &&
+            value[0] == '#' &&
+            value.Skip(1).All(IsHex))
+        {
+            return value.ToLowerInvariant();
+        }
+
+        return string.Empty;
+    }
+
+    private static bool IsHex(char value)
+    {
+        return value is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F';
     }
 
     private static string BuildImageHtml(

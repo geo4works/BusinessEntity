@@ -507,6 +507,7 @@ internal static class RichTextChunkStorageSerializer
 
         if (nodeName is "td" or "th")
         {
+            var styleParts = new List<string>();
             AppendPositiveIntAttribute(builder, node, "colspan");
             AppendPositiveIntAttribute(builder, node, "rowspan");
             var columnWidths = NormalizePositiveIntList(node.GetAttributeValue("data-colwidth", string.Empty));
@@ -521,15 +522,27 @@ internal static class RichTextChunkStorageSerializer
                 var renderedWidth = SumPositiveIntList(columnWidths);
                 if (renderedWidth > 0)
                 {
-                    builder.Append(" style=\"width: ")
-                        .Append(renderedWidth.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                        .Append("px;\"");
+                    styleParts.Add($"width: {renderedWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}px");
                 }
+            }
+
+            var cellBackground = NormalizeCellBackgroundColor(node.GetAttributeValue("data-rich-cell-background", string.Empty));
+            if (!string.IsNullOrWhiteSpace(cellBackground))
+            {
+                builder.Append(" data-rich-cell-background=\"").Append(cellBackground).Append('"');
+                styleParts.Add($"background-color: {cellBackground}");
             }
 
             if (IsTruthyAttribute(node, "data-rich-table-row-number"))
             {
                 builder.Append(" data-rich-table-row-number=\"true\"");
+            }
+
+            if (styleParts.Count > 0)
+            {
+                builder.Append(" style=\"")
+                    .Append(string.Join("; ", styleParts))
+                    .Append('"');
             }
         }
 
@@ -575,6 +588,40 @@ internal static class RichTextChunkStorageSerializer
         }
 
         return total;
+    }
+
+    private static string NormalizeCellBackgroundColor(string? rawValue)
+    {
+        var value = (rawValue ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(value) ||
+            string.Equals(value, "transparent", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        if (value.Length == 4 &&
+            value[0] == '#' &&
+            IsHex(value[1]) &&
+            IsHex(value[2]) &&
+            IsHex(value[3]))
+        {
+            return $"#{char.ToLowerInvariant(value[1])}{char.ToLowerInvariant(value[1])}{char.ToLowerInvariant(value[2])}{char.ToLowerInvariant(value[2])}{char.ToLowerInvariant(value[3])}{char.ToLowerInvariant(value[3])}";
+        }
+
+        if (value.Length == 7 &&
+            value[0] == '#' &&
+            value.Skip(1).All(IsHex))
+        {
+            return value.ToLowerInvariant();
+        }
+
+        return string.Empty;
+    }
+
+    private static bool IsHex(char value)
+    {
+        return value is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F';
     }
 
     private static bool IsTruthyAttribute(HtmlNode node, string name)
