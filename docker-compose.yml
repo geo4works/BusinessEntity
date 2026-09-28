@@ -71,6 +71,9 @@ services:
       AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
       AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?secret key required}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:?bootstrap token required; initialize the environment first}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-akadmin}
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-akadmin@businessentity.local}
     restart: unless-stopped
     shm_size: 512mb
     user: root
@@ -120,13 +123,17 @@ services:
       # Inside the common Docker network, talk to the Authentik service directly via DNS name
       AUTHENTIK_BASE_URL: http://authentic_server:9000
       # What browsers should use to reach Authentik
-      AUTHENTIK_BASE_URL_FOR_BROWSER: http://localhost:9000
-      # API token from Authentik (created via Django shell)
-      AUTHENTIK_API_TOKEN: ecm2ragMCo5vRjIqtdzXXnFARVbeczUyZtkCYrpgBD4dcz4JzfjdLQrL5ksZ
+      AUTHENTIK_BASE_URL_FOR_BROWSER: ${AUTHENTIK_BASE_URL_FOR_BROWSER:-http://localhost:9000}
+      # The worker creates this token before application bootstrap uses the Admin API.
+      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-${AUTHENTIK_BOOTSTRAP_TOKEN:?bootstrap token required}}
+      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID:-business-entity}
+      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:?OIDC client secret required; initialize the environment first}
+      AUTHENTIK_APPLICATION_NAME: ${AUTHENTIK_APPLICATION_NAME:-BusinessEntity}
+      AUTHENTIK_APPLICATION_USERS_GROUP: ${AUTHENTIK_APPLICATION_USERS_GROUP:-GeoUsers}
+      AUTHENTIK_GENERAL_ADMINS_GROUP: ${AUTHENTIK_GENERAL_ADMINS_GROUP:-BusinessEntityAdmins}
       # Redirect URIs for our app (signin-oidc will be auto-added per host)
-      AUTHENTIK_REDIRECT_URIS: http://localhost:7000/auth/callback
-      # Disable bootstrap temporarily to test
-      EnsureAuthentikOnStartup: "false"
+      AUTHENTIK_REDIRECT_URIS: ${AUTHENTIK_REDIRECT_URIS:-http://localhost:7000/auth/callback}
+      EnsureAuthentikOnStartup: ${ENSURE_AUTHENTIK_ON_STARTUP:-true}
       Storage__RootPath: /app/storage
       Storage__HostRootPath: "C:\\Develop\\BusinessEntity\\BusinessEntityStorage"
     volumes:
@@ -136,6 +143,8 @@ services:
         condition: service_healthy
       authentic_server:
         condition: service_healthy
+      authentic_worker:
+        condition: service_started
     networks:
       - common
 

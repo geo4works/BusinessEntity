@@ -23,6 +23,7 @@ internal sealed class UserMiniAppStartupAdminBootstrapper
     private readonly IUserMiniAppRepository<UserGroupMemberDto> _groupMemberRepository;
     private readonly IUserMiniAppRepository<UserRoleAssignmentDto> _roleAssignmentRepository;
     private readonly ILogger<UserMiniAppStartupAdminBootstrapper> _logger;
+    private readonly bool _bootstrapRequired;
 
     // Получает Authentik API client и repositories UserMiniApp для startup-синхронизации администраторов.
     public UserMiniAppStartupAdminBootstrapper(
@@ -33,7 +34,8 @@ internal sealed class UserMiniAppStartupAdminBootstrapper
         IUserMiniAppRepository<UserGroupDto> groupRepository,
         IUserMiniAppRepository<UserGroupMemberDto> groupMemberRepository,
         IUserMiniAppRepository<UserRoleAssignmentDto> roleAssignmentRepository,
-        ILogger<UserMiniAppStartupAdminBootstrapper> logger)
+        ILogger<UserMiniAppStartupAdminBootstrapper> logger,
+        IConfiguration configuration)
     {
         _authentikManagementClient = authentikManagementClient;
         _authentikSessionManager = authentikSessionManager;
@@ -43,6 +45,7 @@ internal sealed class UserMiniAppStartupAdminBootstrapper
         _groupMemberRepository = groupMemberRepository;
         _roleAssignmentRepository = roleAssignmentRepository;
         _logger = logger;
+        _bootstrapRequired = configuration.GetValue<bool>("EnsureAuthentikOnStartup");
     }
 
     // Гарантирует наличие стартовых администраторов в Authentik и локальном user-storage.
@@ -50,6 +53,11 @@ internal sealed class UserMiniAppStartupAdminBootstrapper
     {
         if (!_authentikManagementClient.IsConfigured)
         {
+            if (_bootstrapRequired)
+            {
+                throw new InvalidOperationException("Authentik Admin API token is required for startup bootstrap.");
+            }
+
             _logger.LogWarning("Startup admin users bootstrap skipped: Authentik Admin API token is not configured.");
             return;
         }
@@ -80,10 +88,16 @@ internal sealed class UserMiniAppStartupAdminBootstrapper
 
             await EnsureLocalGroupMemberAsync(localAdmin.Id, localAdminGroup.Id, cancellationToken);
             await EnsureLocalAdminRoleAssignmentAsync(localAdminGroup.Id, cancellationToken);
+            _logger.LogInformation("Startup admin users bootstrap completed.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Startup admin users bootstrap failed.");
+            // Автоматическая установка не должна объявлять готовность без стартовых администраторов.
+            if (_bootstrapRequired || cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
         }
     }
 

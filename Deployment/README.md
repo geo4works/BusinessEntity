@@ -56,4 +56,24 @@ Docker Desktop, Docker Engine, or another Docker-compatible runtime must already
 .\deploy.ps1 stop
 ```
 
-Initial application data is currently created by application startup/bootstrap. Authentik OIDC bootstrap is still a separate deployment task until application bootstrap is implemented as a first-class service.
+The installer generates `AUTHENTIK_BOOTSTRAP_TOKEN` and `AUTHENTIK_CLIENT_SECRET` once
+and preserves them on subsequent runs. The Authentik worker receives the bootstrap
+credentials, while the application uses the same token for the Admin API. Application
+startup waits for default Authentik flows and scope mappings, creates/updates the
+`BusinessEntity` application/catalog group and OIDC provider, and then initializes users.
+
+Initial application accounts are `akadmin` / `akadmin` and `admin` / `admin`.
+The existing admin policy restores the technical `akadmin` password to `akadmin`.
+An existing `admin` account retains its password and profile; missing group membership
+and local role assignments are added. No passwords or tokens are stored in local user DTOs.
+
+Keep the generated `.env` with this installation: changing the bootstrap token does not
+rotate an already created Authentik token. For an existing Authentik with a different
+management token, supply that token as `AUTHENTIK_API_TOKEN`. OIDC provisioning is enabled
+by default through `ENSURE_AUTHENTIK_ON_STARTUP=true`; set it to `false` only for an
+externally configured OIDC provider.
+
+Set `AUTHENTIK_BASE_URL_FOR_BROWSER` and `AUTHENTIK_REDIRECT_URIS` to deployment URLs.
+The first redirect URI is also used by the application during authorization-code login.
+Startup fails visibly if required Authentik provisioning cannot complete; check application
+logs instead of treating a running Authentik health endpoint as a completed installation.

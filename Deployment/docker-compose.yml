@@ -61,6 +61,9 @@ services:
       AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_PG_PASS:?AUTHENTIK_PG_PASS is required}
       AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_PG_USER:-authentik}
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY is required}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:?bootstrap token required; initialize the environment first}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-akadmin}
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-akadmin@businessentity.local}
     restart: unless-stopped
     shm_size: 512mb
     volumes:
@@ -118,9 +121,15 @@ services:
       ConnectionStrings__DockerConnection: Host=postgres-production-db;Port=5432;Database=${BE_DB_NAME:-business_entity};Username=${BE_DB_USER:-adm01};Password=${BE_DB_PASSWORD:?BE_DB_PASSWORD is required}
       AUTHENTIK_BASE_URL: http://authentic_server:9000
       AUTHENTIK_BASE_URL_FOR_BROWSER: ${AUTHENTIK_BASE_URL_FOR_BROWSER:-http://localhost:9000}
-      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-}
+      # The worker creates this token before application bootstrap uses the Admin API.
+      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-${AUTHENTIK_BOOTSTRAP_TOKEN:?bootstrap token required}}
+      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID:-business-entity}
+      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:?OIDC client secret required; initialize the environment first}
+      AUTHENTIK_APPLICATION_NAME: ${AUTHENTIK_APPLICATION_NAME:-BusinessEntity}
+      AUTHENTIK_APPLICATION_USERS_GROUP: ${AUTHENTIK_APPLICATION_USERS_GROUP:-GeoUsers}
+      AUTHENTIK_GENERAL_ADMINS_GROUP: ${AUTHENTIK_GENERAL_ADMINS_GROUP:-BusinessEntityAdmins}
       AUTHENTIK_REDIRECT_URIS: ${AUTHENTIK_REDIRECT_URIS:-http://localhost:7000/auth/callback}
-      EnsureAuthentikOnStartup: ${ENSURE_AUTHENTIK_ON_STARTUP:-false}
+      EnsureAuthentikOnStartup: ${ENSURE_AUTHENTIK_ON_STARTUP:-true}
       Storage__RootPath: /app/storage
       Storage__HostRootPath: ${STORAGE_HOST_ROOT_PATH:-./storage}
     volumes:
@@ -130,6 +139,8 @@ services:
         condition: service_healthy
       authentic_server:
         condition: service_healthy
+      authentic_worker:
+        condition: service_started
     restart: unless-stopped
     networks:
       - common

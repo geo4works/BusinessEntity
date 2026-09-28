@@ -66,6 +66,29 @@ MIT License относится к коду и документации. Она �
 
 Нельзя выдавать форк, сервис, хостинг, пакет, организацию или сайт за официальный Business Entity без письменного разрешения владельца бренда.
 
+## Первый запуск из репозитория
+
+```powershell
+./Powershell/Initialize-AuthentikEnv.ps1
+docker network create docker-business-entity-common-bridge
+docker compose up -d --build
+```
+
+Скрипт сохраняет существующие настройки `.env` и генерирует недостающие bootstrap-токен
+и секрет OIDC-клиента. Worker Authentik создает начального администратора и API-токен.
+Приложение дожидается готовности Authentik, создает приложение и группу каталога
+`BusinessEntity`, OIDC-провайдер `be-oidc`, callback URL и claims групп. После этого
+`UserMiniApp` создает стартовых пользователей `akadmin/akadmin`, `admin/admin`, группы
+и локальные права. Повторный запуск сохраняет идентификаторы объектов и пароль
+существующего `admin`. Техническому `akadmin` восстанавливается пароль `akadmin`
+согласно политике стартовых администраторов.
+
+Адреса по умолчанию: приложение `http://localhost:7000`, Authentik `http://localhost:9000`,
+логгер `http://localhost:5080`. При смене портов задайте соответствующие
+`AUTHENTIK_BASE_URL_FOR_BROWSER` и `AUTHENTIK_REDIRECT_URIS` в `.env`; первый callback
+используется приложением для обмена authorization code. Для готового release bundle
+используйте [Deployment/install.ps1](Deployment/install.ps1).
+
 ## Участие
 
 Репозиторий сейчас находится на раннем этапе публичной инкубации. Основной канал участия - GitHub Issues.

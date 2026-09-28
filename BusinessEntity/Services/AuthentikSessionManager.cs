@@ -73,12 +73,16 @@ namespace BusinessEntity.Services
                 ?? "http://localhost:9000").TrimEnd('/');
             _hostHeader = new Uri(_browserBaseUrl).Authority;
 
-            _providerSlug = section["ProviderSlug"] ?? "be-oidc";
-            _clientId = section["ClientId"] ?? throw new InvalidOperationException("AuthentikAuth:ClientId is required.");
-            _clientSecret = section["ClientSecret"] ?? throw new InvalidOperationException("AuthentikAuth:ClientSecret is required.");
-            _redirectUri = section["RedirectUri"] ?? throw new InvalidOperationException("AuthentikAuth:RedirectUri is required.");
+            _providerSlug = Environment.GetEnvironmentVariable("AUTHENTIK_PROVIDER_SLUG") ?? section["ProviderSlug"] ?? "be-oidc";
+            _clientId = Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_ID") ?? section["ClientId"] ?? throw new InvalidOperationException("AuthentikAuth:ClientId is required.");
+            _clientSecret = Environment.GetEnvironmentVariable("AUTHENTIK_CLIENT_SECRET") ?? section["ClientSecret"] ?? throw new InvalidOperationException("AuthentikAuth:ClientSecret is required.");
+            // Первый разрешенный callback одинаков для startup-bootstrap и обмена authorization code.
+            _redirectUri = Environment.GetEnvironmentVariable("AUTHENTIK_REDIRECT_URIS")?
+                .Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(value => value.Trim()).FirstOrDefault(value => value.Length > 0)
+                ?? section["RedirectUri"] ?? throw new InvalidOperationException("AuthentikAuth:RedirectUri is required.");
             _scope = section["Scope"] ?? "openid profile email";
-            _authenticationFlowSlug = section["AuthenticationFlowSlug"] ?? "default-authentication-flow";
+            _authenticationFlowSlug = Environment.GetEnvironmentVariable("AUTHENTIK_AUTHENTICATION_FLOW_SLUG") ?? section["AuthenticationFlowSlug"] ?? "default-authentication-flow";
             _sessionLifetime = TimeSpan.FromHours(ReadDouble(section["SessionLifetimeHours"], 8));
             _refreshLeadTime = TimeSpan.FromMinutes(ReadDouble(section["RefreshLeadTimeMinutes"], 5));
         }

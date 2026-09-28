@@ -363,6 +363,28 @@ application bootstrap
 
 Infrastructure bootstrap должен быть идемпотентным: повторный запуск не должен удалять данные и не должен пересоздавать volumes.
 
+### 6.1.1. Реализованный bootstrap Authentik
+
+Для исходного репозитория `Powershell/Initialize-AuthentikEnv.ps1` добавляет недостающие
+bootstrap/OIDC-секреты в `.env`, сохраняя существующие значения. Меню запуска всего стека
+вызывает этот скрипт автоматически. В release bundle ту же подготовку выполняет `install.ps1`.
+
+`authentic_worker` получает `AUTHENTIK_BOOTSTRAP_TOKEN`, `AUTHENTIK_BOOTSTRAP_PASSWORD`
+и `AUTHENTIK_BOOTSTRAP_EMAIL`; штатный bootstrap Authentik создает `akadmin`, группу
+`authentik Admins` и API-токен. Приложению передается тот же токен через `AUTHENTIK_API_TOKEN`.
+Существующие bootstrap-токены не ротируются повторной генерацией `.env`.
+
+При `EnsureAuthentikOnStartup=true` `AuthentikBootstrapService` выполняется **до**
+`UserMiniApp.EnsureInitialized()`: ожидает API, токен и default blueprints, создает/обновляет
+приложение и группу каталога `BusinessEntity`, OAuth2/OIDC provider `be-oidc`, callbacks и
+scope mappings `openid`, `profile`, `email`, `groups`. Это группа каталога приложений,
+а не отдельный tenant Authentik. Повторный запуск использует существующие идентификаторы.
+
+Далее `UserMiniApp` выполняет действующую `Users/admin-users-policy.md`: `akadmin/akadmin`,
+новый `admin/admin`, группы и локальное назначение роли. Пароль и профиль существующего
+`admin` сохраняются. Ошибка обязательной настройки останавливает запуск приложения;
+HTTP 200 становится доступен только после завершения bootstrap.
+
 ### 6.2. Application bootstrap
 
 На этом этапе приложение должно:

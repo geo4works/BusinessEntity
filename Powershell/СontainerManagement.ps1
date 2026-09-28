@@ -726,58 +726,12 @@ function Action50 {
     return
   }
 
-  # Предупреждение если отсутствует .env для Authentik
-  $authEnv = Join-Path -Path $root -ChildPath "Authentic\.env"
-  $hasAuthEnv = Test-Path -Path $authEnv
-  if (-not $hasAuthEnv) {
-    Write-Host "⚠ Внимание: отсутствует файл 'Authentic\\.env'. Authentik может не стартовать корректно." -ForegroundColor Yellow
-  }
-
-  # Убедимся, что общая сеть существует (при необходимости создадим)
+  # Сохраняет существующие секреты и добавляет недостающую конфигурацию первого запуска.
+  & (Join-Path $PSScriptRoot "Initialize-AuthentikEnv.ps1") -RepositoryRoot $root
   Ensure-Network -NetworkName "docker-business-entity-common-bridge"
-
-  # Загружаем переменные из Authentic/.env в окружение процесса (требуется для подстановки ${VAR} на этапе парсинга compose)
-  if ($hasAuthEnv) {
-    Write-Host "Импортирую переменные из Authentic\\.env в окружение процесса..." -ForegroundColor DarkCyan
-    Import-DotEnv -Path $authEnv
-  }
-
-  # Гарантируем наличие значений для интерполяции в корне проекта (compose читает .env из корня)
-  $rootEnvPath = Join-Path -Path $root -ChildPath ".env"
-  if ($hasAuthEnv) {
-    $hasHelpers = ($null -ne (Get-Command Read-DotEnvAsHashtable -ErrorAction SilentlyContinue)) -and `
-                  ($null -ne (Get-Command Write-DotEnvFromHashtable -ErrorAction SilentlyContinue))
-    if ($hasHelpers) {
-      $rootVars = Read-DotEnvAsHashtable -Path $rootEnvPath
-      $authVars = Read-DotEnvAsHashtable -Path $authEnv
-      foreach ($k in @("AUTHENTIK_SECRET_KEY", "PG_PASS", "PG_USER", "PG_DB", "COMPOSE_PORT_HTTP", "COMPOSE_PORT_HTTPS")) {
-        if ($authVars.ContainsKey($k)) { $rootVars[$k] = $authVars[$k] }
-      }
-      Write-DotEnvFromHashtable -Path $rootEnvPath -Data $rootVars
-      Write-Host "Обновлён корневой .env для compose интерполяции." -ForegroundColor DarkCyan
-    } else {
-      if (-not (Test-Path -Path $rootEnvPath)) {
-        try {
-          Write-Host "Хелперы .env недоступны. Fallback: копирую Authentic\\.env в корень проекта как .env" -ForegroundColor DarkYellow
-          Copy-Item -Path $authEnv -Destination $rootEnvPath -Force
-        } catch {
-          Write-Host "⚠ Не удалось скопировать Authentic\\.env в .env: $_" -ForegroundColor Yellow
-        }
-      } else {
-        Write-Host "Хелперы .env недоступны. Корневой .env уже существует — пропускаю merge." -ForegroundColor DarkYellow
-      }
-    }
-  }
-
-  if ($hasAuthEnv) {
-    Write-Host "Проверяю конфигурацию: docker compose config" -ForegroundColor Yellow
-    docker compose -f $composePath config | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      Write-Host "❌ Ошибка проверки конфигурации docker compose." -ForegroundColor Red
-      return
-    }
-  } else {
-    Write-Host "Пропускаю 'docker compose config' (нет Authentic\\.env)." -ForegroundColor DarkYellow
+  docker compose -f $composePath config --quiet
+  if ($LASTEXITCODE -ne 0) {
+    throw "Ошибка проверки конфигурации docker compose."
   }
 
   Write-Host "Запускаю стек: docker compose up -d --build" -ForegroundColor Yellow

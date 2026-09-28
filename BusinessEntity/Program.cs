@@ -35,7 +35,7 @@ namespace BusinessEntity
 {
 	public class Program
 	{
-		public static void Main(string[] args)
+		public static async Task Main(string[] args)
 		{
 			var builder = WebApplication.CreateBuilder(args);
 
@@ -126,6 +126,7 @@ namespace BusinessEntity
             builder.Services.AddAuthorization();
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddScoped<AuthentikSessionManager>();
+            builder.Services.AddSingleton<AuthentikBootstrapService>();
 
             // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddDataProviderMiniApp();
@@ -203,6 +204,10 @@ namespace BusinessEntity
                 activityMiniApp.EnsureInitialized();
             }
 
+            // Дожидается токена, flow и OIDC-конфигурации до создания администраторов UserMiniApp.
+            await app.Services.GetRequiredService<AuthentikBootstrapService>()
+                .EnsureAsync(app.Lifetime.ApplicationStopping);
+
             // Явно поднимает UserMiniApp при старте приложения.
             using (var scope = app.Services.CreateScope())
             {
@@ -269,7 +274,7 @@ namespace BusinessEntity
 			app.MapRazorPages();
 			app.MapBlazorHub();
 			app.MapFallbackToPage("/_Host");
-			app.Run();
+			await app.RunAsync();
 		}
 
         // Дает seed/legacy entity и payload-записям явного владельца, когда seed выполнялся без HTTP-пользователя.

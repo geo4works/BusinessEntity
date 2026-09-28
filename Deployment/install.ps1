@@ -35,7 +35,8 @@ function Test-Tool {
 function Get-RandomHex {
     param([int]$ByteCount = 32)
     $bytes = New-Object byte[] $ByteCount
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
     return -join ($bytes | ForEach-Object { $_.ToString("x2") })
 }
 
@@ -94,7 +95,7 @@ function Initialize-EnvFile {
     }
 
     $envMap = Read-DotEnv -Path $EnvPath
-    foreach ($key in @("BE_DB_PASSWORD", "AUTHENTIK_PG_PASS", "AUTHENTIK_SECRET_KEY")) {
+    foreach ($key in @("BE_DB_PASSWORD", "AUTHENTIK_PG_PASS", "AUTHENTIK_SECRET_KEY", "AUTHENTIK_BOOTSTRAP_TOKEN", "AUTHENTIK_CLIENT_SECRET")) {
         if (-not $envMap.Contains($key) -or [string]::IsNullOrWhiteSpace($envMap[$key]) -or $envMap[$key] -eq "__GENERATE__") {
             $envMap[$key] = Get-RandomHex -ByteCount 32
             Write-Host "Generated $key" -ForegroundColor DarkGreen
@@ -177,7 +178,7 @@ function Wait-HttpOk {
         }
     }
 
-    Write-Host "Health wait timed out: $Url" -ForegroundColor Yellow
+    throw "Health wait timed out: $Url"
 }
 
 if (-not (Test-Tool -Name "docker")) {
@@ -197,7 +198,7 @@ Import-OfflineImages
 
 Push-Location $Root
 try {
-    Invoke-RequiredTool -FilePath "docker" -Arguments @("compose", "--env-file", ".env", "-f", "docker-compose.yml", "config")
+    Invoke-RequiredTool -FilePath "docker" -Arguments @("compose", "--env-file", ".env", "-f", "docker-compose.yml", "config", "--quiet")
 
     if (-not $NoStart) {
         Invoke-RequiredTool -FilePath "docker" -Arguments @("compose", "--env-file", ".env", "-f", "docker-compose.yml", "up", "-d")
@@ -228,4 +229,4 @@ Write-Host "Application: http://localhost:$((Read-DotEnv -Path $EnvPath)["BUSINE
 Write-Host "Web logger:  http://localhost:$((Read-DotEnv -Path $EnvPath)["WEB_LOGGER_HTTP_PORT"])" -ForegroundColor Cyan
 Write-Host "Authentik:   http://localhost:$((Read-DotEnv -Path $EnvPath)["AUTHENTIK_HTTP_PORT"])" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Initial application data is created by application startup/bootstrap. Authentik OIDC bootstrap is still a separate deployment task unless ENSURE_AUTHENTIK_ON_STARTUP is implemented/enabled." -ForegroundColor Yellow
+Write-Host "Application startup configures Authentik OIDC, groups and initial users. Initial logins: akadmin / akadmin and admin / admin." -ForegroundColor Yellow

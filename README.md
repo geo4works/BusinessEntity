@@ -93,9 +93,23 @@ Requirements:
 For a local development stack:
 
 ```powershell
+./Powershell/Initialize-AuthentikEnv.ps1
 docker network create docker-business-entity-common-bridge
 docker compose up -d --build
 ```
+
+The environment initializer preserves existing credentials and generates missing bootstrap
+and OIDC client secrets. The Authentik worker creates the initial administrator and API
+token. Before initializing users, the application waits for Authentik and configures the
+`BusinessEntity` application/catalog group, `be-oidc` provider, callback URLs and group claims.
+Initial logins are `akadmin` / `akadmin` and `admin` / `admin`. Existing `admin` passwords
+and profiles are preserved. Re-running the initializer and restarting the stack reuses the
+same credentials and Authentik objects.
+
+When changing the application or Authentik ports, set `AUTHENTIK_REDIRECT_URIS` (first URL
+is the application's callback) and `AUTHENTIK_BASE_URL_FOR_BROWSER` to the corresponding
+public URLs. `ENSURE_AUTHENTIK_ON_STARTUP=false` disables OIDC provisioning for installations
+managed externally; their Admin API token can be supplied as `AUTHENTIK_API_TOKEN`.
 
 Default local endpoints:
 
