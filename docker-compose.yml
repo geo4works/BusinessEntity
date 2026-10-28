@@ -135,7 +135,7 @@ services:
       AUTHENTIK_REDIRECT_URIS: ${AUTHENTIK_REDIRECT_URIS:-http://localhost:7000/auth/callback}
       EnsureAuthentikOnStartup: ${ENSURE_AUTHENTIK_ON_STARTUP:-true}
       Storage__RootPath: /app/storage
-      Storage__HostRootPath: "C:\\Develop\\BusinessEntity\\BusinessEntityStorage"
+      Storage__HostRootPath: "C:\\Develop\\BusinessEntityProduct\\BusinessEntity\\BusinessEntityStorage"
     volumes:
       - ./BusinessEntityStorage:/app/storage
     depends_on:

@@ -1,5 +1,11 @@
 # BusinessEntity: общий обзор системы
 
+> TASK_ARCH_001 находится в раскатке по [ТЗ v2.2](Tasks/TASK_ARCH_001_miniapp-bus-architecture-migration.md).
+> Описание in-memory хранения ниже устарело: бизнес-данные уже хранятся в PostgreSQL
+> через DataProviderMiniApp. Целевые правила — одна шина, общий Core и транзакционное
+> сохранение миниаппа — описаны в [архитектурной политике](Policy/architecture-principles.md).
+> Полная актуализация этого обзора выполняется на этапе 9.
+
 ## Назначение
 
 `BusinessEntity` — это серверное веб-приложение на `ASP.NET Core + Blazor Server`, в котором пользователь работает с графом бизнес-сущностей.  

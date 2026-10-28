@@ -332,6 +332,11 @@ __pycache__/
 .dockerignore
 BusinessEntityStorage/
 
+# Local environment settings and secrets; keep examples in Git.
+.env
+.env.*
+!.env.example
+
 # -----------------------------------------
 # OS generated files
 # -----------------------------------------

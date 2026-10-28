@@ -106,6 +106,14 @@ Initial logins are `akadmin` / `akadmin` and `admin` / `admin`. Existing `admin`
 and profiles are preserved. Re-running the initializer and restarting the stack reuses the
 same credentials and Authentik objects.
 
+Local `.env` files, including `Authentic/.env`, are ignored by Git. Track configuration
+examples in [.env.example](.env.example), [Authentic/.env.example](Authentic/.env.example)
+and [Deployment/.env.example](Deployment/.env.example). On a fresh checkout, run the
+initializer above to create local files and generate credentials. Each installation
+keeps its own credentials across code updates; store an access-controlled backup of its
+environment files alongside database backups. Cloud development environments use their
+own local configuration.
+
 When changing the application or Authentik ports, set `AUTHENTIK_REDIRECT_URIS` (first URL
 is the application's callback) and `AUTHENTIK_BASE_URL_FOR_BROWSER` to the corresponding
 public URLs. `ENSURE_AUTHENTIK_ON_STARTUP=false` disables OIDC provisioning for installations
