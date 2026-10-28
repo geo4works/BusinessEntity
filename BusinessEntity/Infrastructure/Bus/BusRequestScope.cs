@@ -7,13 +7,28 @@ public sealed class BusRequestScope
     public Guid? UserId { get; private set; }
     public bool IsSystem { get; private set; }
     public Guid LogicalWindowId => Id;
-    public Guid? ModuleId { get; private set; }
-    public Guid? EditSessionId { get; private set; }
-    public Guid? ContextId { get; private set; }
+    private readonly AsyncLocal<SourceAddress?> _source = new();
+    public Guid? ModuleId => _source.Value?.ModuleId;
+    public Guid? EditSessionId => _source.Value?.EditSessionId;
+    public Guid? ContextId => _source.Value?.ContextId;
 
-    // Привязывает серверный источник команды к модулю и его контексту сохранения.
-    public void SetSource(Guid? moduleId, Guid? editSessionId, Guid? contextId)
-    { ModuleId = moduleId; EditSessionId = editSessionId; ContextId = contextId; }
+    // Ограничивает источник одной async-операцией, не перезаписывая адрес параллельного компонента.
+    public IDisposable Enter(Guid? moduleId, Guid? editSessionId, Guid? contextId)
+    {
+        var previous = _source.Value; _source.Value = new(moduleId, editSessionId, contextId);
+        return new SourceLease(() => _source.Value = previous);
+    }
+    // Неизменяемый адрес текущей async-ветки.
+    private sealed record SourceAddress(Guid? ModuleId, Guid? EditSessionId, Guid? ContextId);
+    // Восстанавливает вложенный источник после команды.
+    private sealed class SourceLease : IDisposable
+    {
+        private Action? _release;
+        // Сохраняет прежний адрес до завершения команды.
+        public SourceLease(Action release) => _release = release;
+        // Повторное освобождение безопасно.
+        public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();
+    }
 
     // Создаёт неизменяемый адрес запроса с установленным сервером автором.
     public BusRequestContext Snapshot() => new(Id, UserId, LogicalWindowId, ModuleId, EditSessionId, ContextId, IsSystem);

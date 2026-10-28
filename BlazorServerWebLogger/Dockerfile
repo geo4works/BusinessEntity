@@ -9,14 +9,14 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["BlazorServerWebLogger/BlazorServerWebLogger.csproj", "BlazorServerWebLogger/"]
 COPY ["BusinessEntity/BusinessEntity.csproj", "BusinessEntity/"]
-RUN dotnet restore "./BlazorServerWebLogger/BlazorServerWebLogger.csproj"
+RUN --mount=type=cache,id=businessentity-nuget,target=/root/.nuget/packages,sharing=locked dotnet restore "./BlazorServerWebLogger/BlazorServerWebLogger.csproj"
 COPY . .
 WORKDIR "/src/BlazorServerWebLogger"
-RUN dotnet build "./BlazorServerWebLogger.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN --mount=type=cache,id=businessentity-nuget,target=/root/.nuget/packages,sharing=locked dotnet build "./BlazorServerWebLogger.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./BlazorServerWebLogger.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN --mount=type=cache,id=businessentity-nuget,target=/root/.nuget/packages,sharing=locked dotnet publish "./BlazorServerWebLogger.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app

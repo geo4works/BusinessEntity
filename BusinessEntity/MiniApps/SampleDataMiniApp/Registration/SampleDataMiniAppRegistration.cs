@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Internal;
 
@@ -13,6 +14,9 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Registration
             services.AddScoped<IDataFillLineProvider, DataFillLineProvider>();
             services.AddScoped<ISampleDataMiniApp, Facade.SampleDataMiniApp>();
 
+            services.AddMiniAppHost("SampleDataMiniApp", new ModuleDefinition("SampleDataMiniApp", "seed", "Начальные данные", null,
+                ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 40, OpenOnStartup: true));
+            services.AddModuleRuntime<SampleDataStartupRuntime>("SampleDataMiniApp:seed");
             return services;
         }
     }

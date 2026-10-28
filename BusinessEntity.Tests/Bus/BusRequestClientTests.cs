@@ -158,7 +158,7 @@ public sealed class BusRequestClientTests
         var actor = Guid.NewGuid();
         context.SetUser(actor);
         var module = Guid.NewGuid(); var editSession = Guid.NewGuid(); var entity = Guid.NewGuid();
-        context.SetSource(module, editSession, entity);
+        using var address = context.Enter(module, editSession, entity);
         await scope.ServiceProvider.GetRequiredService<BusRequestClient>().SendAsync<ProbeRequest, ProbeResponse>(
             new(Guid.NewGuid()) { Context = new(Guid.NewGuid(), Guid.NewGuid()) });
         var received = scope.ServiceProvider.GetRequiredService<ProbeState>().Context!;

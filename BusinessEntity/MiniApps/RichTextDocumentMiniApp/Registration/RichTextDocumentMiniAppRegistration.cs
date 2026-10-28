@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal;
@@ -15,6 +16,7 @@ public static class RichTextDocumentMiniAppRegistration
         services.AddSingleton(new EntityUrlPattern("/rich-document/"));
         services.AddSingleton<IEntityVersionPolicy, RichTextDocumentVersionPolicy>();
         services.AddSingleton(new EntityUrlPattern("/rich-document-files/"));
-        return services;
+        services.AddMiniAppHost("RichTextDocumentMiniApp");
+            return services;
     }
 }

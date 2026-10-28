@@ -1,3 +1,5 @@
+using BusinessEntity.Infrastructure.Modularity;
+using BusinessEntity.MiniApps.BackupRestoreMiniApp.Registration;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.MiniApps.SpacesMiniApp.Registration;
 using BusinessEntity.MiniApps.SysParametersMiniApp.Registration;
@@ -130,6 +132,7 @@ namespace BusinessEntity
             builder.Services.AddSingleton<AuthentikBootstrapService>();
 
             // Регистрирует mini-app модули приложения в DI.
+            builder.Services.AddModularity();
             builder.Services.AddDataProviderMiniApp();
             builder.Services.AddSingleton<EntitySaveBatchFactory>();
             builder.Services.AddSpacesMiniApp();
@@ -164,56 +167,12 @@ namespace BusinessEntity
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
             builder.Services.AddBusinessEntityBus();
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
-            builder.Services.AddSingleton<SpaceBackupService>();
-            builder.Services.AddScoped<SpaceRestoreService>();
-            builder.Services.AddSingleton<SpaceArchivePaths>();
-            builder.Services.AddHostedService(provider => provider.GetRequiredService<SpaceBackupService>());
+            builder.Services.AddBackupRestoreMiniApp();
 
 			// Подключает Swagger для диагностики API.
 			builder.Services.AddSwaggerGen();
 
 			var app = builder.Build();
-
-            // Владельцы создают только актуальную пустую схему; существующая версия проверяется явно.
-            var freshStorage = await app.Services.InitializeDataProviderStorageAsync(app.Lifetime.ApplicationStopping);
-            await app.Services.InitializeUserStorageAsync(freshStorage, app.Lifetime.ApplicationStopping);
-
-
-            // Явно поднимает ActivityMiniApp при старте приложения.
-            using (var scope = app.Services.CreateScope())
-            {
-                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
-                var activityMiniApp = scope.ServiceProvider.GetRequiredService<IActivityMiniApp>();
-                activityMiniApp.EnsureInitialized();
-            }
-
-            // Дожидается токена, flow и OIDC-конфигурации до создания администраторов UserMiniApp.
-            await app.Services.GetRequiredService<AuthentikBootstrapService>()
-                .EnsureAsync(app.Lifetime.ApplicationStopping);
-
-            // Явно поднимает UserMiniApp при старте приложения.
-            using (var scope = app.Services.CreateScope())
-            {
-                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
-                var userMiniApp = scope.ServiceProvider.GetRequiredService<IUserMiniApp>();
-                userMiniApp.EnsureInitialized();
-            }
-
-            // Явно поднимает TreeMiniApp при старте приложения.
-            using (var scope = app.Services.CreateScope())
-            {
-                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
-                var treeMiniApp = scope.ServiceProvider.GetRequiredService<ITreeMiniApp>();
-                treeMiniApp.EnsureInitialized();
-            }
-
-            // Инициализирует тестовые данные при старте приложения.
-            using (var scope = app.Services.CreateScope())
-            {
-                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
-                var sampleDataMiniApp = scope.ServiceProvider.GetRequiredService<ISampleDataMiniApp>();
-                await sampleDataMiniApp.EnsureInitializedAsync();
-            }
 
 			// Подключает production-only обработчик ошибок.
 			if (!app.Environment.IsDevelopment())

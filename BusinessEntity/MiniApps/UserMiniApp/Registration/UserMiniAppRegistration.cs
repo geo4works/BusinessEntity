@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using BusinessEntity.MiniApps.UserMiniApp.Storage;
@@ -46,6 +47,12 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
 
             services.AddBusEndpoint<UserSessionMessageHandler>(typeof(GetCurrentUserRequest), typeof(EnsureCurrentUserRequest), typeof(GetGroupsRequest), typeof(IsInGroupRequest));
 
+            services.AddMiniAppHost("UserMiniApp",
+                new ModuleDefinition("UserMiniApp", "identity-bootstrap", "Identity", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 10, OpenOnStartup: true),
+                new ModuleDefinition("UserMiniApp", "defaults", "Пользователи", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 20, OpenOnStartup: true));
+            services.AddModuleRuntime<IdentityStartupRuntime>("UserMiniApp:identity-bootstrap");
+            services.AddModuleRuntime<UserStartupRuntime>("UserMiniApp:defaults");
+            services.AddScoped<IModuleAccessPolicy, UserModuleAccessPolicy>();
             return services;
         }
         // Создаёт собственную схему User после нового DataProvider и проверяет её на последующих стартах.

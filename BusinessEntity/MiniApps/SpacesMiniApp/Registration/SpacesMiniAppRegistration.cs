@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Saving;
 
@@ -11,6 +12,7 @@ public static class SpacesMiniAppRegistration
     {
         services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.Space, "SpacesMiniApp"));
         services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.Space, false));
-        return services;
+        services.AddMiniAppHost("SpacesMiniApp");
+            return services;
     }
 }

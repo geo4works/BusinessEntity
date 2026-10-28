@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.ActivityMiniApp.Connectors;
@@ -23,6 +24,7 @@ public static class ActivityMiniAppRegistration
 
             services.AddBusEndpoint<ActivityMiniAppMessageHandler>(typeof(GetCommentsRequest), typeof(CreateCommentRequest));
 
+            services.AddMiniAppHost("ActivityMiniApp");
             return services;
     }
 }

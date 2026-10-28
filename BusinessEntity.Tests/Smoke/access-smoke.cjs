@@ -10,6 +10,7 @@ async function run() {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); page.setDefaultTimeout(30000);
   const admin = await browser.newPage({ viewport: { width: 1600, height: 1100 } }); admin.setDefaultTimeout(30000);
   const guestGroup = "Smoke guests " + Date.now();
+  let createdGroupName;
   try {
     // Настройка тестовых fixtures выполняется через тот же интерфейс, что доступен администратору.
     await admin.goto(base + "/login", { waitUntil: "networkidle" });
@@ -27,19 +28,29 @@ async function run() {
     await admin.getByRole("button", { name: "Пользователи", exact: true }).click();
     await admin.getByRole("tab", { name: "Группы", exact: true }).click();
     await admin.getByRole("button", { name: "Создать группу", exact: true }).click();
-    await admin.getByLabel("Имя группы", { exact: true }).fill(guestGroup);
+    await admin.getByText(/^Группа .+ создана\.$/).waitFor();
+    const groupNameInput = admin.getByLabel("Имя группы", { exact: true });
+    createdGroupName = await groupNameInput.inputValue();
+    await groupNameInput.fill(guestGroup); await groupNameInput.press("Tab");
     await admin.getByRole("button", { name: "Сохранить группу", exact: true }).click();
+    await admin.getByText("Группа сохранена.", { exact: true }).waitFor();
     await admin.getByRole("button", { name: guestGroup, exact: true }).waitFor();
     await admin.getByRole("tab", { name: "Состав групп", exact: true }).click();
     await admin.locator(".users-admin__membership-selector select").selectOption({ label: guestGroup + " (0)" });
     await admin.locator(".users-admin__membership-table tbody tr").filter({ hasText: "anonymous" }).getByRole("checkbox").check();
     await admin.getByRole("button", { name: "Сохранить состав", exact: true }).click();
+    await admin.getByText("Состав группы сохранен.", { exact: true }).waitFor();
+    await admin.locator(".users-admin__membership-selector select option").filter({ hasText: guestGroup + " (1)" }).waitFor({ state: "attached" });
     await admin.getByRole("tab", { name: "Права доступа", exact: true }).click();
     await admin.locator(".users-admin__access-space select").selectOption({ label: "Документы" });
     await admin.locator(".users-admin__access-picker").filter({ hasText: "Группа" }).locator("select").selectOption({ label: guestGroup });
     await admin.locator(".users-admin__access-picker").filter({ hasText: "Роль" }).locator("select").selectOption({ label: "Гость" });
     await admin.locator(".users-admin__access").getByRole("button", { name: "Добавить", exact: true }).click();
-    await admin.locator(".users-admin__access-table tbody tr").filter({ hasText: guestGroup }).waitFor();
+    await admin.getByText("Назначение роли сохранено.", { exact: true }).waitFor();
+    const assignment = admin.locator(".users-admin__access-table tbody tr").filter({ hasText: guestGroup });
+    await assignment.waitFor();
+    assert((await assignment.innerText()).includes("Документы"));
+    assert((await assignment.innerText()).includes("Гость"));
     await page.goto(base + "/space-selection", { waitUntil: "networkidle" });
     // При одном доступном пространстве штатный выбор происходит автоматически.
     if (new URL(page.url()).pathname === "/space-selection")
@@ -66,15 +77,33 @@ async function run() {
     if (process.env.BE_SMOKE_OUTPUT) {
       fs.mkdirSync(process.env.BE_SMOKE_OUTPUT, { recursive: true });
       await page.screenshot({ path: path.join(process.env.BE_SMOKE_OUTPUT, "access-failure.png"), fullPage: true });
+      await admin.screenshot({ path: path.join(process.env.BE_SMOKE_OUTPUT, "access-admin-failure.png"), fullPage: true });
     }
-    console.error(JSON.stringify({ failedAt: page.url(), error: error.message })); process.exitCode = 1;
+    console.error(JSON.stringify({ failedAt: page.url(), adminAt: admin.url(), error: error.message })); process.exitCode = 1;
   } finally {
     try {
       await admin.goto(base + "/administration", { waitUntil: "networkidle" });
       await admin.getByRole("button", { name: "Пользователи", exact: true }).click();
       await admin.getByRole("tab", { name: "Группы", exact: true }).click();
-      const group = admin.getByRole("button", { name: guestGroup, exact: true });
+      await admin.locator(".users-admin__groups-table").waitFor();
+      let group = admin.getByRole("button", { name: guestGroup, exact: true });
+      if (!await group.count() && createdGroupName) group = admin.getByRole("button", { name: createdGroupName, exact: true });
       if (await group.count()) {
+        const cleanupName = (await group.innerText()).trim();
+        await admin.getByRole("tab", { name: "Состав групп", exact: true }).click();
+        const membership = admin.locator(".users-admin__membership-selector select");
+        await membership.waitFor();
+        const groupId = await membership.locator("option").evaluateAll((options, name) =>
+          options.find(option => option.textContent.startsWith(name + " ("))?.value, cleanupName);
+        assert(groupId, "Тестовая группа доступна для очистки состава");
+        await membership.selectOption(groupId);
+        await admin.locator(".users-admin__membership-table").waitFor();
+        for (const checkbox of await admin.locator(".users-admin__membership-table input[type=checkbox]").all())
+          if (await checkbox.isChecked()) await checkbox.uncheck();
+        await admin.getByRole("button", { name: "Сохранить состав", exact: true }).click();
+        await admin.getByText("Состав группы сохранен.", { exact: true }).waitFor();
+        await admin.getByRole("tab", { name: "Группы", exact: true }).click();
+        await admin.locator(".users-admin__groups-table").waitFor();
         await group.click(); await admin.getByRole("button", { name: "Удалить группу", exact: true }).click();
         await admin.getByRole("button", { name: "Подтвердить удаление", exact: true }).click();
         await group.waitFor({ state: "detached" });

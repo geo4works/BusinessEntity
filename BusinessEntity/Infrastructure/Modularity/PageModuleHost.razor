@@ -1,0 +1,29 @@
+@namespace BusinessEntity.Infrastructure.Modularity
+@inject WindowModularityManager Manager
+@inject IModuleUiFactory UiFactory
+@implements IAsyncDisposable
+
+@if (Module != null)
+{
+    <CascadingValue Value="Module" IsFixed="true" @key="Module.ModuleId">
+        <DynamicComponent Type="UiFactory.Resolve(Module.Definition.ComponentKey!)" Parameters="Parameters" />
+    </CascadingValue>
+}
+
+@code {
+    [Parameter, EditorRequired] public string DefinitionKey { get; set; } = string.Empty;
+    [Parameter] public Guid? ContextId { get; set; }
+    [Parameter] public Guid? EditSessionId { get; set; }
+    [Parameter] public IDictionary<string, object>? Parameters { get; set; }
+    private MiniAppModule? Module;
+    // URL-host передаёт только контекст; создание и политика принадлежат менеджеру.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Module?.Definition.Key == DefinitionKey && Module.ContextId == ContextId) return;
+        if (Module != null) await Manager.CloseAsync(Module.ModuleId);
+        Module = await Manager.OpenAsync(DefinitionKey, ContextId, EditSessionId);
+    }
+    // Снятие вспомогательного UI не очищает общий dirty рабочего экземпляра.
+    public async ValueTask DisposeAsync()
+    { if (Module != null) await Manager.ReleaseViewAsync(Module.ModuleId); }
+}

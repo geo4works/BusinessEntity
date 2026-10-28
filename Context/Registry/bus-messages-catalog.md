@@ -1,6 +1,6 @@
 # Каталог сообщений общей шины
 
-Фактическое состояние этапа 3 TASK_ARCH_001, 2026-10-28.
+Фактическое состояние этапа 4 TASK_ARCH_001, 2026-10-28.
 Один singleton ReactiveUI.IMessageBus; регистрации маршрутов находятся в Registration владельцев.
 
 Все предметные Request/Response наследуют BusRequest/BusResponse.
@@ -173,3 +173,12 @@ PathToRoot, SearchName); `GetPublishedEntityNamesRequest/Response`;
 `GetDataProviderCacheStatisticsRequest/Response`. Все используют общий
 BusRequestClient. Структура выдаётся безопасными копиями одной ревизии;
 права применяют Tree/User и владельцы страниц до отображения.
+
+## Модульность этапа 4
+
+`GiveMeModuleDefinitions(RequestId)` / `HereAreModuleDefinitions(RequestId,
+MiniAppId, Definitions)` — сбор без Razor/Type. Подписка каталога сохраняется
+для поздних ответов. `ModuleLifecycleChanged` переносит ModuleId, MiniAppId,
+DefinitionId, LogicalWindowId, ContextId, EditSessionId и Opened/Activated/
+Deactivated/Closed. Источник предметного Request устанавливается async-local
+lease одного живого модуля; параллельные компоненты не меняют адрес друг друга.

@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Caching;
 using BusinessEntity.Core.Saving;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +59,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
 
             services.AddBusEndpoint<DataProviderMessageHandler>(typeof(QueryGraphRequest), typeof(GetPublishedEntityNamesRequest), typeof(GetDataProviderCacheStatisticsRequest), typeof(GetBusinessEntitiesRequest), typeof(GetBusinessEntityByIdRequest), typeof(GetBusinessEntityDataRequest), typeof(GetBusinessEntityDataVersionRequest), typeof(GetBusinessEntityDataVersionsRequest), typeof(GetAllRelationsRequest), typeof(GetRelationsRequest), typeof(GetRelationByIdRequest), typeof(GetRichTextEmbeddedFileRequest));
 
+            services.AddMiniAppHost("DataProviderMiniApp", new ModuleDefinition("DataProviderMiniApp", "storage", "Хранилище", null,
+                ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 0, OpenOnStartup: true));
+            services.AddModuleRuntime<DataProviderStartupRuntime>("DataProviderMiniApp:storage");
             return services;
         }
         // Композиционный корень вызывает публичную инициализацию, не зная EF и таблиц владельца.

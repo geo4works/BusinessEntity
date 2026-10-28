@@ -1,5 +1,5 @@
 @inherits LayoutComponentBase
-@using BusinessEntity.MiniApps.TreeMiniApp.Components
+@using BusinessEntity.Infrastructure.Modularity
 
 <PageTitle>Business EntityData Engine</PageTitle>
 
@@ -16,7 +16,7 @@
         <div class="main-row">
             <div class="tree-panel">
                 <div class="tree-content">
-                    <TreeMiniAppComponent />
+                    <ShellModuleHostArea Area="LeftTree" />
                 </div>
             </div>
 

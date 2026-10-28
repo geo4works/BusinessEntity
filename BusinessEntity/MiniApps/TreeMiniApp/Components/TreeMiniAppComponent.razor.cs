@@ -23,7 +23,7 @@ using System.Text.Json;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 {
-    public partial class TreeMiniAppComponent : ComponentBase, IDisposable
+    public partial class TreeMiniAppComponent : BusinessEntity.Infrastructure.Modularity.ModuleComponentBase, IDisposable
     {
         [Inject] private TreeMiniAppService TreeMiniAppService { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }

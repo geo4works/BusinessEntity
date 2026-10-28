@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Internal;
 
@@ -14,6 +15,7 @@ public static class UserMessagesMiniAppRegistration
         services.AddScoped<IUserMessagesMiniApp, Facade.UserMessagesMiniApp>();
 
         services.AddSingleton<IUserMessageFlashStore, UserMessageFlashStore>();
-        return services;
+        services.AddMiniAppHost("UserMessagesMiniApp");
+            return services;
     }
 }

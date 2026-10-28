@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.DocumentsMiniApp.Internal;
@@ -14,6 +15,7 @@ public static class DocumentsMiniAppRegistration
         services.AddSingleton<IEntityArchivePolicy, DocumentArchivePolicy>();
         services.AddSingleton(new EntityUrlPattern("/document/"));
         services.AddSingleton<IEntityVersionPolicy, DocumentVersionPolicy>();
-        return services;
+        services.AddMiniAppHost("DocumentsMiniApp");
+            return services;
     }
 }

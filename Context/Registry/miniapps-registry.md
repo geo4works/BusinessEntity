@@ -1,8 +1,7 @@
 # Реестр миниаппов
 
-Фактическое состояние этапа 3 TASK_ARCH_001, 2026-10-28.
-Приложение содержит семь действующих миниаппов и четыре регистрации владельцев типов. Host-service, декларативные модули
-и общий контекст сохранения добавляются в этапах 4–6, пока их нет.
+Фактическое состояние этапа 4 TASK_ARCH_001, 2026-10-28.
+Приложение содержит владельцев из таблицы и регистрации типов. Каждый AddXxxMiniApp регистрирует один декларативный singleton MiniAppHostService. Общий runtime сохранения реализован; предметные редакторы подключаются в этапах 6/8.
 
 | Миниапп | Назначение | Текущее время жизни | Доступ и состояние |
 |---|---|---|---|
@@ -10,8 +9,9 @@
 | UserMiniApp | Identity, локальные пользователи, роли, группы, права | Scoped | Connector через BusRequestClient; отдельный UserIdentitySession, scoped session/general handlers с фильтром адреса |
 | TreeMiniApp | Дерево пространства и действия над узлами | Scoped | Bus connector без facade; scoped handler проверяет scope/окно перед исполнением |
 | ActivityMiniApp | Комментарии | Scoped | Bus connector без facade; scoped handler; комментарии пишет и читает DataProvider через шину |
-| MediaServerMiniApp | Видео и фоновые загрузки | Service scoped; registry/manager singleton, manager hosted | Прямой API; фоновая очередь передаёт серверный UserId в отдельный scope; постоянные файлы и metadata пишет DataProvider; UI/контроллер — этапы 5–6 |
-| SampleDataMiniApp | Начальные данные | Scoped | Facade и сервис; ручной startup пока в Program; перенос запуска — этап 4 |
+| MediaServerMiniApp | Видео и фоновые загрузки | Service scoped; registry/manager singleton, runtime каталога | Прямой API; фоновая очередь передаёт серверный UserId в отдельный scope; постоянные файлы и metadata пишет DataProvider; UI/контроллер — этапы 5–6 |
+| SampleDataMiniApp | Начальные данные | Scoped | Сервис запускает SampleDataStartupRuntime каталога после defaults |
+| BackupRestoreMiniApp | Архивы и расписание | Scheduler singleton runtime; restore scoped | Каталог запускает background после seed; export/import через DataProvider |
 | UserMessagesMiniApp | Адресованные пользователю сообщения | State/handler/facade scoped; flash-store singleton | PostUserMessage/ClearUserMessages адресуются пользователю и окну; корреляция исключает повторную доставку |
 
 Регистрации: [MiniApps](../../BusinessEntity/MiniApps).
@@ -28,8 +28,7 @@ Core использует общие EntitySaveBatchFactory и GraphArchiveRemap
 
 ## Владельцы, которые появятся в этапах 5–6
 
-Navigation, BackupRestore,
-Diagnostics и Administration оформляются отдельными миниаппами по инвентарю ТЗ.
+Navigation, Diagnostics и Administration оформляются отдельными миниаппами по инвентарю ТЗ.
 Это планируемые владельцы, а не уже существующий код.
 WidgetsMiniApp для удаляемых часов не создаётся.
 
@@ -50,3 +49,24 @@ host-service, размещения и владельцев контекстов 
 Кэш DataProvider: согласованный structural snapshot, ограниченный payload LRU,
 публичные проекции навигации и статистика. Владельцы UI применяют права к копиям
 проекций. User SQL учитывается отдельно от storage counters.
+
+## Фактические модули этапа 4
+
+| DefinitionKey | Размещение / политика | Запуск |
+|---|---|---|
+| DataProviderMiniApp:storage | Headless / AppSingleton | schema/files/cache, порядок 0 |
+| UserMiniApp:identity-bootstrap | Headless / AppSingleton | Authentik, 10 |
+| UserMiniApp:defaults | Headless / AppSingleton | собственная схема/defaults, 20 |
+| SysParametersMiniApp:defaults | Headless / AppSingleton | обязательный singleton, 30 |
+| SampleDataMiniApp:seed | Headless / AppSingleton | seed, 40 |
+| MediaServerMiniApp:uploads | Headless / AppSingleton | background queue, 50 |
+| BackupRestoreMiniApp:scheduler | Headless / AppSingleton | background backup, 60 |
+| TreeMiniApp:tree | ShellModuleHostArea LeftTree / WindowSingleton | tree.main |
+
+Другие host-service пока объявляют пустой набор UI (перенос этапа 5).
+ModuleCatalog singleton принимает поздние объявления; WindowModularityManager
+scoped держит адреса и общие MiniAppSaveContext. AppSingleton не допускает UI/dirty.
+IModuleUiFactory проверяет локальный реестр типов; шина переносит только ключи.
+Снятие последнего dirty UI сохраняет runtime неактивным до возврата/guard;
+старый неактивный адрес не исполняет команду. Reconnect сохраняет circuit;
+новый circuit после аварии не восстанавливает локальные черновики.

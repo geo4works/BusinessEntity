@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Infrastructure.Bus;
@@ -23,6 +24,9 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Registration
             services.AddBusEndpoint<TreeMiniAppMessageHandler>(typeof(GetTreeForSpaceRequest));
             services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.Folder, "TreeMiniApp"));
             services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.Folder, false));
+            services.AddMiniAppHost("TreeMiniApp", new ModuleDefinition("TreeMiniApp", "tree", "Дерево", "account_tree",
+                ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "tree.main", "LeftTree", OpenOnStartup: true));
+            services.AddModuleComponent<BusinessEntity.MiniApps.TreeMiniApp.Components.TreeMiniAppComponent>("tree.main");
             return services;
         }
     }

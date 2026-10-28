@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Saving;
 
@@ -11,6 +12,9 @@ public static class SysParametersMiniAppRegistration
     {
         services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.SysParametersTp, "SysParametersMiniApp"));
         services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.SysParametersTp, true));
-        return services;
+        services.AddMiniAppHost("SysParametersMiniApp", new ModuleDefinition("SysParametersMiniApp", "defaults", "Параметры системы", null,
+                ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 30, OpenOnStartup: true));
+            services.AddModuleRuntime<BusinessEntity.MiniApps.SysParametersMiniApp.Internal.SysParametersStartupRuntime>("SysParametersMiniApp:defaults");
+            return services;
     }
 }
