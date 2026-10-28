@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -49,11 +50,31 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
 
             services.AddMiniAppHost("UserMiniApp",
                 new ModuleDefinition("UserMiniApp", "identity-bootstrap", "Identity", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 10, OpenOnStartup: true),
-                new ModuleDefinition("UserMiniApp", "defaults", "Пользователи", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 20, OpenOnStartup: true));
+                new ModuleDefinition("UserMiniApp", "defaults", "Пользователи", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 20, OpenOnStartup: true),
+            new ModuleDefinition("UserMiniApp", "User.Profile", "Профиль", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.profile", RequiredPermission: "Authenticated"),
+            new ModuleDefinition("UserMiniApp", "User.AuthInfo", "Авторизация", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.authinfo", RequiredPermission: "Authenticated"),
+            new ModuleDefinition("UserMiniApp", "User.Administration", "Пользователи", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.administration", RequiredPermission: "GlobalAdmin"),
+            new ModuleDefinition("UserMiniApp", "User.Header", "Пользователь", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "user.header", "TopBar", Order: 20, OpenOnStartup: true));
             services.AddModuleRuntime<IdentityStartupRuntime>("UserMiniApp:identity-bootstrap");
             services.AddModuleRuntime<UserStartupRuntime>("UserMiniApp:defaults");
             services.AddScoped<IModuleAccessPolicy, UserModuleAccessPolicy>();
-            return services;
+
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UserProfile>("user.profile");
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UserAuthInfo>("user.authinfo");
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UsersAdministration>("user.administration");
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UserHeader>("user.header");
+        services.AddMiniAppButtons(
+            new ButtonDefinition("UserMiniApp", "nav.authinfo", "Nav.Main", "Авторизация", "oi oi-lock-locked", 10, RequiredPermission: "Authenticated", TargetRoute: "/authinfo"),
+            new ButtonDefinition("UserMiniApp", "nav.profile", "Nav.Main", "Профиль", "oi oi-person", 20, RequiredPermission: "Authenticated", TargetRoute: "/profile"),
+            new ButtonDefinition("UserMiniApp", "admin.users", "Administration.Navigation", "Пользователи", null, 30, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users"));
+
+        services.AddMiniAppButtons(
+            new ButtonDefinition("UserMiniApp", "users.general", "User.Administration.Navigation", "Общая", Order: 0, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users/general"),
+            new ButtonDefinition("UserMiniApp", "users.access", "User.Administration.Navigation", "Права доступа", Order: 1, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users/access"),
+            new ButtonDefinition("UserMiniApp", "users.roles", "User.Administration.Navigation", "Роли", Order: 2, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users/roles"),
+            new ButtonDefinition("UserMiniApp", "users.groups", "User.Administration.Navigation", "Группы", Order: 3, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users/groups"),
+            new ButtonDefinition("UserMiniApp", "users.members", "User.Administration.Navigation", "Состав групп", Order: 4, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users/members"));
+        return services;
         }
         // Создаёт собственную схему User после нового DataProvider и проверяет её на последующих стартах.
         public static async Task InitializeUserStorageAsync(this IServiceProvider services, bool freshDatabase, CancellationToken ct)

@@ -3,6 +3,7 @@
 @inject IModuleUiFactory UiFactory
 @implements IAsyncDisposable
 
+@if (Error != null) { <div class="alert alert-danger" role="alert">@Error</div> }
 @if (Module != null)
 {
     <CascadingValue Value="Module" IsFixed="true" @key="Module.ModuleId">
@@ -16,12 +17,15 @@
     [Parameter] public Guid? EditSessionId { get; set; }
     [Parameter] public IDictionary<string, object>? Parameters { get; set; }
     private MiniAppModule? Module;
+    private string? Error;
     // URL-host передаёт только контекст; создание и политика принадлежат менеджеру.
     protected override async Task OnParametersSetAsync()
     {
-        if (Module?.Definition.Key == DefinitionKey && Module.ContextId == ContextId) return;
+        if (Module?.Definition.Key == DefinitionKey && Module.ContextId == ContextId && (!EditSessionId.HasValue || Module.EditSessionId == EditSessionId)) return;
         if (Module != null) await Manager.CloseAsync(Module.ModuleId);
-        Module = await Manager.OpenAsync(DefinitionKey, ContextId, EditSessionId);
+        Module = null; Error = null;
+        try { Module = await Manager.OpenAsync(DefinitionKey, ContextId, EditSessionId); }
+        catch (Exception exception) { Error = BusinessEntity.Infrastructure.Bus.BusError.FromException(exception).Message; }
     }
     // Снятие вспомогательного UI не очищает общий dirty рабочего экземпляра.
     public async ValueTask DisposeAsync()

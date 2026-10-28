@@ -1,5 +1,5 @@
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
-using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.ActivityMiniApp.Internal;
 using Microsoft.AspNetCore.Components;
 
 namespace BusinessEntity.MiniApps.ActivityMiniApp.Components;
@@ -16,7 +16,7 @@ public partial class BusinessEntityCommentEditor : ComponentBase
     [Parameter] public int Rows { get; set; } = 2;
     [Parameter] public EventCallback OnSubmitted { get; set; }
 
-    [Inject] public IActivityConnector ActivityConnector { get; set; } = default!;
+    [Inject] private ActivityCommentService CommentsService { get; set; } = default!;
 
     private string Text { get; set; } = string.Empty;
     private string? Error { get; set; }
@@ -36,7 +36,7 @@ public partial class BusinessEntityCommentEditor : ComponentBase
 
         try
         {
-            await ActivityConnector.CreateCommentAsync(new BusinessEntityCommentCreateRequest
+            await CommentsService.CreateCommentAsync(new BusinessEntityCommentCreateRequest
             {
                 BusinessEntityId = BusinessEntityId,
                 ParentId = ParentId,

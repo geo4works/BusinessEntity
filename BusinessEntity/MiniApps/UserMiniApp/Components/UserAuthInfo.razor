@@ -1,0 +1,315 @@
+@namespace BusinessEntity.MiniApps.UserMiniApp.Components
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<PageTitle>Информация об авторизации</PageTitle>
+
+<h1>Информация об авторизации</h1>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="user-info-container">
+            <div class="user-welcome">
+                @if (!string.IsNullOrEmpty(CurrentUserName))
+                {
+                    <h3>Подробная информация об авторизации для @CurrentUserName</h3>
+
+                    <!-- Основная информация о пользователе -->
+                    <div class="user-basic-info">
+                        @if (!string.IsNullOrEmpty(CurrentUserEmail))
+                        {
+                            <p class="user-email"><strong>Email:</strong> @CurrentUserEmail</p>
+                        }
+                        @if (!string.IsNullOrEmpty(CurrentUserId))
+                        {
+                            <p class="user-id"><strong>ID пользователя:</strong> @CurrentUserId</p>
+                        }
+                        @if (CurrentUserModel != null)
+                        {
+                            <p class="auth-type"><strong>Тип авторизации:</strong> Cookies</p>
+                            <p class="auth-status"><strong>Авторизован:</strong> @AuthenticationStatusText</p>
+                        }
+                        <p class="claims-count"><strong>Количество клеймов:</strong> @AllClaims.Count</p>
+
+                        <div class="groups-summary mt-4">
+                            <strong>Группы пользователя в Authentik:</strong>
+                            @if (AuthentikGroups.Any())
+                            {
+                                <div class="groups-badges mt-2">
+                                    @foreach (var group in AuthentikGroups)
+                                    {
+                                        <span class="badge bg-primary me-2 mb-2">@group</span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted mb-0 mt-2">Группы в claims не найдены.</p>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Детальная информация о клеймах -->
+                    @if (AllClaims.Any())
+                    {
+                        <div class="claims-section">
+                            <h4>Все клеймы пользователя:</h4>
+
+                            <!-- Группировка клеймов по типам -->
+                            <div class="claims-by-type">
+                                @foreach (var claimGroup in ClaimsByType.OrderBy(x => x.Key))
+                                {
+                                    <div class="claim-group">
+                                        <h5 class="claim-type">@GetFriendlyClaimTypeName(claimGroup.Key)</h5>
+                                        <div class="claim-values">
+                                            @foreach (var claim in claimGroup.Value)
+                                            {
+                                                <div class="claim-item">
+                                                    <span class="claim-value">@claim.Value</span>
+                                                    @if (!string.IsNullOrEmpty(claim.Issuer) && claim.Issuer != "LOCAL AUTHORITY")
+                                                    {
+                                                        <small class="claim-issuer">(@claim.Issuer)</small>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Полный список клеймов в виде таблицы -->
+                            <div class="claims-table-section">
+                                <h5>Подробная таблица клеймов:</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Тип клейма</th>
+                                                <th>Значение</th>
+                                                <th>Издатель</th>
+                                                <th>Оригинальный издатель</th>
+                                                <th>Тип значения</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var claim in AllClaims.OrderBy(c => c.Type))
+                                            {
+                                                <tr>
+                                                    <td><code>@claim.Type</code></td>
+                                                    <td>@claim.Value</td>
+                                                    <td>@claim.Issuer</td>
+                                                    <td>@claim.OriginalIssuer</td>
+                                                    <td>@claim.ValueType</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- ID Token информация (если есть) -->
+                    @if (!string.IsNullOrEmpty(IdentityToken))
+                    {
+                        <div class="token-section">
+                            <h4>Информация о токене:</h4>
+                            <div class="token-info">
+                                <p><strong>ID токен присутствует:</strong> Да</p>
+                                <p><strong>Длина токена:</strong> @IdentityToken.Length символов</p>
+                                <details>
+                                    <summary>Показать токен (осторожно!)</summary>
+                                    <div class="token-value">
+                                        <code>@IdentityToken</code>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="action-buttons">
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="SignOut">Выйти</button>
+                        <a href="/" class="btn btn-primary btn-sm">На главную</a>
+                    </div>
+                }
+                else
+                {
+                    <p>Загрузка информации о пользователе...</p>
+                }
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="alert alert-warning">
+            <h4>Требуется авторизация</h4>
+            <p>Для просмотра информации об авторизации необходимо войти в систему.</p>
+            <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentik</button>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+<style>
+    .user-info-container {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .user-welcome h3 {
+        color: #28a745;
+        margin-bottom: 15px;
+    }
+
+    .user-basic-info {
+        background-color: #e9ecef;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+
+    .user-basic-info p {
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+    }
+
+    .user-email, .user-id, .auth-type, .auth-status, .claims-count {
+        color: #495057;
+    }
+
+    .groups-summary {
+        padding-top: 12px;
+        border-top: 1px solid #ced4da;
+    }
+
+    .groups-badges .badge {
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .claims-section {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+    }
+
+    .claims-section h4 {
+        color: #007bff;
+        margin-bottom: 15px;
+    }
+
+    .claims-by-type {
+        margin-bottom: 25px;
+    }
+
+    .claim-group {
+        margin-bottom: 15px;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-left: 3px solid #007bff;
+    }
+
+    .claim-type {
+        color: #0056b3;
+        font-size: 1rem;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+
+    .claim-values {
+        margin-left: 10px;
+    }
+
+    .claim-item {
+        margin-bottom: 5px;
+    }
+
+    .claim-value {
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .claim-issuer {
+        color: #6c757d;
+        font-style: italic;
+        margin-left: 5px;
+    }
+
+    .claims-table-section {
+        margin-top: 20px;
+    }
+
+    .claims-table-section h5 {
+        color: #495057;
+        margin-bottom: 10px;
+    }
+
+    .table {
+        font-size: 0.85rem;
+    }
+
+    .table code {
+        background-color: #f1f3f4;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 0.8rem;
+    }
+
+    .token-section {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+    }
+
+    .token-section h4 {
+        color: #856404;
+        margin-bottom: 10px;
+    }
+
+    .token-info p {
+        margin-bottom: 8px;
+        color: #856404;
+    }
+
+    .token-value {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 3px;
+        margin-top: 10px;
+        word-break: break-all;
+        font-family: 'Courier New', monospace;
+        font-size: 0.8rem;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .action-buttons {
+        margin-top: 20px;
+    }
+
+    .action-buttons .btn {
+        margin-right: 10px;
+        font-size: 0.8rem;
+        padding: 5px 10px;
+    }
+
+    details {
+        margin-top: 10px;
+    }
+
+    summary {
+        cursor: pointer;
+        color: #007bff;
+        font-weight: 500;
+    }
+
+    summary:hover {
+        text-decoration: underline;
+    }
+</style>

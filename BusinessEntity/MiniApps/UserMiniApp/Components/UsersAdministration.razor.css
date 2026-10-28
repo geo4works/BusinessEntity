@@ -56,7 +56,7 @@
 }
 
 .users-admin__user:last-child {
-    border-bottom: 0;
+    border-radius: 4px;
 }
 
 .users-admin__user:hover {
@@ -94,28 +94,29 @@
     font-size: 0.7rem;
 }
 
-.users-admin__tabs {
+.users-admin__sections {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding-bottom: 0.5rem;
 }
 
-.users-admin__tab {
+.users-admin__sections ::deep .users-admin__section {
     border: 1px solid #2f3a45;
     border-bottom: 0;
     background: #f8fafc;
     color: #111827;
-    min-width: 7.6rem;
+    min-width: 0;
     padding: 0.52rem 0.75rem;
     font-size: 0.875rem;
     line-height: 1.25;
     text-align: left;
 }
 
-.users-admin__tab + .users-admin__tab {
-    border-left: 0;
-}
 
-.users-admin__tab--active {
+
+.users-admin__sections ::deep .users-admin__section.active {
     background: #cfe5fb;
 }
 
@@ -246,7 +247,7 @@
     flex: 0 0 auto;
 }
 
-.users-admin__group-inline-editor {
+.users-admin__groups ::deep .users-admin__group-inline-editor {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -254,7 +255,7 @@
     flex: 1 1 auto;
 }
 
-.users-admin__group-inline-editor .btn {
+.users-admin__groups ::deep .users-admin__group-inline-editor .btn {
     flex: 0 0 auto;
     white-space: nowrap;
 }
@@ -274,7 +275,7 @@
     white-space: nowrap;
 }
 
-.users-admin__group-inline-field .form-control {
+.users-admin__group-inline-field ::deep .form-control {
     min-width: 10rem;
     max-width: 24rem;
 }
@@ -494,3 +495,6 @@
         margin-left: 0;
     }
 }
+
+.users-admin__sections ::deep .users-admin__section { text-decoration: none; display: inline-block; }
+.users-admin__groups ::deep .users-admin__group-inline-editor { flex-wrap: wrap !important; }

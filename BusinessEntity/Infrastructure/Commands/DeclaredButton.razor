@@ -1,0 +1,69 @@
+@using System.Reactive.Linq
+@using ReactiveUI
+@inject IMessageBus Bus
+@namespace BusinessEntity.Infrastructure.Commands
+@inject ButtonCatalog Catalog
+@inject ModuleCommandRegistry Commands
+@inject BusinessEntity.Infrastructure.Modularity.WindowModularityManager Manager
+@inject BusinessEntity.Infrastructure.Bus.BusRequestClient Client
+@implements IDisposable
+
+@if (Definition != null && (CurrentState?.Visible ?? Visible))
+{
+    <button type="button" class="@(CssClass ?? Definition.CssClass)" title="@(CurrentState?.Title ?? Title ?? Definition.Title)"
+            aria-label="@Definition.Title" disabled="@(!(CurrentState?.Enabled ?? Enabled))" @onclick="InvokeAsync">
+        @if (ChildContent != null) { @ChildContent }
+        else { @Definition.Title }
+    </button>
+}
+@if (Error != null) { <span role="alert" class="text-danger">@Error</span> }
+
+@code {
+    [CascadingParameter] public BusinessEntity.Infrastructure.Modularity.MiniAppModule? Module { get; set; }
+    [Parameter, EditorRequired] public string MiniAppId { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CommandId { get; set; } = string.Empty;
+    [Parameter] public string HostId { get; set; } = "Document.Toolbar";
+    [Parameter] public bool Enabled { get; set; } = true;
+    [Parameter] public bool Visible { get; set; } = true;
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? CssClass { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnInvoked { get; set; }
+    private ButtonDefinition? Definition;
+    private IDisposable? _binding;
+    private string? Error;
+    private readonly Guid BindingId = Guid.NewGuid();
+    private ButtonState? CurrentState;
+    private IDisposable? _stateSubscription;
+    // Приёмник хранит адресный UI-кэш snapshot владельца, не вычисляя бизнес-доступ самостоятельно.
+    protected override void OnInitialized()
+    {
+        _stateSubscription = Bus.Listen<ButtonStateSnapshot>().Subscribe(snapshot =>
+        {
+            if (Module == null || snapshot.LogicalWindowId != Module.LogicalWindowId || snapshot.ModuleId != Module.ModuleId
+                || snapshot.EditSessionId != Module.EditSessionId || snapshot.BindingId != BindingId
+                || !snapshot.States.TryGetValue(CommandId, out var state) || state == CurrentState) return;
+            CurrentState = state; _ = InvokeAsync(StateHasChanged);
+        });
+    }
+    // Runtime callback приходит от владельца, декларация — от его singleton host-service.
+    protected override void OnParametersSet()
+    {
+        if (Module == null) throw new InvalidOperationException("Адресная команда требует живого модуля.");
+        Definition = Catalog.Get(MiniAppId, CommandId, HostId); _binding?.Dispose();
+        _binding = Commands.Bind(Module, Definition, new(Visible, Enabled, Title), () => InvokeAsync(() => OnInvoked.InvokeAsync()), BindingId);
+    }
+    // Приёмник только отправляет команду; бизнес-операцию исполняет зарегистрированный владелец.
+    private async Task InvokeAsync()
+    {
+        Error = null;
+        try
+        {
+            await Manager.ExecuteAsync(Module!.ModuleId, async _ =>
+                await Client.SendAsync<ButtonCommandInvoked, ButtonCommandResult>(new(Guid.NewGuid(), MiniAppId, CommandId, BindingId)));
+        }
+        catch (Exception exception) { Error = BusinessEntity.Infrastructure.Bus.BusError.FromException(exception).Message; }
+    }
+    // Кнопка не оставляет callback закрытого компонента.
+    public void Dispose() { _binding?.Dispose(); _binding = null; _stateSubscription?.Dispose(); _stateSubscription = null; }
+}

@@ -1,0 +1,51 @@
+@namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+
+<PageTitle>RichTextDocument</PageTitle>
+
+@if (!string.IsNullOrEmpty(Error))
+{
+    <div class="alert alert-danger">@Error</div>
+}
+else if (IsLoading)
+{
+    <div class="alert alert-info">Загрузка rich-text документа...</div>
+}
+else if (Entity == null)
+{
+    <div class="alert alert-warning">Документ не найден.</div>
+}
+else
+{
+    <div class="py-2 px-2">
+        <RichTextDocumentView @ref="DocumentView"
+            BusinessEntityId="@Id"
+            EntityName="@(ViewedTitle)"
+            InitialChunkWindow="@InitialChunkWindow"
+            OutlineNodes="@OutlineNodes"
+            IsInitialContentLoading="@IsInitialContentLoading"
+            IsOutlineLoading="@IsOutlineLoading"
+            IsBusy="@IsImporting"
+            IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
+            StatusMessage="@StatusMessage"
+            VersionsRefreshToken="@VersionsRefreshToken"
+            ViewedVersion="@ViewedVersion"
+            LatestVersion="@LatestVersion"
+            PublishedVersion="@(Manifest?.PublishedVersion ?? 0)"
+            CanEditViewedVersion="@CanEditViewedVersion"
+            CanRestoreVersion="@CanEditDocument"
+            CanDelete="@CanDeleteDocument"
+            CanPublish="@CanPublishDocument"
+            CanChangePublicFlag="@CanChangePublicFlag"
+            IsPublic="@(Entity?.IsPublic == true)"
+            CanBrowseVersions="@HasFullDocumentAccess"
+            StartInEditMode="@StartInEditMode"
+            OnImportSelected="OnImportSelectedAsync"
+            OnRebuildTableOfContents="OnRebuildTableOfContentsAsync"
+            OnEditorSaved="OnEditorSavedAsync"
+            OnPublishRequested="OnPublishRequestedAsync"
+            OnDeleteRequested="OnDeleteRequestedAsync"
+            OnPublicChanged="OnPublicChangedAsync"
+            OnVersionSelected="OnVersionSelectedAsync" />
+    </div>
+}

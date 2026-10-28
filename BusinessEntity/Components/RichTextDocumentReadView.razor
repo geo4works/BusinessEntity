@@ -32,37 +32,23 @@
                             <span class="form-check-label">Общий</span>
                         </label>
                     }
-                    <a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
-                       title="Печать"
-                       href="@($"/print/{BusinessEntityId}")">
+                    <DeclaredLink MiniAppId="RichTextDocumentMiniApp" CommandId="article.print" ContextId="BusinessEntityId">
                         <span class="material-icons" aria-hidden="true">print</span>
                         <span>Печать</span>
-                    </a>
-                    <button type="button"
-                            class="btn btn-sm btn-outline-primary"
-                            title="@(CanEdit ? "Редактировать последнюю версию" : "Редактирование доступно только для последней версии")"
-                            disabled="@(!CanEdit)"
-                            @onclick="HandleEditAsync">
+                    </DeclaredLink>
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.edit" OnInvoked="HandleEditAsync" Enabled="@(CanEdit)" CssClass="btn btn-sm btn-outline-primary" Title="Edit">
                         Edit
-                    </button>
-                    <label class="btn btn-sm btn-outline-secondary mb-0">
-                        Импорт
-                        <InputFile class="d-none" OnChange="HandleImportSelected" accept=".txt,.md,.markdown,.html,.htm" disabled="@(!CanEdit)" />
-                    </label>
-                    <button type="button"
-                            class="btn btn-sm btn-outline-success"
-                            disabled="@(!CanPublish)"
-                            @onclick="HandlePublishAsync">
+                    </DeclaredButton>
+                    <DeclaredFileInput MiniAppId="RichTextDocumentMiniApp" CommandId="article.import" Enabled="CanEdit" OnSelected="HandleImportSelected" />
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.publish" OnInvoked="HandlePublishAsync" Enabled="@(CanPublish)" CssClass="btn btn-sm btn-outline-success">
                         Опубликовать
-                    </button>
+                    </DeclaredButton>
                     @if (CanDelete)
                     {
-                        <button type="button"
-                                class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1"
-                                @onclick="HandleDeleteAsync">
+                        <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.delete" OnInvoked="HandleDeleteAsync" Enabled="@(CanDelete)" CssClass="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1">
                             <span class="material-icons" aria-hidden="true">delete</span>
                             <span>Удалить</span>
-                        </button>
+                        </DeclaredButton>
                     }
                 </div>
             </div>
@@ -105,37 +91,23 @@
                             <span class="form-check-label">Общий</span>
                         </label>
                     }
-                    <a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
-                       title="Печать"
-                       href="@($"/print/{BusinessEntityId}")">
+                    <DeclaredLink MiniAppId="RichTextDocumentMiniApp" CommandId="article.print" ContextId="BusinessEntityId">
                         <span class="material-icons" aria-hidden="true">print</span>
                         <span>Печать</span>
-                    </a>
-                    <button type="button"
-                            class="btn btn-sm btn-outline-primary"
-                            title="@(CanEdit ? "Редактировать последнюю версию" : "Редактирование доступно только для последней версии")"
-                            disabled="@(!CanEdit)"
-                            @onclick="HandleEditAsync">
+                    </DeclaredLink>
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.edit" OnInvoked="HandleEditAsync" Enabled="@(CanEdit)" CssClass="btn btn-sm btn-outline-primary" Title="Edit">
                         Edit
-                    </button>
-                    <label class="btn btn-sm btn-outline-secondary mb-0">
-                        Импорт
-                        <InputFile class="d-none" OnChange="HandleImportSelected" accept=".txt,.md,.markdown,.html,.htm" disabled="@(!CanEdit)" />
-                    </label>
-                    <button type="button"
-                            class="btn btn-sm btn-outline-success"
-                            disabled="@(!CanPublish)"
-                            @onclick="HandlePublishAsync">
+                    </DeclaredButton>
+                    <DeclaredFileInput MiniAppId="RichTextDocumentMiniApp" CommandId="article.import" Enabled="CanEdit" OnSelected="HandleImportSelected" />
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.publish" OnInvoked="HandlePublishAsync" Enabled="@(CanPublish)" CssClass="btn btn-sm btn-outline-success">
                         Опубликовать
-                    </button>
+                    </DeclaredButton>
                     @if (CanDelete)
                     {
-                        <button type="button"
-                                class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1"
-                                @onclick="HandleDeleteAsync">
+                        <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.delete" OnInvoked="HandleDeleteAsync" Enabled="@(CanDelete)" CssClass="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1">
                             <span class="material-icons" aria-hidden="true">delete</span>
                             <span>Удалить</span>
-                        </button>
+                        </DeclaredButton>
                     }
                 </div>
                 <RichTextDocumentWidgets CanRestoreVersion="@CanRestoreVersion" BusinessEntityId="@BusinessEntityId"

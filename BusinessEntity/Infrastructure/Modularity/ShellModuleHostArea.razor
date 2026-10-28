@@ -1,19 +1,30 @@
 @namespace BusinessEntity.Infrastructure.Modularity
 @inject ModuleCatalog Catalog
+@inject WindowModularityManager Manager
 @implements IDisposable
 
-@foreach (var definition in Catalog.Definitions.Where(x => x.Placement == ModulePlacement.ShellModuleHostArea && x.HostArea == Area && x.OpenOnStartup))
+@foreach (var definition in Definitions)
 {
     <PageModuleHost @key="definition.Key" DefinitionKey="@definition.Key" />
 }
-
 @code {
     [Parameter, EditorRequired] public string Area { get; set; } = string.Empty;
     private bool _disposed;
-    // Поздние UI-декларации появляются в том же именованном месте без пересоздания circuit.
+    private IReadOnlyList<ModuleDefinition> Definitions = [];
+    // Поздние объявления обновляют только свои именованные места.
     protected override void OnInitialized() => Catalog.DefinitionsChanged += OnDefinitionsChanged;
-    // Каталог общий, поэтому уведомление переводится в renderer текущего окна.
-    private void OnDefinitionsChanged() { if (!_disposed) _ = InvokeAsync(StateHasChanged); }
-    // Хост не оставляет ссылку singleton-каталога на закрытое окно.
+    // Невидимый по правам модуль оболочки не создаётся; прямые страницы проверяют свой guard отдельно.
+    protected override Task OnParametersSetAsync() => RefreshAsync();
+    // Каталог общий, проверка доступа выполняется в scope текущего окна.
+    private async Task RefreshAsync()
+    {
+        var visible = new List<ModuleDefinition>();
+        foreach (var definition in Catalog.Definitions.Where(x => x.Placement == ModulePlacement.ShellModuleHostArea && x.HostArea == Area && x.OpenOnStartup))
+            if (await Manager.CanOpenDefinitionAsync(definition)) visible.Add(definition);
+        Definitions = visible;
+    }
+    // Singleton callback переводится в renderer без удержания закрытого окна.
+    private void OnDefinitionsChanged() { if (!_disposed) _ = InvokeAsync(async () => { await RefreshAsync(); StateHasChanged(); }); }
+    // Снимает единственную подписку именованного места.
     public void Dispose() { _disposed = true; Catalog.DefinitionsChanged -= OnDefinitionsChanged; }
 }

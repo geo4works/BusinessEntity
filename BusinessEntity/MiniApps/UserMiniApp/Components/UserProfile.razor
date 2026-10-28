@@ -1,0 +1,219 @@
+@namespace BusinessEntity.MiniApps.UserMiniApp.Components
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@attribute [Authorize]
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos
+@using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts
+@using ReactiveUI
+@inject IUserConnector UserConnector
+@inject IMessageBus MessageBus
+@inject BusinessEntity.Infrastructure.Bus.BusRequestScope BusScope
+
+<PageTitle>Профиль</PageTitle>
+
+<section class="profile-page">
+    <h3>Профиль</h3>
+
+    @if (IsLoading)
+    {
+        <div class="profile-page__state">Загрузка...</div>
+    }
+    else
+    {
+        <EditForm Model="@ProfileModel" OnValidSubmit="SaveProfileAsync">
+            <div class="profile-page__form">
+                <label class="profile-page__field">
+                    <span>Отображаемое имя</span>
+                    <InputText class="form-control"
+                               @bind-Value="ProfileModel.DisplayedName"
+                               disabled="@IsSaving" />
+                </label>
+
+                <div class="profile-page__section-title">Пароль для входа</div>
+
+                <label class="profile-page__field">
+                    <span>Старый пароль</span>
+                    <div class="profile-page__password-control">
+                        <InputText class="form-control profile-page__password-input"
+                                   type="@OldPasswordInputType"
+                                   autocomplete="current-password"
+                                   @bind-Value="ProfileModel.OldPassword"
+                                   disabled="@IsSaving" />
+                        <button type="button"
+                                class="btn btn-outline-secondary profile-page__password-toggle"
+                                @onclick="ToggleOldPasswordVisibility"
+                                disabled="@IsSaving">
+                            @OldPasswordToggleText
+                        </button>
+                    </div>
+                </label>
+
+                <label class="profile-page__field">
+                    <span>Новый пароль</span>
+                    <div class="profile-page__password-control">
+                        <InputText class="form-control profile-page__password-input"
+                                   type="@NewPasswordInputType"
+                                   autocomplete="new-password"
+                                   @bind-Value="ProfileModel.NewPassword"
+                                   disabled="@IsSaving" />
+                        <button type="button"
+                                class="btn btn-outline-secondary profile-page__password-toggle"
+                                @onclick="ToggleNewPasswordVisibility"
+                                disabled="@IsSaving">
+                            @NewPasswordToggleText
+                        </button>
+                    </div>
+                </label>
+
+                <label class="profile-page__field">
+                    <span>Повторение пароля</span>
+                    <div class="profile-page__password-control">
+                        <InputText class="form-control profile-page__password-input"
+                                   type="@RepeatPasswordInputType"
+                                   autocomplete="new-password"
+                                   @bind-Value="ProfileModel.RepeatPassword"
+                                   disabled="@IsSaving" />
+                        <button type="button"
+                                class="btn btn-outline-secondary profile-page__password-toggle"
+                                @onclick="ToggleRepeatPasswordVisibility"
+                                disabled="@IsSaving">
+                            @RepeatPasswordToggleText
+                        </button>
+                    </div>
+                </label>
+            </div>
+
+            <div class="profile-page__actions">
+                <button type="submit"
+                        class="btn btn-primary"
+                        disabled="@IsSaving">
+                    Сохранить
+                </button>
+            </div>
+        </EditForm>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="profile-page__error">@ErrorMessage</div>
+    }
+</section>
+
+@code {
+    private UserProfileUpdateRequest ProfileModel { get; set; } = new();
+    private bool IsLoading { get; set; }
+    private bool IsSaving { get; set; }
+    private bool IsOldPasswordVisible { get; set; }
+    private bool IsNewPasswordVisible { get; set; }
+    private bool IsRepeatPasswordVisible { get; set; }
+    private Guid CurrentUserId { get; set; }
+    private string? ErrorMessage { get; set; }
+    private string OldPasswordInputType => IsOldPasswordVisible ? "text" : "password";
+    private string NewPasswordInputType => IsNewPasswordVisible ? "text" : "password";
+    private string RepeatPasswordInputType => IsRepeatPasswordVisible ? "text" : "password";
+    private string OldPasswordToggleText => IsOldPasswordVisible ? "Скрыть" : "Показать";
+    private string NewPasswordToggleText => IsNewPasswordVisible ? "Скрыть" : "Показать";
+    private string RepeatPasswordToggleText => IsRepeatPasswordVisible ? "Скрыть" : "Показать";
+
+    // Загружает текущий профиль при открытии страницы.
+    protected override async Task OnInitializedAsync()
+    {
+        IsLoading = true;
+
+        try
+        {
+            var profile = await UserConnector.GetProfileAsync();
+            CurrentUserId = profile?.UserId ?? Guid.Empty;
+            ProfileModel.DisplayedName = profile?.DisplayedName ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    // Сохраняет отображаемое имя и, если заполнены поля пароля, меняет пароль в Authentik.
+    private async Task SaveProfileAsync()
+    {
+        IsSaving = true;
+        ErrorMessage = null;
+
+        try
+        {
+            var isPasswordChanged = HasPasswordChange();
+            var profile = await UserConnector.UpdateProfileAsync(ProfileModel);
+            CurrentUserId = profile.UserId;
+            ProfileModel.DisplayedName = profile.DisplayedName;
+            ClearPasswordFields();
+            PublishProfileSavedMessage(isPasswordChanged);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    // Публикует сообщение о сохранении профиля в правую панель пользовательских сообщений.
+    private void PublishProfileSavedMessage(bool isPasswordChanged)
+    {
+        if (CurrentUserId == Guid.Empty)
+        {
+            return;
+        }
+
+        var text = isPasswordChanged
+            ? "Профиль сохранен. Пароль изменен."
+            : "Профиль сохранен.";
+
+        MessageBus.SendMessage(new PostUserMessage(
+            CurrentUserId, BusScope.LogicalWindowId, Guid.NewGuid(),
+            text,
+            UserMessageLevel.Success,
+            "Профиль сохранен"));
+    }
+
+    // Проверяет, заполнено ли хотя бы одно поле смены пароля.
+    private bool HasPasswordChange()
+    {
+        return !string.IsNullOrWhiteSpace(ProfileModel.OldPassword) ||
+               !string.IsNullOrWhiteSpace(ProfileModel.NewPassword) ||
+               !string.IsNullOrWhiteSpace(ProfileModel.RepeatPassword);
+    }
+
+    // Очищает парольные поля после успешной смены или сохранения.
+    private void ClearPasswordFields()
+    {
+        ProfileModel.OldPassword = string.Empty;
+        ProfileModel.NewPassword = string.Empty;
+        ProfileModel.RepeatPassword = string.Empty;
+        IsOldPasswordVisible = false;
+        IsNewPasswordVisible = false;
+        IsRepeatPasswordVisible = false;
+    }
+
+    // Переключает видимость старого пароля.
+    private void ToggleOldPasswordVisibility()
+    {
+        IsOldPasswordVisible = !IsOldPasswordVisible;
+    }
+
+    // Переключает видимость нового пароля.
+    private void ToggleNewPasswordVisibility()
+    {
+        IsNewPasswordVisible = !IsNewPasswordVisible;
+    }
+
+    // Переключает видимость повторения пароля.
+    private void ToggleRepeatPasswordVisibility()
+    {
+        IsRepeatPasswordVisible = !IsRepeatPasswordVisible;
+    }
+}

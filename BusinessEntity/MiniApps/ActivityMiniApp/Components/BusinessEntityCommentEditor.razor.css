@@ -24,7 +24,7 @@
     line-height: 1;
 }
 
-.be-comment-editor__submit-link {
+.be-comment-editor ::deep .be-comment-editor__submit-link {
     background: transparent;
     border: 0;
     color: #2f6ec8;
@@ -36,12 +36,12 @@
     white-space: nowrap;
 }
 
-.be-comment-editor__submit-link:hover:not(:disabled) {
+.be-comment-editor ::deep .be-comment-editor__submit-link:hover:not(:disabled) {
     color: #1f5ab0;
     text-decoration: underline;
 }
 
-.be-comment-editor__submit-link:disabled {
+.be-comment-editor ::deep .be-comment-editor__submit-link:disabled {
     color: #94a3b8;
     cursor: default;
     text-decoration: none;

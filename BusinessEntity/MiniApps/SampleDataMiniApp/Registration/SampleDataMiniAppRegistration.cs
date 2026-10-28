@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Internal;
@@ -15,9 +16,15 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Registration
             services.AddScoped<ISampleDataMiniApp, Facade.SampleDataMiniApp>();
 
             services.AddMiniAppHost("SampleDataMiniApp", new ModuleDefinition("SampleDataMiniApp", "seed", "Начальные данные", null,
-                ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 40, OpenOnStartup: true));
+                ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 40, OpenOnStartup: true),
+            new ModuleDefinition("SampleDataMiniApp", "SampleData.Administration", "Общее", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "sample.administration", RequiredPermission: "GlobalAdmin"));
             services.AddModuleRuntime<SampleDataStartupRuntime>("SampleDataMiniApp:seed");
-            return services;
+
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.SampleDataMiniApp.Components.GeneralAdministration>("sample.administration");
+        services.AddMiniAppButtons(
+            new ButtonDefinition("SampleDataMiniApp", "admin.general", "Administration.Navigation", "Общее", null, 0, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/general"));
+
+        return services;
         }
     }
 }

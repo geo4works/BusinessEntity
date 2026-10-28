@@ -1,0 +1,8 @@
+@page "/administration/users"
+@page "/administration/users/{Section}"
+<PageModuleHost DefinitionKey="AdministrationMiniApp:Administration.Page" />
+<PageModuleHost DefinitionKey="UserMiniApp:User.Administration" Parameters="ModuleParameters" />
+@code {
+    [Parameter] public string? Section { get; set; }
+    private IDictionary<string, object> ModuleParameters => new Dictionary<string, object> { ["Section"] = Section ?? "general" };
+}

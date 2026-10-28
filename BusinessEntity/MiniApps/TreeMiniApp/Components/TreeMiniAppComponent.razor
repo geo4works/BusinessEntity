@@ -1,4 +1,4 @@
-@inherits BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
 @using BusinessEntity.Models
 @namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 @using Radzen
@@ -85,19 +85,19 @@
         border-color: #d3c0ff !important;
         font-weight: 400 !important;
     }
-    
+
     .tree-node-dragging {
         opacity: 0.5;
         background-color: #ddd !important;
         color: #666 !important;
         cursor: move;
     }
-    
+
     .tree-node-drag-over {
         background-color: #e3f2fd !important;
         border: 2px dashed #2196f3 !important;
     }
-    
+
     .tree-multiselect-mode .card-header {
         background-color: #e3f2fd;
         border-bottom: 2px solid #2196f3;
@@ -138,7 +138,7 @@
         background-color: transparent !important;
         color: inherit !important;
     }
-    
+
     /* Убираем фокус outline */
     .rz-treeview-item:focus {
         outline: none !important;
@@ -210,13 +210,13 @@
         box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
         background-color: #fff !important;
     }
-    
+
     .tree-editing-input:focus {
         border-color: #007bff !important;
         box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
         outline: none !important;
     }
-    
+
     .tree-editing-error {
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
@@ -228,9 +228,9 @@
     <div id="main-tree-container"
          class="card h-100 d-flex flex-column @(IsMultiSelectMode ? "tree-multiselect-mode" : "")"
          style="height: 100%;">
-        
+
         <!-- Панель заголовка скрыта по требованию -->
-        
+
         <div class="card-body flex-grow-1">
 
             @if (TreeData != null && TreeData.Any())
@@ -260,9 +260,9 @@
                             }
                             @if (isEditing)
                             {
-                                <input type="text" 
+                                <input type="text"
                                        class="form-control form-control-sm tree-editing-input @(HasValidationError ? "tree-editing-error" : "")"
-                                       @bind="EditingText" 
+                                       @bind="EditingText"
                                        @bind:event="oninput"
                                        @onkeydown="OnEditKeyDownAsync"
                                        @onblur="async () => await FinishEditingAsync(true)"

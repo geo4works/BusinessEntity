@@ -1,0 +1,137 @@
+@namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [AllowAnonymous]
+@inject BusinessEntity.Contracts.IUserContextService UserContext
+@inject global::BusinessEntity.Services.SpaceHelper SpaceHelper
+@inject IUserConnector UserConnector
+@inject NavigationManager NavManager
+@inject BusinessEntity.WebLogger.Services.IWebLoggerService? WebLogger
+
+<h3>@PageTitle</h3>
+
+@if (spaces == null)
+{
+    <p><em>Загрузка...</em></p>
+}
+else if (!spaces.Any())
+{
+    <p>Нет доступных пространств.</p>
+}
+else
+{
+    <ul class="list-group">
+        @foreach (var space in spaces)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                @space.Name
+                <button class="btn btn-sm btn-primary" @onclick="() => SelectSpace(space.Id)">@SelectButtonText</button>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<SpaceSelectionItem>? spaces;
+    private bool IsAuthenticated { get; set; }
+    private string PageTitle => IsAuthenticated ? "Выбор пространства" : "Доступные пространства";
+    private string SelectButtonText => IsAuthenticated ? "Выбрать" : "Перейти";
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = AuthenticationStateTask == null ? null : await AuthenticationStateTask;
+        IsAuthenticated = authState?.User.Identity?.IsAuthenticated == true;
+
+        if (WebLogger != null)
+        {
+            await WebLogger.Information(
+                $"[space-selection] [page:init] path=/space-selection authenticated={IsAuthenticated} hasSelectedSpace={UserContext.HasSelectedSpace} currentSpaceId={UserContext.CurrentSpaceId?.ToString() ?? "null"} currentSpaceName='{UserContext.CurrentSpaceName ?? string.Empty}'");
+        }
+
+        if (!IsAuthenticated)
+        {
+            await LoadAnonymousSpacesAsync();
+            return;
+        }
+
+        // На явной странице выбора не делаем автопереход на главную:
+        // пользователь мог открыть ее намеренно, чтобы сменить текущее пространство.
+        // Проверяем только случай "протухшего" выбранного пространства.
+        if (UserContext.HasSelectedSpace && UserContext.CurrentSpaceId.HasValue)
+        {
+            var existingSpace = await SpaceHelper.GetSpaceByIdAsync(UserContext.CurrentSpaceId.Value);
+            if (existingSpace == null)
+            {
+                // После рестартов storage старый space из cookies может исчезнуть.
+                // В этом случае очищаем контекст и даём пользователю выбрать пространство заново.
+                if (WebLogger != null)
+                {
+                    await WebLogger.Warning(
+                        $"[space-selection] [page:clear-stale-space] staleSpaceId={UserContext.CurrentSpaceId.Value}");
+                }
+                UserContext.ClearSpace();
+            }
+            else if (WebLogger != null)
+            {
+                await WebLogger.Information(
+                    $"[space-selection] [page:current-space-present] currentSpaceId={existingSpace.Id} currentSpaceName='{existingSpace.Name}' action=show-selection-page");
+            }
+        }
+
+        var list = await SpaceHelper.GetSpacesAsync();
+        spaces = list
+            .Select(space => new SpaceSelectionItem(space.Id, space.Name))
+            .ToList();
+        if (WebLogger != null)
+        {
+            await WebLogger.Information(
+                $"[space-selection] [page:spaces-loaded] count={spaces.Count}");
+        }
+    }
+
+    private async Task LoadAnonymousSpacesAsync()
+    {
+        var anonymousSpaces = await UserConnector.GetAnonymousAccessibleSpacesAsync();
+        spaces = anonymousSpaces
+            .Select(space => new SpaceSelectionItem(space.Id, space.Name))
+            .ToList();
+
+        if (WebLogger != null)
+        {
+            await WebLogger.Information(
+                $"[space-selection] [page:anonymous-spaces-loaded] count={spaces.Count}");
+        }
+
+        if (spaces.Count == 0)
+        {
+            NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/space-selection")}", replace: true);
+            return;
+        }
+
+        if (spaces.Count == 1)
+        {
+            await SelectSpace(spaces[0].Id);
+        }
+    }
+
+    private async Task SelectSpace(Guid spaceId)
+    {
+        if (WebLogger != null)
+        {
+            await WebLogger.Information(
+                $"[space-selection] [page:select-click] authenticated={IsAuthenticated} targetSpaceId={spaceId}");
+        }
+
+        var route = IsAuthenticated
+            ? $"/api/space/select/{spaceId}"
+            : $"/api/space/select-anonymous/{spaceId}";
+        NavManager.NavigateTo(route, forceLoad: true);
+    }
+
+    private sealed record SpaceSelectionItem(Guid Id, string Name);
+}

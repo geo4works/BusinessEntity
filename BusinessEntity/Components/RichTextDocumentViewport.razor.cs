@@ -910,14 +910,7 @@ namespace BusinessEntity.Components
         {
             if (_viewportRegistered && !string.IsNullOrWhiteSpace(ViewportElementId))
             {
-                try
-                {
-                    await JS.InvokeVoidAsync("richTextReadViewport.unregisterViewport", ViewportElementId);
-                }
-                catch (JSDisconnectedException)
-                {
-                    // Blazor Server can disconnect JS runtime during teardown.
-                }
+                await BusinessEntity.Infrastructure.UI.BrowserLifecycle.UnregisterAsync(JS, "richTextReadViewport.unregisterViewport", ViewportElementId);
             }
 
             _dotNetReference?.Dispose();

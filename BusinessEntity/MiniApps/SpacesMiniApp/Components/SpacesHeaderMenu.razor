@@ -1,0 +1,41 @@
+@namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
+@inherits ModuleComponentBase
+@inject BusinessEntity.Services.SpaceHelper SpacesHelper
+@inject BusinessEntity.Contracts.IUserContextService CurrentSpace
+@inject BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors.IUserConnector Users
+@inject NavigationManager Navigation
+
+@if (Authenticated)
+{
+    <div class="app-header__dropdown-submenu">
+        <button type="button" class="app-header__dropdown-item app-header__dropdown-submenu-trigger" aria-haspopup="true">
+            <span>Пространства</span><span class="app-header__dropdown-submenu-arrow" aria-hidden="true">‹</span>
+        </button>
+        <div class="app-header__submenu">
+            <a class="app-header__submenu-item app-header__submenu-item--all" href="/space-selection">Все пространства</a>
+            <div class="app-header__submenu-separator" aria-hidden="true"></div>
+            @if (Spaces.Count == 0) { <div class="app-header__submenu-empty">Нет пространств</div> }
+            @foreach (var space in Spaces)
+            {
+                <button type="button" class="@(CurrentSpace.CurrentSpaceId == space.Id ? "app-header__submenu-item app-header__submenu-item--current" : "app-header__submenu-item")"
+                        title="@space.Name" @onclick="() => SelectSpace(space.Id)">@space.Name</button>
+            }
+        </div>
+    </div>
+}
+else if (PublicCount > 1) { <a class="app-header__link-button" href="/space-selection">Пространства</a> }
+
+@code {
+    private bool Authenticated;
+    private IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity> Spaces = [];
+    private int PublicCount;
+    // Текущий контекст и список пространств принадлежат Spaces, identity получается публичным контрактом User.
+    protected override async Task OnParametersSetAsync()
+    {
+        Authenticated = (await Users.GetCurrentUserAsync())?.IsAuthenticated == true;
+        if (Authenticated) Spaces = (await SpacesHelper.GetSpacesAsync()).ToArray();
+        else PublicCount = (await Users.GetAnonymousAccessibleSpacesAsync()).Count;
+    }
+    // Серверный HTTP adapter устанавливает cookie выбранного пространства.
+    private void SelectSpace(Guid id) => Navigation.NavigateTo($"/api/space/select/{id}", forceLoad: true);
+}

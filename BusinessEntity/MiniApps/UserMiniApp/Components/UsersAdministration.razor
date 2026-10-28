@@ -1,3 +1,5 @@
+@inject ButtonCatalog NavigationButtons
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
 @using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos
 @namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
@@ -62,46 +64,15 @@
     </div>
 
     <div class="users-admin__details">
-        <div class="users-admin__tabs" role="tablist" aria-label="Разделы пользователя">
-            <button type="button"
-                    class="@GetTabButtonClass(UserAdministrationTab.General)"
-                    role="tab"
-                    aria-selected="@(ActiveTab == UserAdministrationTab.General)"
-                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.General))">
-                Общая
-            </button>
-            <button type="button"
-                    class="@GetTabButtonClass(UserAdministrationTab.AccessRights)"
-                    role="tab"
-                    aria-selected="@(ActiveTab == UserAdministrationTab.AccessRights)"
-                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.AccessRights))">
-                Права доступа
-            </button>
-            <button type="button"
-                    class="@GetTabButtonClass(UserAdministrationTab.Roles)"
-                    role="tab"
-                    aria-selected="@(ActiveTab == UserAdministrationTab.Roles)"
-                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.Roles))">
-                Роли
-            </button>
-            <button type="button"
-                    class="@GetTabButtonClass(UserAdministrationTab.Groups)"
-                    role="tab"
-                    aria-selected="@(ActiveTab == UserAdministrationTab.Groups)"
-                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.Groups))">
-                Группы
-            </button>
-            <button type="button"
-                    class="@GetTabButtonClass(UserAdministrationTab.GroupMembers)"
-                    role="tab"
-                    aria-selected="@(ActiveTab == UserAdministrationTab.GroupMembers)"
-                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.GroupMembers))">
-                Состав групп
-            </button>
-        </div>
+        <nav class="users-admin__sections" aria-label="Разделы пользователя">
+            @foreach (var link in NavigationButtons.GetForHost("User.Administration.Navigation"))
+            {
+                <NavLink class="users-admin__section" href="@link.TargetRoute" Match="NavLinkMatch.All">@link.Title</NavLink>
+            }
+        </nav>
 
-        <div class="users-admin__panel" role="tabpanel">
-            @if (ActiveTab == UserAdministrationTab.General)
+        <div class="users-admin__panel">
+            @if (ActiveSection == UserAdministrationSection.General)
             {
                 <EditForm Model="@EditModel" OnValidSubmit="SaveUserAsync">
                     <div class="users-admin__form">
@@ -184,7 +155,7 @@
                     </div>
                 </EditForm>
             }
-            else if (ActiveTab == UserAdministrationTab.AccessRights)
+            else if (ActiveSection == UserAdministrationSection.AccessRights)
             {
                 <div class="users-admin__access">
                     <label class="users-admin__access-space">
@@ -307,7 +278,7 @@
                     }
                 </div>
             }
-            else if (ActiveTab == UserAdministrationTab.Roles)
+            else if (ActiveSection == UserAdministrationSection.Roles)
             {
                 <div class="users-admin__roles">
                     <div class="users-admin__roles-actions">
@@ -463,7 +434,7 @@
                     </EditForm>
                 </div>
             }
-            else if (ActiveTab == UserAdministrationTab.Groups)
+            else if (ActiveSection == UserAdministrationSection.Groups)
             {
                 <div class="users-admin__groups">
                     <div class="users-admin__groups-actions">
@@ -564,7 +535,7 @@
                     }
                 </div>
             }
-            else if (ActiveTab == UserAdministrationTab.GroupMembers)
+            else if (ActiveSection == UserAdministrationSection.GroupMembers)
             {
                 <div class="users-admin__group-members">
                     <label class="users-admin__membership-selector">
@@ -615,7 +586,7 @@
                     }
                     else
                     {
-                        <table class="users-admin__membership-table">
+                        <table class="users-admin__membership-table" data-group-id="@MembershipGroupId">
                             <thead>
                                 <tr>
                                     <th>В группе</th>

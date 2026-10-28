@@ -1,3 +1,5 @@
+using BusinessEntity.Infrastructure.Commands;
+using BusinessEntity.Infrastructure.Bus;
 using Microsoft.AspNetCore.Components;
 using BusinessEntity.Models;
 using BusinessEntity.Core.Contracts;
@@ -25,6 +27,12 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 {
     public partial class TreeMiniAppComponent : BusinessEntity.Infrastructure.Modularity.ModuleComponentBase, IDisposable
     {
+        [Inject] public ButtonCatalog Buttons { get; set; } = default!;
+        [Inject] public ModuleCommandRegistry Commands { get; set; } = default!;
+        [Inject] public BusRequestClient CommandClient { get; set; } = default!;
+        private readonly List<IDisposable> _menuBindings = [];
+        private long _menuRevision;
+        private sealed record MenuInvocation(ButtonDefinition Definition, Guid BindingId);
         [Inject] private TreeMiniAppService TreeMiniAppService { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
@@ -38,7 +46,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
         [Parameter] public EventCallback<List<TreeNodeItemViewModelBase>> OnMultipleNodesSelected { get; set; }
         [CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
-        
+
         private IEnumerable<TreeNodeItemViewModelBase> TreeData { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsLoading { get; set; } = true;
         private bool Visible { get; set; } = false;
@@ -46,7 +54,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private readonly Dictionary<Guid, TreeNodeItemViewModelBase> _nodeById = new();
         // Подписка на сообщения об обновлении сущностей
         private IDisposable? _graphChangedSubscription;
-        
+
         // Состояние мульти-селекта
         private List<TreeNodeItemViewModelBase> SelectedNodes { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsMultiSelectMode { get; set; } = false;
@@ -56,29 +64,29 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private Guid TreeExpansionStateSpaceId { get; set; }
         private Guid? TreeExpansionStatePropertyId { get; set; }
         private const int TreeExpansionStateUserPropertyType = 300;
-        
+
         // Состояние inline-редактирования
         private TreeNodeItemViewModelBase? EditingNode { get; set; } = null;
         private string EditingText { get; set; } = string.Empty;
         private ElementReference editingInput;
-        
+
         // Состояние валидации при редактировании
         private bool HasValidationError { get; set; } = false;
         private string ValidationErrorMessage { get; set; } = string.Empty;
         private CancellationTokenSource? _pendingOpenDocumentCts;
         private const int SingleClickOpenDelayMs = 350;
         private static readonly StringComparer TreeNodeTitleComparer = StringComparer.Create(new CultureInfo("ru-RU"), ignoreCase: true);
-        
+
         protected override async Task OnInitializedAsync()
         {
             try
             {
                 IsLoading = true;
-                
+
                 // Подписываемся на изменения выбранного пространства
                 UserContextService.SelectedSpaceChanged += OnSelectedSpaceChanged;
                 TreeSelectionService.EntitySelectionRequested += OnEntitySelectionRequested;
-                
+
                 // Общее событие хранит только ID; проекция заново проверяет права текущего окна.
                 _graphChangedSubscription = MessageBus.Listen<BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages.EntityBatchCommitted>()
                     .Subscribe(message =>
@@ -88,7 +96,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
                 // Проверяем текущее состояние пространства
                 await DrawTreeForCurrentSpace();
-                
+
                 WebLogger?.Information("TreeComponent initialized successfully");
             }
             catch (Exception ex)
@@ -167,7 +175,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             }
 
             IsLoading = true;
-            
+
             // Очищаем выбранные узлы при смене пространства
             await ClearAllSelectionsCoreAsync(refreshUi: false);
             // Очищаем индекс перед построением дерева
@@ -191,17 +199,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 Icon = GetEntityIcon(snapshot.Space.EntityType),
                 Entity = snapshot.Space,
                 EntityType = snapshot.Space.EntityType.ToString(),
-                Expanded = true,
-                // Устанавливаем обратный вызов для создания сущностей
-                OnEntityCreateRequested = OnEntityCreateRequestedAsync,
-                // Устанавливаем обратный вызов для удаления сущностей
-                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
-                // Устанавливаем обратный вызов для переименования сущностей
-                OnEntityRenameRequested = OnEntityRenameRequestedAsync,
-                OnEntityOpenRequested = OnEntityOpenRequestedAsync,
-                OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync
+                Expanded = true
             };
-
             var childNodes = new List<TreeNodeItemViewModelBase>();
 
             foreach (var child in snapshot.Children)
@@ -246,18 +245,16 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             // Устанавливаем обратный вызов для создания сущностей у папок
             if (entityData.EntityType.ToString() == "Folder")
             {
-                treeNodeVm.OnEntityCreateRequested = OnEntityCreateRequestedAsync;
-            }
-            
-            // Устанавливаем обратный вызов для удаления сущностей для всех типов узлов
-            treeNodeVm.OnEntityDeleteRequested = OnEntityDeleteRequestedAsync;
-            
-            // Устанавливаем обратный вызов для переименования сущностей для всех типов узлов
-            treeNodeVm.OnEntityRenameRequested = OnEntityRenameRequestedAsync;
-            treeNodeVm.OnEntityOpenRequested = OnEntityOpenRequestedAsync;
-            treeNodeVm.OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync;
 
-            var childNodes = new List<TreeNodeItemViewModelBase>(); 
+            }
+
+            // Устанавливаем обратный вызов для удаления сущностей для всех типов узлов
+
+            // Устанавливаем обратный вызов для переименования сущностей для всех типов узлов
+
+
+
+            var childNodes = new List<TreeNodeItemViewModelBase>();
 
             foreach (var child in snapshot.Children)
             {
@@ -727,9 +724,9 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             //WebLogger?.Information($"[HandleNodeSelection]--Enter; started for node: {clickedNode.Title}, Ctrl: {isCtrlPressed}, Shift: {isShiftPressed}");
             Console.WriteLine($"[HandleNodeSelection]--Enter; started for node: {clickedNode.Title}, Ctrl: {isCtrlPressed}, Shift: {isShiftPressed}");
             if (clickedNode == null) return;
-            
+
             // Игнорируем Shift+click (запрещаем выбор диапазона)
-            if (isShiftPressed) 
+            if (isShiftPressed)
             {
                 return;
             }
@@ -778,10 +775,10 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
             // Обновляем состояние мульти-селекта
             IsMultiSelectMode = SelectedNodes.Count > 1;
-            
+
             // Обновляем сервис выделения
             TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
-            
+
             // Принудительно обновляем UI
             await InvokeAsync(StateHasChanged);
         }
@@ -839,12 +836,12 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private void FindSelectedNodesRecursive(TreeNodeItemViewModelBase node, List<TreeNodeItemViewModelBase> selectedNodes)
         {
             if (node == null) return;
-            
+
             if (node.IsSelected)
             {
                 selectedNodes.Add(node);
             }
-            
+
             if (node.Children != null)
             {
                 foreach (var child in node.Children.Cast<TreeNodeItemViewModelBase>())
@@ -886,7 +883,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             {
                 node.SetSelected(true);
                 SelectedNodes.Add(node);
-                
+
                 if (node.Children?.Any() == true)
                 {
                     SelectAllNodesRecursive(node.Children);
@@ -921,46 +918,66 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             }
             return sb.ToString();
         }
-        
-       private void OnTreeContextMenu(TreeItemContextMenuEventArgs args)
+
+        // Приёмник получает объявления владельцев, фильтрует их по узлу и серверным правам.
+        private async Task OnTreeContextMenu(TreeItemContextMenuEventArgs args)
         {
-            if (!IsAuthenticated)
+            if (!IsAuthenticated || Module == null || args.Value is not TreeNodeItemViewModelBase node || node.Entity == null) return;
+            var revision = ++_menuRevision; ClearMenuBindings();
+            var items = new List<ContextMenuItem>();
+            foreach (var definition in Buttons.GetForHost("Tree.ContextMenu"))
             {
-                return;
+                if (definition.EntityTypes?.Contains(node.Entity.EntityType.ToString()) != true) continue;
+                if (!await ModuleManager.CanExecuteAsync(Module.ModuleId, definition.RequiredPermission, node.Entity.Id)) continue;
+                if (revision != _menuRevision) return;
+                var bindingId = Guid.NewGuid();
+                _menuBindings.Add(Commands.Bind(Module, definition, new(true, true),
+                    () => InvokeAsync(() => ExecuteTreeCommandAsync(node, definition)), bindingId, node.Entity.Id));
+                items.Add(new ContextMenuItem { Text = definition.Title, Icon = definition.Icon,
+                    Value = new MenuInvocation(definition, bindingId) });
             }
-
-            // Получаем выбранный узел дерева
-            var selectedNode = args.Value as TreeNodeItemViewModelBase;
-            if (selectedNode == null)
-            {
-                return;
-            }
-
-            // Получаем пункты меню из модели
-            var menuItems = selectedNode.CreateContextMenu();
-
-            // TreeItemContextMenuEventArgs уже наследуется от MouseEventArgs, поэтому используем args напрямую
-            ContextMenu.Open(args, menuItems, async (item) =>
+            ContextMenu.Open(args, items, async item =>
             {
                 try
                 {
-                    // Напрямую вызываем обработчик в ViewModel
-                    var actionValue = item?.Value?.ToString();
-                    if (!string.IsNullOrEmpty(actionValue))
-                    {
-                        CancelPendingOpenEntityOpen();
-                        await selectedNode.HandleMenuActionAsync(actionValue);
-                    }
+                    if (item?.Value is not MenuInvocation invocation || revision != _menuRevision) return;
+                    CancelPendingOpenEntityOpen();
+                    await ModuleManager.ExecuteAsync(Module.ModuleId, async _ =>
+                        await CommandClient.SendAsync<ButtonCommandInvoked, ButtonCommandResult>(new(Guid.NewGuid(),
+                            invocation.Definition.MiniAppId, invocation.Definition.CommandId, invocation.BindingId)));
                 }
-                finally
+                catch (Exception exception)
                 {
-                    // Закрываем контекстное меню после выполнения действия
-                    ContextMenu.Close();
+                    if (WebLogger != null) await WebLogger.Error(exception);
+                    MessageBus.SendMessage(new BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.PostUserMessage(
+                        RequestScope.UserId ?? Guid.Empty, RequestScope.LogicalWindowId, Guid.NewGuid(),
+                        BusError.FromException(exception).Message, BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error, "Дерево"));
                 }
+                finally { ContextMenu.Close(); ClearMenuBindings(); }
             });
-        }        
+        }
+        // Предметные действия выполняет runtime дерева, а не объявления или ViewModel меню.
+        private async Task ExecuteTreeCommandAsync(TreeNodeItemViewModelBase node, ButtonDefinition definition)
+        {
+            using var address = EnterModuleAddress();
+            switch (definition.CommandId)
+            {
+                case "tree.createFolder": case "tree.createDocument": case "tree.createArticle":
+                    await OnEntityCreateRequestedAsync(node, definition.Argument ?? throw new InvalidDataException("Не задан тип создаваемого узла.")); break;
+                case "tree.open": await OnEntityOpenRequestedAsync(node); break;
+                case "tree.edit": await OnEntityOpenForEditRequestedAsync(node); break;
+                case "tree.rename": await OnEntityRenameRequestedAsync(node, node.Title); break;
+                case "tree.delete": await OnEntityDeleteRequestedAsync(node); break;
+                default: throw new KeyNotFoundException("Команда дерева не зарегистрирована.");
+            }
+        }
+        // Закрытие меню снимает обработчики и делает прежние BindingId недействительными.
+        private void ClearMenuBindings()
+        { foreach (var binding in _menuBindings) binding.Dispose(); _menuBindings.Clear(); }
+
        public void Dispose()
        {
+            _menuRevision++; ClearMenuBindings();
             CancelPendingOpenEntityOpen();
             // Отписываемся от события при уничтожении компонента
             if (UserContextService != null)
@@ -1035,7 +1052,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             {
                 // Определяем, какие элементы будут удалены
                 var nodesToDelete = new List<TreeNodeItemViewModelBase>();
-                
+
                 // Если есть мультиселект и удаляемый узел входит в выделенные, удаляем все выделенные
                 if (SelectedNodes.Count > 1 && SelectedNodes.Contains(nodeToDelete))
                 {
@@ -1119,15 +1136,15 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private void RemoveNodeFromTree(TreeNodeItemViewModelBase nodeToRemove)
         {
             if (nodeToRemove == null) return;
-            
+
             WebLogger?.Information($"Removing node '{nodeToRemove.Title}' from tree");
-            
+
             // Рекурсивно удаляем узел из всего дерева
             RemoveNodeRecursively(TreeData, nodeToRemove);
-            
+
             // Удаляем из списка выделенных узлов, если он там есть
             SelectedNodes.Remove(nodeToRemove);
-            
+
             // Удаляем из индекса рекурсивно
             RemoveFromIndexRecursive(nodeToRemove);
 
@@ -1186,7 +1203,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private bool RemoveNodeRecursively(IEnumerable<TreeNodeItemViewModelBase> nodes, TreeNodeItemViewModelBase nodeToRemove)
         {
             if (nodes == null) return false;
-            
+
             foreach (var node in nodes.ToList()) // ToList() для избежания изменения коллекции во время итерации
             {
                 // Проверяем дочерние элементы текущего узла
@@ -1195,14 +1212,14 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                     node.Children.Remove(nodeToRemove);
                     return true;
                 }
-                
+
                 // Рекурсивно проверяем дочерние элементы
                 if (RemoveNodeRecursively(node.Children, nodeToRemove))
                 {
                     return true;
                 }
             }
-            
+
             // Если это корневой элемент, удаляем из TreeData
             if (TreeData.Contains(nodeToRemove))
             {
@@ -1215,7 +1232,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                     return true;
                 }
             }
-            
+
             return false;
         }
 
@@ -1331,7 +1348,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         {
             // Разрешаем drop операцию
             // В Blazor preventDefault() выполняется через атрибут @ondragover:preventDefault="true"
-            
+
             // Обновляем позицию всплывающего элемента
             try
             {
@@ -1463,10 +1480,10 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             try
             {
                 WebLogger?.Information("Drag operation ended");
-                
+
                 // Удаляем всплывающий элемент
                 await RemoveDragTooltip();
-                
+
                 // Убираем флаги перетаскивания у всех узлов
                 ClearDraggingFlags();
                 await InvokeAsync(StateHasChanged);
@@ -1535,7 +1552,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             foreach (var node in nodes)
             {
                 node.SetDragging(false);
-                
+
                 if (node.Children?.Any() == true)
                 {
                     ClearDraggingFlagsRecursive(node.Children);
@@ -1554,7 +1571,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 if (!draggedTitles.Any()) return;
 
                 var tooltipContent = string.Join("<br/>", draggedTitles);
-                
+
                 await JSRuntime.InvokeVoidAsync("createDragTooltip", tooltipContent);
             }
             catch (Exception ex)
@@ -1723,7 +1740,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                         return; // Не выходим из режима редактирования при ошибке валидации
                     }
                 }
-                
+
                 // Выходим из режима редактирования только если нет ошибок
                 EditingNode = null;
                 EditingText = string.Empty;

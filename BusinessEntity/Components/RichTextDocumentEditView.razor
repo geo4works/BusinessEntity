@@ -58,12 +58,7 @@
                             <span class="form-check-label">Общий</span>
                         </label>
                     }
-                    <button type="button"
-                            class="btn btn-sm btn-outline-secondary rich-text-document-read-mode-button"
-                            title="Перейти в режим чтения"
-                            aria-label="Перейти в режим чтения"
-                            @onclick="HandleReadModeAsync"
-                            disabled="@IsSaving">
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.read" OnInvoked="HandleReadModeAsync" Enabled="@(!IsSaving)" CssClass="btn btn-sm btn-outline-secondary rich-text-document-read-mode-button" Title="Перейти в режим чтения">
                         <svg class="rich-text-document-read-mode-button__icon"
                              viewBox="0 0 24 24"
                              aria-hidden="true"
@@ -72,13 +67,10 @@
                             <path d="M20 5.5c-2.8 0-5 .6-7 2.1v11.2c2-1.4 4.2-2 7-2.1V5.5Z" />
                             <path d="M11 7.6h2" />
                         </svg>
-                    </button>
-                    <button type="button"
-                            class="btn btn-sm btn-primary"
-                            @onclick="HandleSaveAsync"
-                            disabled="@IsSaving">
+                    </DeclaredButton>
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.save" OnInvoked="HandleSaveAsync" Enabled="@(!IsSaving)" CssClass="btn btn-sm btn-primary">
                         Save
-                    </button>
+                    </DeclaredButton>
                     <button type="button"
                             class="btn btn-sm btn-outline-success"
                             @onclick="HandlePublishAsync"
@@ -87,13 +79,10 @@
                     </button>
                     @if (CanDelete)
                     {
-                        <button type="button"
-                                class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1"
-                                @onclick="HandleDeleteAsync"
-                                disabled="@IsSaving">
+                        <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.delete" OnInvoked="HandleDeleteAsync" Enabled="@(CanDelete)" CssClass="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1">
                             <span class="material-icons" aria-hidden="true">delete</span>
                             <span>Удалить</span>
-                        </button>
+                        </DeclaredButton>
                     }
                 </div>
                 <RichTextDocumentWidgets BusinessEntityId="@BusinessEntityId"

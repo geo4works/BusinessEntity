@@ -1,5 +1,5 @@
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
-using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.ActivityMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using Microsoft.AspNetCore.Components;
 
@@ -17,7 +17,7 @@ public partial class BusinessEntityCommentsSection : ComponentBase
     [Parameter] public string? CssClass { get; set; }
     [Parameter] public EventCallback<int> OnCountChanged { get; set; }
 
-    [Inject] public IActivityConnector ActivityConnector { get; set; } = default!;
+    [Inject] private ActivityCommentService CommentsService { get; set; } = default!;
     [Inject] public IUserConnector UserConnector { get; set; } = default!;
 
     private IReadOnlyList<BusinessEntityCommentRecord> Comments { get; set; } = Array.Empty<BusinessEntityCommentRecord>();
@@ -70,7 +70,7 @@ public partial class BusinessEntityCommentsSection : ComponentBase
 
         try
         {
-            Comments = await ActivityConnector.GetCommentsAsync(BusinessEntityId);
+            Comments = await CommentsService.GetCommentsAsync(BusinessEntityId);
             LoadedBusinessEntityId = BusinessEntityId;
             HasLoaded = true;
             await NotifyCountChangedAsync();

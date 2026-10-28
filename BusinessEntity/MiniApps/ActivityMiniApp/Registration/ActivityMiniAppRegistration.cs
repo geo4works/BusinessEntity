@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Messages;
@@ -24,7 +25,10 @@ public static class ActivityMiniAppRegistration
 
             services.AddBusEndpoint<ActivityMiniAppMessageHandler>(typeof(GetCommentsRequest), typeof(CreateCommentRequest));
 
-            services.AddMiniAppHost("ActivityMiniApp");
+            services.AddMiniAppHost("ActivityMiniApp", new ModuleDefinition("ActivityMiniApp", "Activity.Comments", "Комментарии", null,
+                ModulePlacement.Page, ModuleInstancePolicy.PerContext, "activity.comments", RequiredPermission: "ReadContent"));
+            services.AddModuleComponent<BusinessEntity.MiniApps.ActivityMiniApp.Components.BusinessEntityCommentsSection>("activity.comments");
+            services.AddMiniAppButtons(new ButtonDefinition("ActivityMiniApp", "comment.submit", "Document.Toolbar", "Отправить", RequiredPermission: "ReadContent"));
             return services;
     }
 }

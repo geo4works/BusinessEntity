@@ -1,6 +1,6 @@
 # Каталог сообщений общей шины
 
-Фактическое состояние этапа 4 TASK_ARCH_001, 2026-10-28.
+Фактическое состояние этапа 5 TASK_ARCH_001, 2026-10-28.
 Один singleton ReactiveUI.IMessageBus; регистрации маршрутов находятся в Registration владельцев.
 
 Все предметные Request/Response наследуют BusRequest/BusResponse.
@@ -182,3 +182,17 @@ MiniAppId, Definitions)` — сбор без Razor/Type. Подписка кат
 DefinitionId, LogicalWindowId, ContextId, EditSessionId и Opened/Activated/
 Deactivated/Closed. Источник предметного Request устанавливается async-local
 lease одного живого модуля; параллельные компоненты не меняют адрес друг друга.
+
+## Команды этапа 5
+
+GiveMeButtons(RequestId, HostId) / HereAreButtons(RequestId, MiniAppId, HostId,
+Buttons). ButtonDefinition задаёт CommandId/владельца, место, title/icon/order,
+право, route и ограничения типов/argument. Никаких runtime callback в декларации.
+
+ButtonStateSnapshot: LogicalWindowId, ModuleId, EditSessionId, ContextId,
+MiniAppId, BindingId, immutable states. ButtonCommandInvoked — BusRequest с
+DeclarationOwner/CommandId/BindingId; ButtonCommandResult — BusResponse/BusError.
+Endpoint scoped проверяет окно, module/edit/context, живой nonce, Enabled/Visible
+и актуальное право. Runtime binding снимается вместе с компонентом/меню.
+
+[Фактические UI-модули и маршруты](modules-and-routes.md).

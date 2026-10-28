@@ -46,7 +46,7 @@ namespace BusinessEntity.Components
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
-        [Inject] public RichTextDocumentMessagePanelService MessagePanel { get; set; } = default!;
+        [Inject] public BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextUserMessages MessagePanel { get; set; } = default!;
 
         private IReadOnlyList<RichTextDocumentOutlineNode> LocalOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         private IReadOnlyList<RichTextDocumentOutlineNode> VisibleOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
@@ -346,14 +346,7 @@ namespace BusinessEntity.Components
                 return;
             }
 
-            try
-            {
-                await JS.InvokeVoidAsync("richTextOutlineViewport.unregisterViewport", OutlineTreeElementId);
-            }
-            catch (JSDisconnectedException)
-            {
-                // Blazor Server can disconnect JS runtime during teardown.
-            }
+            await BusinessEntity.Infrastructure.UI.BrowserLifecycle.UnregisterAsync(JS, "richTextOutlineViewport.unregisterViewport", OutlineTreeElementId);
         }
     }
 }

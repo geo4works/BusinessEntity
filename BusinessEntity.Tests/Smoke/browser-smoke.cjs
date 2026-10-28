@@ -117,7 +117,7 @@ async function run() {
 
     await page.goto(base + "/administration", { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Администрирование", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Пользователи", exact: true }).click();
+    await page.getByRole("link", { name: "Пользователи", exact: true }).click();
     await page.locator(".users-admin__list button").first().waitFor();
     passed("administration-users");
     const loggerResponse = await page.request.get("http://localhost:5080");

@@ -14,12 +14,9 @@
                   @bind="Text"
                   @bind:event="oninput"></textarea>
         <div class="be-comment-editor__actions">
-            <button type="button"
-                    class="be-comment-editor__submit-link"
-                    disabled="@(!CanSubmit)"
-                    @onclick="SubmitAsync">
+            <DeclaredButton MiniAppId="ActivityMiniApp" CommandId="comment.submit" CssClass="be-comment-editor__submit-link" Enabled="CanSubmit" OnInvoked="SubmitAsync">
                 @(IsSubmitting ? "Отправка..." : "Отправить")
-            </button>
+            </DeclaredButton>
         </div>
     </div>
 </div>

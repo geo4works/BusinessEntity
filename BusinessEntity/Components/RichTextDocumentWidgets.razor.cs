@@ -261,6 +261,13 @@ namespace BusinessEntity.Components
             }
         }
 
+        private IDictionary<string, object> CommentModuleParameters => new Dictionary<string, object>
+        {
+            ["BusinessEntityId"] = BusinessEntityId, ["CanWrite"] = true, ["UseOwnScroll"] = true,
+            ["ScrollMaxHeightPx"] = 420, ["CssClass"] = "rich-text-document-comments-widget__section",
+            ["OnCountChanged"] = EventCallback.Factory.Create<int>(this, HandleCommentsCountChangedAsync)
+        };
+
         private Task HandleCommentsCountChangedAsync(int count)
         {
             CommentsCount = Math.Max(0, count);

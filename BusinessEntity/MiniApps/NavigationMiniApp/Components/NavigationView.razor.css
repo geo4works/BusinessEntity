@@ -1,0 +1,72 @@
+.navbar-toggler {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.top-row {
+    height: 56px;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.navbar-brand {
+    font-size: 14px;
+    text-align: center;
+    width: 100%;
+}
+
+.oi {
+    font-size: 21px;
+    text-align: center;
+    display: block;
+}
+
+.nav-item {
+    font-size: 14px;
+    padding-bottom: 8px;
+    width: 100%;
+}
+
+    .nav-item:first-of-type {
+        padding-top: 16px;
+    }
+
+    .nav-item:last-of-type {
+        padding-bottom: 16px;
+    }
+
+    .nav-item ::deep a {
+        color: #d7d7d7;
+        border-radius: 4px;
+        height: 48px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 48px;
+        padding: 0;
+        margin: 0;
+    }
+
+.nav-item ::deep a.active {
+    background-color: rgba(255,255,255,0.25);
+    color: white;
+}
+
+.nav-item ::deep a:hover {
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+}
+
+@media (min-width: 641px) {
+    .navbar-toggler {
+        display: none;
+    }
+
+    .collapse {
+        /* Never collapse the sidebar for wide screens */
+        display: block;
+    }
+
+    .nav-item:first-of-type {
+        padding-top: 0;
+    }
+}

@@ -1,6 +1,6 @@
 # Реестр миниаппов
 
-Фактическое состояние этапа 4 TASK_ARCH_001, 2026-10-28.
+Фактическое состояние этапа 5 TASK_ARCH_001, 2026-10-28.
 Приложение содержит владельцев из таблицы и регистрации типов. Каждый AddXxxMiniApp регистрирует один декларативный singleton MiniAppHostService. Общий runtime сохранения реализован; предметные редакторы подключаются в этапах 6/8.
 
 | Миниапп | Назначение | Текущее время жизни | Доступ и состояние |
@@ -21,16 +21,10 @@
 
 DocumentsMiniApp и RichTextDocumentMiniApp объявляют ownership, правила версий,
 архивов и URL. SpacesMiniApp и SysParametersMiniApp объявляют ownership и архивные
-правила. У них ещё нет UI-host и рабочего экземпляра: это этапы 4–6.
+правила. Их UI-модули зарегистрированы на этапе 5; SaveParticipant подключаются на этапе 6.
 TreeMiniApp объявляет владельца Folder, MediaServerMiniApp — MediaVideo.
 Core использует общие EntitySaveBatchFactory и GraphArchiveRemapper; конкретные
 типы в оставшихся моделях и helper устраняются на этапе 6.
-
-## Владельцы, которые появятся в этапах 5–6
-
-Navigation, Diagnostics и Administration оформляются отдельными миниаппами по инвентарю ТЗ.
-Это планируемые владельцы, а не уже существующий код.
-WidgetsMiniApp для удаляемых часов не создаётся.
 
 ## Общий слой
 
@@ -70,3 +64,18 @@ IModuleUiFactory проверяет локальный реестр типов; 
 Снятие последнего dirty UI сохраняет runtime неактивным до возврата/guard;
 старый неактивный адрес не исполняет команду. Reconnect сохраняет circuit;
 новый circuit после аварии не восстанавливает локальные черновики.
+
+## UI-владельцы этапа 5
+
+NavigationMiniApp (LeftNav), AdministrationMiniApp (навигационный вход),
+DiagnosticsMiniApp (diagnostics/logging) имеют свои декларативные host-service.
+Spaces предоставляет home/selection/admin и меню пространств; User — identity
+header/profile/authinfo/admin; SysParameters — company header/admin; Documents
+и RichText — собственные страницы; Activity — вложенный page комментариев.
+Media — library/uploads; Tree — tree/selection helper; UserMessages — общая панель.
+Всего 15 логических владельцев, без отдельных проектов на каждый.
+
+Полный актуальный список UI definition/component keys, URL, guard и save-context
+находится в [реестре модулей и маршрутов](modules-and-routes.md). Таблица headless
+выше продолжает действовать. Остатки смешанных Services/Core/Models и вложенных
+rich-text компонентов переносятся/разделяются этапом 6, старый selection — этапом 7.

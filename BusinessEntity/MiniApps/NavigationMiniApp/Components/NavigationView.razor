@@ -1,0 +1,33 @@
+@namespace BusinessEntity.MiniApps.NavigationMiniApp.Components
+@inherits ModuleComponentBase
+@inject ButtonCatalog Buttons
+
+<div class="nav-menu-top-left-placeholder"></div>
+<div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        @foreach (var button in Links)
+        {
+            <div class="nav-item">
+                <NavLink class="nav-link" href="@button.TargetRoute" Match="@(button.TargetRoute == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@button.Title">
+                    <span class="@button.Icon" aria-hidden="true"></span>
+                </NavLink>
+            </div>
+        }
+    </nav>
+</div>
+
+@code {
+    private IReadOnlyList<ButtonDefinition> Links = [];
+    private bool collapseNavMenu = true;
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    // Навигация только отображает ссылки владельцев, проверяя применимое право через manager.
+    protected override async Task OnParametersSetAsync()
+    {
+        var links = new List<ButtonDefinition>();
+        foreach (var button in Buttons.GetForHost("Nav.Main"))
+            if (Module != null && await ModuleManager.CanExecuteAsync(Module.ModuleId, button.RequiredPermission)) links.Add(button);
+        Links = links;
+    }
+    // Сохраняет прежнее сворачивание иконного меню.
+    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+}

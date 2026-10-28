@@ -938,6 +938,15 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             return await GetCurrentUserPermissionsForSpaceAsync(spaceId.Value, cancellationToken);
         }
 
+        // Guard получает metadata из canonical storage, а не из изменяемого браузером UI.
+        public async Task<UserContentAccessDecision> GetContentAccessForEntityIdAsync(Guid entityId, CancellationToken ct = default)
+        {
+            var entity = await _data.GetByIdAsync(entityId, ct) ?? throw new KeyNotFoundException("Объект не найден.");
+            return await GetCurrentUserContentAccessForEntityAsync(new UserContentAccessRequest
+            { EntityId = entity.Id, EntityType = entity.EntityType, IsCommon = entity.IsPublic,
+                CreatedByUserId = entity.CreatedByUserId, PublishedVersion = entity.PublishedVersion }, ct);
+        }
+
         // Возвращает готовое content-access решение для текущего authenticated пользователя или anonymous mode.
         public async Task<UserContentAccessDecision> GetCurrentUserContentAccessForEntityAsync(
             UserContentAccessRequest request,

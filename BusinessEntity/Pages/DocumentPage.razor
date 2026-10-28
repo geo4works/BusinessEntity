@@ -1,31 +1,9 @@
 @page "/document/{id:guid}"
+@using BusinessEntity.Infrastructure.Modularity
+<PageModuleHost DefinitionKey="DocumentsMiniApp:Documents.Document" ContextId="Id" Parameters="ModuleParameters" />
 
-<PageTitle>Document</PageTitle>
-
-@if (!string.IsNullOrEmpty(Error))
-{
-    <div class="alert alert-danger">@Error</div>
-}
-else if (IsLoading)
-{
-    <div class="alert alert-info">Загрузка документа...</div>
-}
-else if (Entity == null)
-{
-    <div class="alert alert-warning">Документ не найден.</div>
-}
-else
-{
-    <div class="py-2 px-2">
-        <Document @ref="DocumentView" Entity="Entity"
-                  DataList="DataList"
-                  StartInEditMode="StartInEditMode"
-                  CanEdit="CanEditDocument"
-                  CanBrowseVersions="HasFullDocumentAccess"
-                  CanDelete="CanDeleteDocument"
-                  CanChangePublicFlag="CanChangePublicFlag"
-                  IsPublic="@(Entity?.IsPublic == true)"
-                  OnPublicChanged="HandlePublicChangedAsync"
-                  OnDeleteRequested="HandleDeleteRequestedAsync" />
-    </div>
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "edit")] public string? EditQuery { get; set; }
+    private IDictionary<string, object> ModuleParameters => new Dictionary<string, object> { ["Id"] = Id, ["EditQuery"] = EditQuery ?? string.Empty };
 }

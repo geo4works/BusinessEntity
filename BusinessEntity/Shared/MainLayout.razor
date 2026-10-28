@@ -5,12 +5,12 @@
 
 <div class="page">
     <div class="sidebar">
-        <NavMenu />
+        <ShellModuleHostArea Area="LeftNav" />
     </div>
 
     <div class="center-area">
         <div class="top-row px-4">
-            <AppHeader />
+            <div class="app-header"><ShellModuleHostArea Area="TopBar" /></div>
         </div>
 
         <div class="main-row">
@@ -26,7 +26,10 @@
                 </article>
             </main>
 
-            <RightSidebar />
+            <div class="right-panel">
+                <div class="right-header"><h6>Панель настроек и виджетов</h6></div>
+                <div class="right-content"><ShellModuleHostArea Area="RightPanel" /></div>
+            </div>
         </div>
     </div>
 </div>

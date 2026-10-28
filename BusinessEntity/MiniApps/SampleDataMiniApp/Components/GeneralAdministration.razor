@@ -1,0 +1,92 @@
+@namespace BusinessEntity.MiniApps.SampleDataMiniApp.Components
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@using Microsoft.Extensions.Configuration
+@using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
+@using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
+@inject IConfiguration Configuration
+@inject IDataProviderConnector DataProviderConnector
+@inject ISampleDataMiniApp SampleDataMiniApp
+@inject IUserConnector UserConnector
+
+<div class="card mt-3">
+    <div class="card-body">
+        <h5 class="card-title">Пользователи Authentik</h5>
+        <p class="card-text">
+            Пользователи текущего приложения редактируются в разделе <strong>Пользователи</strong>.
+            Пароли, роли и группы редактируются в разделе <strong>Пользователи</strong>.
+        </p>
+        <p class="card-text">
+            После открытия страницы перейдите в меню <strong>Directory -> Users</strong>.
+        </p>
+        <a class="btn btn-primary"
+           href="@AuthentikAdminUrl"
+           target="_blank"
+           rel="noopener noreferrer">
+            Открыть управление пользователями в Authentik
+        </a>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <h5 class="card-title">Debug Re-seed</h5>
+        <p class="card-text">
+            Временно для отладки: полностью очищает BusinessEntity-хранилище и запускает seed заново.
+        </p>
+        <button class="btn btn-danger"
+                @onclick="ReSeedAsync"
+                disabled="@IsReseeding">
+            @(IsReseeding ? "Re-seed..." : "Re-seed")
+        </button>
+
+        @if (!string.IsNullOrWhiteSpace(ReSeedStatus))
+        {
+            <div class="mt-2 text-muted">@ReSeedStatus</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(ReSeedError))
+        {
+            <div class="mt-2 text-danger">@ReSeedError</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool IsReseeding { get; set; }
+    private string? ReSeedStatus { get; set; }
+    private string? ReSeedError { get; set; }
+
+    private string AuthentikAdminUrl =>
+        (
+            Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL_FOR_BROWSER")
+            ?? Configuration["AuthentikAuth:BaseUrlForBrowser"]
+            ?? Configuration["AuthentikAuth:BaseUrl"]
+            ?? "http://localhost:9000"
+        ).TrimEnd('/') + "/if/admin/";
+
+    private async Task ReSeedAsync()
+    {
+        try
+        {
+            IsReseeding = true;
+            ReSeedError = null;
+            ReSeedStatus = "Очищаем текущего пользователя, хранилище и запускаем seed заново...";
+            await DataProviderConnector.SaveAsync(new global::BusinessEntity.Core.Saving.EntitySaveBatch(Guid.NewGuid(), "Administration", null)
+                { DeleteEntities = (await DataProviderConnector.GetAllAsync()).Select(entity => entity.Id).ToArray() });
+            var userDeleted = await UserConnector.DeleteCurrentUserAsync();
+            await SampleDataMiniApp.ForceReseedAsync();
+            ReSeedStatus = userDeleted
+                ? "Re-seed завершен. Текущий локальный пользователь удален."
+                : "Re-seed завершен. Локальная запись текущего пользователя не была найдена.";
+        }
+        catch (Exception ex)
+        {
+            ReSeedError = ex.Message;
+        }
+        finally
+        {
+            IsReseeding = false;
+        }
+    }
+}

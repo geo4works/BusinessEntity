@@ -1,3 +1,6 @@
+using BusinessEntity.MiniApps.NavigationMiniApp.Registration;
+using BusinessEntity.MiniApps.AdministrationMiniApp.Registration;
+using BusinessEntity.MiniApps.DiagnosticsMiniApp.Registration;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.MiniApps.BackupRestoreMiniApp.Registration;
 using BusinessEntity.Core.Saving;
@@ -133,6 +136,7 @@ namespace BusinessEntity
 
             // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddModularity();
+            builder.Services.AddNavigationMiniApp(); builder.Services.AddAdministrationMiniApp(); builder.Services.AddDiagnosticsMiniApp();
             builder.Services.AddDataProviderMiniApp();
             builder.Services.AddSingleton<EntitySaveBatchFactory>();
             builder.Services.AddSpacesMiniApp();
@@ -155,7 +159,6 @@ namespace BusinessEntity
             builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentSettingsService>();
-            builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentMessagePanelService>();
             builder.Services.AddScoped<HtmlToRichTextBlocksConverter>();
             builder.Services.AddScoped<IRichDocFormatConverter, PlainTextRichTextImportConverter>();
             builder.Services.AddScoped<IRichDocFormatConverter, MarkdownRichTextImportConverter>();
@@ -179,7 +182,7 @@ namespace BusinessEntity
 			{
 				app.UseExceptionHandler("/Error");
 			}
-			
+
 			// Собирает HTTP pipeline приложения.
 			app.UseSwagger();
 			app.UseSwaggerUI();

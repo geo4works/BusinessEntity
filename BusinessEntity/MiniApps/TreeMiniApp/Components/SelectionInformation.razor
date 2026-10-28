@@ -1,0 +1,29 @@
+@namespace BusinessEntity.MiniApps.TreeMiniApp.Components
+@inject BusinessEntity.Services.ITreeSelectionService Selection
+@implements IDisposable
+
+<div class="widget">
+    <div class="widget-title">Информация</div>
+    <div class="widget-body">
+        @if (Selection.IsMultiSelectActive) { @Selection.GetSelectedNodesInfo() }
+        else if (Selection.SingleSelectedNode is { } selected)
+        {
+            <div>@selected.Title</div>
+            <div>Тип: @selected.EntityType</div>
+            @if (selected.Entity != null)
+            {
+                <div>Создан: @selected.Entity.CreatedDate.ToLocalTime().ToString("g")</div>
+                <div>Изменён: @selected.Entity.LastModifiedDate.ToLocalTime().ToString("g")</div>
+            }
+        }
+        else { <span>Ничего не выбрано</span> }
+    </div>
+</div>
+@code {
+    // На этапе 7 источник заменяется адресным протоколом master/helper.
+    protected override void OnInitialized() => Selection.SelectionChanged += OnSelectionChanged;
+    // Переводит уведомление в renderer текущего окна.
+    private void OnSelectionChanged(List<BusinessEntity.Models.TreeNodeItemViewModelBase> nodes) => _ = InvokeAsync(StateHasChanged);
+    // Не удерживает компонент после смены страницы/circuit.
+    public void Dispose() => Selection.SelectionChanged -= OnSelectionChanged;
+}

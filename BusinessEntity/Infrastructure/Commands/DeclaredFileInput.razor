@@ -1,0 +1,41 @@
+@namespace BusinessEntity.Infrastructure.Commands
+@inject ButtonCatalog Catalog
+@inject ModuleCommandRegistry Commands
+@inject BusinessEntity.Infrastructure.Modularity.WindowModularityManager Manager
+@inject BusinessEntity.Infrastructure.Bus.BusRequestClient Client
+
+@if (Definition != null)
+{
+    <label class="btn btn-sm btn-outline-secondary mb-0">
+        @Definition.Title
+        <InputFile class="d-none" OnChange="SelectedAsync" accept="@Definition.Argument" disabled="@(!Enabled || Busy)" />
+    </label>
+}
+@if (Error != null) { <span class="text-danger" role="alert">@Error</span> }
+@code {
+    [CascadingParameter] public BusinessEntity.Infrastructure.Modularity.MiniAppModule? Module { get; set; }
+    [Parameter, EditorRequired] public string MiniAppId { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CommandId { get; set; } = string.Empty;
+    [Parameter] public bool Enabled { get; set; } = true;
+    [Parameter] public EventCallback<InputFileChangeEventArgs> OnSelected { get; set; }
+    private ButtonDefinition? Definition;
+    private bool Busy;
+    private string? Error;
+    // Объявленные владельцем расширения и подпись задают технический browser file input.
+    protected override void OnParametersSet() => Definition = Catalog.Get(MiniAppId, CommandId, "Document.Toolbar");
+    // IBrowserFile остаётся локальным browser stream; по шине отправляются только адрес и binding nonce.
+    private async Task SelectedAsync(InputFileChangeEventArgs args)
+    {
+        if (Busy || !Enabled || Module == null || Definition == null) return;
+        Busy = true; Error = null;
+        var nonce = Guid.NewGuid();
+        using var binding = Commands.Bind(Module, Definition, new(true, true), () => InvokeAsync(() => OnSelected.InvokeAsync(args)), nonce);
+        try
+        {
+            await Manager.ExecuteAsync(Module.ModuleId, async _ =>
+                await Client.SendAsync<ButtonCommandInvoked, ButtonCommandResult>(new(Guid.NewGuid(), MiniAppId, CommandId, nonce), timeout: TimeSpan.FromMinutes(30)));
+        }
+        catch (Exception exception) { Error = BusinessEntity.Infrastructure.Bus.BusError.FromException(exception).Message; }
+        finally { Busy = false; }
+    }
+}

@@ -323,7 +323,7 @@ Backup пока получает полный экспорт при каждом
 
 ## Этап 4 — модульность и рабочие экземпляры
 
-Статус: завершён, версия 0.16.7 подготовлена к CMMTP 3.
+Статус: завершён. CMMTP 3 — 0.16.7, e7be348, push origin/main успешен.
 
 ### Сделано
 
@@ -391,4 +391,91 @@ Backup пока получает полный экспорт при каждом
 Проверки: build ✓, tests ✓ (88; PostgreSQL 28), RSTT ✓, smoke ✓ (9 + 6 + 3).
 Чек-лист §6: CHK-07/08/09/13/16/19/32 ✓; CHK-18/26/27 ✓ общий runtime.
 Данные и восстановление: схемы, текущая БД и storage сохранены.
-Версия и коммит: CMMTP 3 — 0.16.7; hash/push фиксируются после Git.
+Версия и коммит: CMMTP 3 — 0.16.7, e7be348, push ✓.
+
+## Этап 5 — оболочка, страницы и команды
+
+Статус: завершён; 0.16.8 подготовлена к CMMTP 3.
+
+### Сделано
+
+- MainLayout содержит именованные места; Navigation, company/User headers,
+  Spaces menu, Tree, selection info, Media uploads и UserMessages предоставляют
+  владельцы. RightPanel — обычные секции. Часы удалены.
+- Предметное содержимое страниц и их CSS перенесено в Components владельцев.
+  Pages сохраняют URL/query/PrintLayout и PageModuleHost. Administration имеет
+  собственный навигационный модуль; general/system/spaces/users и пользовательские
+  general/access/roles/groups/members — отдельные URL с browser history.
+- ModuleAccessPolicy проверяет identity/GlobalAdmin/применимый AdminSpace;
+  контентные metadata получает из DataProvider. Административные секции проверяют
+  собственное право. Spaces фильтрует список/мутации по конкретному пространству;
+  создание и restore нового пространства — GlobalAdmin.
+- Host-service объявляет кнопки и ссылки. Nav.Main, Administration.Navigation,
+  User.Administration.Navigation, Document.Toolbar и Tree.ContextMenu используют
+  декларации владельцев. StateSnapshot включает BindingId; UI хранит адресный
+  кэш. Runtime nonce отличает две кнопки одной команды и перестаёт действовать
+  при снятии UI. Endpoint проверяет scope/window/user/system/module/edit/context,
+  live state и актуальное право. Фоновая доставка переводится на owning renderer.
+- Import передаёт по шине nonce операции, IBrowserFile остаётся локальным stream.
+  Создание типов в Tree объявляют их владельцы; старые ViewModel menu/action API
+  и delegates удалены. Комментарии Activity предоставляются собственным модулем;
+  его UI вызывает свой сервис напрямую. Rich-text сообщения объединены с UserMessages.
+- TestChangeParent/TestRemoveRelation с code-behind удалены. При сверке HEAD
+  их Razor-файлы не имели @page; они были остатками тестовых компонентов,
+  самостоятельные рабочие маршруты для них не обнаружены. Новые Diagnostics
+  вместо них не создавались.
+- CSS isolation учтён для вложенных декларативных кнопок/ссылок. Штатная отмена
+  JS unregister при закрытии circuit обрабатывается отдельно от настоящих ошибок.
+
+### Проверки
+
+- Release build решения: 0 ошибок; исходные nullable/async и NU1903 не скрыты.
+- dotnet test с BE_TEST_POSTGRES: 90 passed, 0 failed, 0 skipped; PostgreSQL 28.
+  Новые проверки: window/module/binding/state, две кнопки одной команды,
+  неизменяемые snapshots и выполнение UI callback с фонового потока через HtmlRenderer.
+- RSTT: оба образа собраны, контейнеры force-recreate. Image ID приложения
+  f3173fe3ac8a96d99fca87fdbb00d33d67b5c6be658f18314f983c9d649beb4e совпал.
+- На окончательном образе все 21 browser сценарий прошли: 9 basic + 6 storage
+  + 3 anonymous + 3 routes/guards. Последняя группа проверяет URL/reload/history
+  admin-разделов, обычного нового пользователя без admin-доступа (6 прямых URL),
+  отсутствие часов/вкладочного RightPanel/тестовых экранов.
+- Тестовые guest-группы и обычная учётная запись удалены через UI. SQL после
+  окончания подтвердил 0 Smoke guests и 0 smoke-guard пользователей. Исходная
+  BusinessEntityAdmins с её участником сохранена. Authentik user удалён штатным UI.
+- Визуально осмотрены Document, статья и users/groups при ширине 1600px.
+  Команды помещаются в своей колонке, исходный Edit цвет подтверждён computed CSS,
+  ссылки разделов и group editor оформлены/переносятся; компоненты и JS работают.
+- В конечных логах приложения нет unhandled/circuit failures. Промежуточный
+  teardown TaskCanceledException исправлен BrowserLifecycle cleanup.
+- git diff --check: без ошибок. Текстовый поиск в новых UI/commands/registration
+  не нашёл legacy/compat/NormalizeVersion/ALTER TABLE/вкладочных placements.
+
+Промежуточные ошибки не засчитываются: namespace/partial base и перенос полей,
+Razor-атрибут с вложенными кавычками, ожидания UI fixture после смены group URL,
+исчезнувшие scoped CSS selectors. После исправлений выполнены новые сборки,
+RSTT и полные browser прогоны. Setup/cleanup группы теперь ждёт data-group-id
+загруженного server view и подтверждённого нулевого состава, не старого сообщения.
+
+### Аудит и оставшиеся этапы
+
+CHK-10/11/12/13/25 ✓; CHK-07/08/09/19/32 ✓ в объёме этапа.
+Ранее действующие инварианты шины/хранения/кэша сохранены проверками.
+Внутренней вкладочной архитектуры нет: локальные контролы поиска/истории статьи
+не являются host-ами страниц приложения. Доступ /space-selection сохранён
+anonymous по content-access policy; это уточняет guard-клетку исходного инвентаря.
+Core/смешанные helpers/доменные модели, остатки own User connector calls и вложенные
+rich-text controls разбираются этапом 6; selection service — 7; SaveParticipant
+форм — 6 и navigation/dirty UX — 8. Они не отмечены завершёнными.
+
+### Отчёт по §8
+
+Этап 5 — Оболочка, страницы и декларативные команды: готово.
+Сделано: именованные места, тонкие URL-host, страницы администрирования,
+адресные декларации/state/commands, права, общие сообщения, удаление часов/тестов.
+Отклонения от ТЗ и почему: anonymous SpaceSelection оставлен по действующей
+content-access policy; локальные контролы статьи сохранены по правилу UI §3.6.
+Вопросы к пользователю: нет.
+Проверки: build ✓, tests ✓ (90; PostgreSQL 28), RSTT ✓, smoke ✓ (21), visual ✓.
+Чек-лист §6: CHK-10/11/12/13/25 ✓; CHK-07/08/09/19/32 ✓ в объёме этапа.
+Данные: схема 2 и archive 2 сохранены, БД/storage/volumes не очищались.
+Версия и коммит: CMMTP 3 — 0.16.8; hash/push фиксируются после Git.

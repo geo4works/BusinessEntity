@@ -1,0 +1,453 @@
+@namespace BusinessEntity.MiniApps.MediaServerMiniApp.Components
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@using BusinessEntity.Contracts
+@using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts
+@using Microsoft.JSInterop
+@attribute [Authorize]
+@implements IDisposable
+@inject IMediaServerService MediaServerService
+@inject IMediaServerUploadJobTracker UploadJobTracker
+@inject IJSRuntime JSRuntime
+@inject IUserContextService UserContext
+
+<PageTitle>Мультимедиа</PageTitle>
+
+<div class="multimedia-page">
+    <h3>Мультимедиа</h3>
+
+    <div class="multimedia-tabs" role="tablist" aria-label="Типы мультимедиа">
+        <button type="button" class="multimedia-tab multimedia-tab--active">Видео</button>
+        <button type="button" class="multimedia-tab" disabled>Аудио</button>
+        <button type="button" class="multimedia-tab" disabled>Файлы</button>
+        <button type="button" class="multimedia-tab" disabled>Картинки</button>
+    </div>
+
+    <div class="multimedia-actions">
+        <label class="btn btn-primary btn-sm multimedia-upload">
+            <span class="oi oi-cloud-upload" aria-hidden="true"></span>
+            <span>Загрузить</span>
+            <input id="@UploadInputId"
+                   class="multimedia-upload__input"
+                   type="file"
+                   multiple
+                   accept="video/*"
+                   @onchange="StartVideoUploadsAsync" />
+        </label>
+        @if (!string.IsNullOrWhiteSpace(Message))
+        {
+            <span class="multimedia-status">@Message</span>
+        }
+    </div>
+
+    <div class="multimedia-filter">
+        <input class="form-control multimedia-filter__input"
+               placeholder="Фильтр по имени или описанию"
+               value="@FilterText"
+               @oninput="HandleFilterInputAsync"
+               @onkeydown="HandleFilterKeyDownAsync" />
+        <button type="button"
+                class="btn btn-outline-primary multimedia-filter__button"
+                title="Фильтр"
+                @onclick="ApplyFilterAsync">
+            <span class="multimedia-filter__funnel" aria-hidden="true"></span>
+        </button>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="multimedia-empty">Загрузка списка...</div>
+    }
+    else if (Videos.Count == 0)
+    {
+        <div class="multimedia-empty">Видео пока не загружены.</div>
+    }
+    else
+    {
+        <div class="multimedia-list">
+            @foreach (var video in Videos)
+            {
+                <div class="@GetVideoItemCssClass(video)" @key="video.Id">
+                    <div class="multimedia-video-row">
+                        <button type="button"
+                                class="multimedia-video-row__icon"
+                                @onclick="() => ToggleVideoFooter(video)"
+                                title="Открыть просмотр">
+                            <span class="oi oi-media-play" aria-hidden="true"></span>
+                        </button>
+                        <div class="multimedia-video-row__main">
+                            <input class="form-control"
+                                   value="@GetDraftName(video)"
+                                   @oninput="eventArgs => SetDraftName(video.Id, eventArgs.Value?.ToString())"
+                                   @onkeydown="eventArgs => HandleNameKeyDownAsync(video, eventArgs)" />
+                            <div class="multimedia-video-row__meta">
+                                <span>@video.FileName</span>
+                                <span>@FormatSize(video.OriginalSizeBytes)</span>
+                                <span>@video.UploadedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (ExpandedVideoId == video.Id)
+                    {
+                        <div class="multimedia-video-footer">
+                            <video class="multimedia-video-footer__player" src="@video.EmbedUrl" controls autoplay playsinline></video>
+                            <div class="multimedia-video-footer__comment">
+                                <label class="multimedia-video-footer__label" for="@GetCommentInputId(video)">Комментарий</label>
+                                <textarea id="@GetCommentInputId(video)"
+                                          class="form-control multimedia-video-footer__textarea"
+                                          value="@GetDraftComment(video)"
+                                          @oninput="eventArgs => SetDraftComment(video.Id, eventArgs.Value?.ToString())"></textarea>
+                            </div>
+                            <div class="multimedia-video-footer__actions">
+                                <button type="button"
+                                        class="btn btn-sm btn-primary multimedia-video-footer__save"
+                                        @onclick="() => SaveVideoAsync(video)"
+                                        title="Сохранить">
+                                    <span class="oi oi-hard-drive" aria-hidden="true"></span>
+                                    <span>Сохранить</span>
+                                </button>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => DeleteVideoAsync(video)"
+                                        title="Удалить">
+                                    <span class="oi oi-trash" aria-hidden="true"></span>
+                                    <span>Удалить</span>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private readonly string UploadInputId = $"media-video-upload-{Guid.NewGuid():N}";
+    private readonly CancellationTokenSource UploadRefreshCancellation = new();
+    private Task? UploadRefreshTask;
+    private DotNetObjectReference<MediaLibrary>? DotNetReference;
+
+    private List<MediaVideoInfo> Videos { get; set; } = new();
+    private List<MediaVideoUploadJobInfo> UploadJobs { get; set; } = new();
+    private Dictionary<Guid, string> DraftNames { get; } = new();
+    private Dictionary<Guid, string> DraftComments { get; } = new();
+    private bool IsLoading { get; set; }
+    private bool IsStartingUploadBatch { get; set; }
+    private string Message { get; set; } = string.Empty;
+    private string FilterText { get; set; } = string.Empty;
+    private Guid? ExpandedVideoId { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVideosAsync();
+        LoadUploadJobs();
+        UploadRefreshTask = RefreshUploadJobsLoopAsync(UploadRefreshCancellation.Token);
+    }
+
+    private async Task LoadVideosAsync(bool clearMessage = true)
+    {
+        IsLoading = true;
+        if (clearMessage)
+        {
+            Message = string.Empty;
+        }
+
+        try
+        {
+            Videos = (await MediaServerService.GetVideosAsync(UserContext.CurrentSpaceId, FilterText)).ToList();
+            DraftNames.Clear();
+            DraftComments.Clear();
+            foreach (var video in Videos)
+            {
+                DraftNames[video.Id] = video.DisplayName;
+                DraftComments[video.Id] = video.Comment;
+            }
+
+            if (ExpandedVideoId.HasValue && Videos.All(x => x.Id != ExpandedVideoId.Value))
+            {
+                ExpandedVideoId = null;
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void LoadUploadJobs()
+    {
+        UploadJobs = UploadJobTracker.GetVideoUploadJobs()
+            .Where(ShouldDisplayUploadJob)
+            .OrderByDescending(x => x.CreatedDate)
+            .ToList();
+    }
+
+    private async Task RefreshUploadJobsAndVideosAsync()
+    {
+        var allJobs = UploadJobTracker.GetVideoUploadJobs();
+        var hasNewCompletedVideo = allJobs.Any(x =>
+            x.State == MediaVideoUploadJobState.Completed &&
+            x.VideoId.HasValue &&
+            Videos.All(video => video.Id != x.VideoId.Value));
+
+        UploadJobs = allJobs
+            .Where(ShouldDisplayUploadJob)
+            .OrderByDescending(x => x.CreatedDate)
+            .ToList();
+
+        if (hasNewCompletedVideo)
+        {
+            await LoadVideosAsync(clearMessage: false);
+        }
+    }
+
+    private async Task RefreshUploadJobsLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (!cancellationToken.IsCancellationRequested &&
+                   await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshUploadJobsAndVideosAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task StartVideoUploadsAsync(ChangeEventArgs _)
+    {
+        IsStartingUploadBatch = true;
+        Message = string.Empty;
+        try
+        {
+            DotNetReference ??= DotNetObjectReference.Create(this);
+            var count = await JSRuntime.InvokeAsync<int>(
+                "mediaServerUpload.startVideos",
+                UploadInputId,
+                DotNetReference);
+
+            if (count <= 0)
+            {
+                Message = "Файлы не выбраны.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
+        finally
+        {
+            IsStartingUploadBatch = false;
+            LoadUploadJobs();
+        }
+    }
+
+    private async Task HandleFilterInputAsync(ChangeEventArgs eventArgs)
+    {
+        FilterText = eventArgs.Value?.ToString() ?? string.Empty;
+        await LoadVideosAsync(clearMessage: false);
+    }
+
+    private async Task HandleFilterKeyDownAsync(KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Enter")
+        {
+            await ApplyFilterAsync();
+        }
+    }
+
+    private Task ApplyFilterAsync()
+    {
+        return LoadVideosAsync(clearMessage: false);
+    }
+
+    [JSInvokable]
+    public async Task OnMediaVideoUploadJobsChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await RefreshUploadJobsAndVideosAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task CancelUploadJobAsync(MediaVideoUploadJobInfo job)
+    {
+        UploadJobTracker.CancelVideoUploadJob(job.JobId);
+        LoadUploadJobs();
+        await Task.CompletedTask;
+    }
+
+    private void ToggleVideoFooter(MediaVideoInfo video)
+    {
+        ExpandedVideoId = ExpandedVideoId == video.Id ? null : video.Id;
+    }
+
+    private string GetDraftName(MediaVideoInfo video)
+    {
+        return DraftNames.TryGetValue(video.Id, out var value) ? value : video.DisplayName;
+    }
+
+    private void SetDraftName(Guid id, string? value)
+    {
+        DraftNames[id] = value ?? string.Empty;
+    }
+
+    private string GetDraftComment(MediaVideoInfo video)
+    {
+        return DraftComments.TryGetValue(video.Id, out var value) ? value : video.Comment;
+    }
+
+    private void SetDraftComment(Guid id, string? value)
+    {
+        DraftComments[id] = value ?? string.Empty;
+    }
+
+    private async Task HandleNameKeyDownAsync(MediaVideoInfo video, KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Enter")
+        {
+            await SaveVideoAsync(video);
+        }
+    }
+
+    private async Task SaveVideoAsync(MediaVideoInfo video)
+    {
+        try
+        {
+            var updated = await MediaServerService.RenameVideoAsync(video.Id, GetDraftName(video));
+            updated = await MediaServerService.UpdateVideoCommentAsync(video.Id, GetDraftComment(video));
+            var index = Videos.FindIndex(x => x.Id == video.Id);
+            if (index >= 0)
+            {
+                Videos[index] = updated;
+            }
+
+            DraftNames[updated.Id] = updated.DisplayName;
+            DraftComments[updated.Id] = updated.Comment;
+            Message = "Видео сохранено.";
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
+    }
+
+    private async Task DeleteVideoAsync(MediaVideoInfo video)
+    {
+        try
+        {
+            await MediaServerService.DeleteVideoAsync(video.Id);
+            Videos.RemoveAll(x => x.Id == video.Id);
+            DraftNames.Remove(video.Id);
+            DraftComments.Remove(video.Id);
+            if (ExpandedVideoId == video.Id)
+            {
+                ExpandedVideoId = null;
+            }
+
+            Message = "Видео удалено.";
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
+    }
+
+    private static bool ShouldDisplayUploadJob(MediaVideoUploadJobInfo job)
+    {
+        return IsActiveUploadJob(job) ||
+               job.State == MediaVideoUploadJobState.Failed ||
+               job.State == MediaVideoUploadJobState.Cancelled;
+    }
+
+    private static bool IsActiveUploadJob(MediaVideoUploadJobInfo job)
+    {
+        return job.State == MediaVideoUploadJobState.Queued ||
+               job.State == MediaVideoUploadJobState.Uploading ||
+               job.State == MediaVideoUploadJobState.Processing;
+    }
+
+    private string GetVideoItemCssClass(MediaVideoInfo video)
+    {
+        return ExpandedVideoId == video.Id
+            ? "multimedia-video-item multimedia-video-item--expanded"
+            : "multimedia-video-item";
+    }
+
+    private static string GetCommentInputId(MediaVideoInfo video)
+    {
+        return $"media-video-comment-{video.Id:D}";
+    }
+
+    private static string GetUploadStateText(MediaVideoUploadJobInfo job)
+    {
+        return job.State switch
+        {
+            MediaVideoUploadJobState.Queued => "Ожидает",
+            MediaVideoUploadJobState.Uploading => "Загрузка",
+            MediaVideoUploadJobState.Processing => "Обработка",
+            MediaVideoUploadJobState.Completed => "Готово",
+            MediaVideoUploadJobState.Cancelled => "Отменено",
+            MediaVideoUploadJobState.Failed => "Ошибка",
+            _ => job.State.ToString()
+        };
+    }
+
+    private static string GetProgressWidth(MediaVideoUploadJobInfo job)
+    {
+        var percent = job.ProgressPercent;
+        if (!percent.HasValue)
+        {
+            return IsActiveUploadJob(job) ? "35%" : "0%";
+        }
+
+        return $"{percent.Value:0.##}%";
+    }
+
+    private static string GetProgressText(MediaVideoUploadJobInfo job)
+    {
+        if (!job.TotalBytes.HasValue || job.TotalBytes.Value <= 0)
+        {
+            return $"{FormatSize(job.UploadedBytes)}";
+        }
+
+        var percent = job.ProgressPercent ?? 0;
+        return $"{percent:0}% · {FormatSize(job.UploadedBytes)} из {FormatSize(job.TotalBytes.Value)}";
+    }
+
+    private static string FormatSize(long size)
+    {
+        if (size <= 0)
+        {
+            return "0 Б";
+        }
+
+        string[] suffixes = { "Б", "КБ", "МБ", "ГБ" };
+        var value = (double)size;
+        var suffixIndex = 0;
+        while (value >= 1024 && suffixIndex < suffixes.Length - 1)
+        {
+            value /= 1024;
+            suffixIndex++;
+        }
+
+        return suffixIndex == 0
+            ? $"{value:0} {suffixes[suffixIndex]}"
+            : $"{value:0.0} {suffixes[suffixIndex]}";
+    }
+
+    public void Dispose()
+    {
+        UploadRefreshCancellation.Cancel();
+        UploadRefreshCancellation.Dispose();
+        DotNetReference?.Dispose();
+    }
+}

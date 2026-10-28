@@ -1,6 +1,6 @@
 # Декларации кнопок и меню
 
-Норма TASK_ARCH_001 v2.2. Реализация — этап 5.
+Норма TASK_ARCH_001 v2.2. Реализовано этапом 5.
 
 ## Приёмники
 
@@ -27,3 +27,19 @@ ButtonCommandInvoked адресуется нужному владельцу, э�
 не заменяет серверную проверку доступа.
 
 Источник: [ТЗ §3.5](../../Tasks/TASK_ARCH_001_miniapp-bus-architecture-migration.md#35-декларативные-кнопки-и-команды).
+
+## Исполнение
+
+ButtonCatalog собирает метаданные от singleton host-service. ModuleCommandRegistry
+хранит scoped runtime binding владельца, отдельно от декларации. BindingId
+отличает две UI-кнопки одной команды и исключает выполнение снятого обработчика.
+DeclaredButton получает ButtonStateSnapshot в свой адресный UI-кэш. Endpoint
+возвращает коррелированный результат/BusError; закрытые модули, чужие окна,
+несовпавший edit/context и недоступное состояние отклоняются.
+
+DeclaredFileInput сохраняет IBrowserFile только локально на время выбранной
+операции; шина несёт nonce, а поток читает владелец импорта. DeclaredLink
+использует объявленный route, guard целевой page повторно проверяет доступ.
+Tree.ContextMenu получает creator-декларации владельцев типов; generic graph
+операцию выполняет Tree через общий движок. Subject node хранится в server binding,
+не берётся из подставленного browser payload.

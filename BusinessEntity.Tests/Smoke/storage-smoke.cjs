@@ -93,7 +93,7 @@ async function run() {
     passed("markdown-import-reload");
 
     await page.goto(base + "/administration", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Пространства", exact: true }).click();
+    await page.getByRole("link", { name: "Пространства", exact: true }).click();
     const spaceRow = page.locator("tbody > tr").filter({ has: page.getByText("Документы", { exact: true }) });
     await spaceRow.getByRole("button", { name: "Настройки пространства", exact: true }).click();
     const backupPanel = page.locator("fieldset").filter({ has: page.getByText("Бэкап", { exact: true }) });

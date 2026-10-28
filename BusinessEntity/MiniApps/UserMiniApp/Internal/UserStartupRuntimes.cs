@@ -52,9 +52,28 @@ internal sealed class UserModuleAccessPolicy : IModuleAccessPolicy
         var identity = await _users.GetCurrentUserAsync(ct);
         if (identity?.IsAuthenticated == true) _scope.SetUser((await _users.EnsureCurrentUserAsync(ct))?.Id);
         if (string.IsNullOrEmpty(definition.RequiredPermission)) return true;
+        if (definition.RequiredPermission is "ReadContent" or "EditContent" or "PublishContent" or "DeleteContent")
+        {
+            if (!contextId.HasValue) return false;
+            var content = await _users.GetContentAccessForEntityIdAsync(contextId.Value, ct);
+            return definition.RequiredPermission switch
+            {
+                "ReadContent" => content.CanRead,
+                "EditContent" => content.CanEditDraft,
+                "PublishContent" => content.CanPublishDraft,
+                "DeleteContent" => content.IsAccessAdmin || (await _users.GetCurrentUserPermissionsForEntityAsync(contextId.Value, ct)).CanAdminItems,
+                _ => false
+            };
+        }
         if (identity?.IsAuthenticated != true) return false;
         if (definition.RequiredPermission == "Authenticated") return true;
         if (identity.IsAkadmin || identity.IsGeneralAdmin) return true;
+        if (definition.RequiredPermission == "AdminItems")
+        {
+            var itemRights = contextId.HasValue ? await _users.GetCurrentUserPermissionsForEntityAsync(contextId.Value, ct)
+                : await _users.GetCurrentUserPermissionsForSpaceAsync(_space.CurrentSpaceId ?? Guid.Empty, ct);
+            return itemRights.CanAdminItems || itemRights.CanAdminSpace || itemRights.CanGlobalAdmin;
+        }
         var rights = await _users.GetCurrentUserPermissionsForSpaceAsync(contextId ?? _space.CurrentSpaceId ?? Guid.Empty, ct);
         return definition.RequiredPermission switch
         {

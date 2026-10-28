@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Internal;
@@ -15,7 +16,11 @@ public static class UserMessagesMiniAppRegistration
         services.AddScoped<IUserMessagesMiniApp, Facade.UserMessagesMiniApp>();
 
         services.AddSingleton<IUserMessageFlashStore, UserMessageFlashStore>();
-        services.AddMiniAppHost("UserMessagesMiniApp");
-            return services;
+        services.AddMiniAppHost("UserMessagesMiniApp",
+            new ModuleDefinition("UserMessagesMiniApp", "UserMessages.Panel", "Сообщения", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "messages.panel", "RightPanel", Order: 30, OpenOnStartup: true, RequiredPermission: "Authenticated"));
+
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMessagesMiniApp.Components.UserMessagesPanel>("messages.panel");
+
+        return services;
     }
 }

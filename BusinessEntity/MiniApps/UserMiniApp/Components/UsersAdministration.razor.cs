@@ -7,7 +7,7 @@ using ReactiveUI;
 namespace BusinessEntity.MiniApps.UserMiniApp.Components
 {
     // Компонент административного CRUD локальных пользователей UserMiniApp.
-    public partial class UsersAdministration : ComponentBase
+    public partial class UsersAdministration
     {
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
@@ -87,7 +87,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 }
             }
         }
-        private UserAdministrationTab ActiveTab { get; set; } = UserAdministrationTab.General;
+        private UserAdministrationSection ActiveSection { get; set; } = UserAdministrationSection.General;
         private bool IsBusy =>
             IsLoading ||
             IsRolesLoading ||
@@ -125,6 +125,18 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             await ResolveCurrentMessageUserAsync();
             await LoadUsersAsync();
         }
+
+        [Parameter] public string Section { get; set; } = "general";
+        // URL определяет раздел; история браузера и прямые ссылки работают штатно.
+        protected override Task OnParametersSetAsync() => LoadSectionAsync(Section switch
+        {
+            "general" => UserAdministrationSection.General,
+            "access" => UserAdministrationSection.AccessRights,
+            "roles" => UserAdministrationSection.Roles,
+            "groups" => UserAdministrationSection.Groups,
+            "members" => UserAdministrationSection.GroupMembers,
+            _ => throw new KeyNotFoundException("Раздел пользователей не найден.")
+        });
 
         // Запоминает текущего локального пользователя, чтобы сообщения администрирования попадали в его правую панель.
         private async Task ResolveCurrentMessageUserAsync()
@@ -202,7 +214,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                     SelectUser(selectedUser);
                 }
 
-                if (ActiveTab == UserAdministrationTab.GroupMembers && MembershipGroupId.HasValue)
+                if (ActiveSection == UserAdministrationSection.GroupMembers && MembershipGroupId.HasValue)
                 {
                     await LoadGroupMembershipsAsync();
                 }
@@ -499,7 +511,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 var createdUser = await UserConnector.CreateAdministrationUserAsync();
                 UpsertUserInList(createdUser);
                 SelectUser(createdUser);
-                if (ActiveTab == UserAdministrationTab.GroupMembers && MembershipGroupId.HasValue)
+                if (ActiveSection == UserAdministrationSection.GroupMembers && MembershipGroupId.HasValue)
                 {
                     await LoadGroupMembershipsAsync();
                 }
@@ -634,7 +646,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
                 UpsertUserInList(savedUser);
                 SelectUser(savedUser);
-                if (ActiveTab == UserAdministrationTab.GroupMembers && MembershipGroupId.HasValue)
+                if (ActiveSection == UserAdministrationSection.GroupMembers && MembershipGroupId.HasValue)
                 {
                     await LoadGroupMembershipsAsync();
                 }
@@ -887,7 +899,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                     await LoadGroupsAsync();
                 }
 
-                if (ActiveTab == UserAdministrationTab.GroupMembers && MembershipGroupId.HasValue)
+                if (ActiveSection == UserAdministrationSection.GroupMembers && MembershipGroupId.HasValue)
                 {
                     await LoadGroupMembershipsAsync();
                 }
@@ -984,21 +996,21 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
         }
 
-        // Переключает вкладку и лениво загружает данные выбранного раздела.
-        private async Task SetActiveTabAsync(UserAdministrationTab tab)
+        // Загружает данные раздела, выбранного маршрутом.
+        private async Task LoadSectionAsync(UserAdministrationSection tab)
         {
-            ActiveTab = tab;
+            ActiveSection = tab;
             ErrorMessage = null;
             StatusMessage = null;
             StateHasChanged();
 
-            if (tab == UserAdministrationTab.Roles && !IsRolesLoaded)
+            if (tab == UserAdministrationSection.Roles && !IsRolesLoaded)
             {
                 await LoadRolesAsync();
                 return;
             }
 
-            if (tab == UserAdministrationTab.AccessRights)
+            if (tab == UserAdministrationSection.AccessRights)
             {
                 if (!IsRolesLoaded)
                 {
@@ -1022,13 +1034,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 return;
             }
 
-            if (tab == UserAdministrationTab.Groups && !IsGroupsLoaded)
+            if (tab == UserAdministrationSection.Groups && !IsGroupsLoaded)
             {
                 await LoadGroupsAsync();
                 return;
             }
 
-            if (tab == UserAdministrationTab.GroupMembers)
+            if (tab == UserAdministrationSection.GroupMembers)
             {
                 if (!IsGroupsLoaded)
                 {
@@ -1142,14 +1154,6 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 : "users-admin__user";
         }
 
-        // Возвращает CSS-класс кнопки вкладки формы пользователя.
-        private string GetTabButtonClass(UserAdministrationTab tab)
-        {
-            return ActiveTab == tab
-                ? "users-admin__tab users-admin__tab--active"
-                : "users-admin__tab";
-        }
-
         // Возвращает CSS-класс строки роли в таблице ролей.
         private string GetRoleRowClass(UserRoleRecord role)
         {
@@ -1179,7 +1183,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         {
             SelectedUserId = null;
             DeleteConfirmationUserId = null;
-            ActiveTab = UserAdministrationTab.General;
+            ActiveSection = UserAdministrationSection.General;
             IsPasswordVisible = false;
             EditModel = new UserAdministrationSaveRequest();
         }
@@ -1212,8 +1216,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             return value ? "x" : string.Empty;
         }
 
-        // Вкладки формы локального пользователя.
-        private enum UserAdministrationTab
+        // Разделы административных страниц пользователя.
+        private enum UserAdministrationSection
         {
             General,
             AccessRights,

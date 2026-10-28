@@ -69,6 +69,15 @@ public sealed class WindowModularityManager : IAsyncDisposable
     // Проверяет текущий адрес перед исполнением поздней команды UI.
     public MiniAppModule GetLive(Guid moduleId) => !_disposed ? _modules.SingleOrDefault(x => x.ModuleId == moduleId && !_inactive.Contains(x.ModuleId))
         ?? throw new KeyNotFoundException("Модуль уже закрыт.") : throw new ObjectDisposedException(nameof(WindowModularityManager));
+    // Приёмник оболочки проверяет право до создания скрытого UI-модуля.
+    public Task<bool> CanOpenDefinitionAsync(ModuleDefinition definition, Guid? contextId = null)
+        => _access.CanOpenAsync(definition, contextId, default);
+    // Право конкретной команды проверяется сервером заново при выполнении.
+    public Task<bool> CanExecuteAsync(Guid moduleId, string? permission, Guid? permissionContextId = null)
+    {
+        var module = GetLive(moduleId);
+        return _access.CanOpenAsync(module.Definition with { RequiredPermission = permission }, permissionContextId ?? module.ContextId, default);
+    }
     // Запускает команду в async-local адресе конкретного живого экземпляра.
     public async Task ExecuteAsync(Guid moduleId, Func<MiniAppModule, Task> command)
     {

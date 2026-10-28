@@ -210,12 +210,8 @@
             else if (ActiveTab == RichTextDocumentWidgetTab.Comments)
             {
                 <div class="rich-text-document-comments-widget">
-                    <BusinessEntityCommentsSection BusinessEntityId="@BusinessEntityId"
-                                                   CanWrite="true"
-                                                   UseOwnScroll="true"
-                                                   ScrollMaxHeightPx="420"
-                                                   CssClass="rich-text-document-comments-widget__section"
-                                                   OnCountChanged="HandleCommentsCountChangedAsync" />
+                    <PageModuleHost DefinitionKey="ActivityMiniApp:Activity.Comments" ContextId="BusinessEntityId"
+                                    Parameters="CommentModuleParameters" />
                 </div>
             }
             else

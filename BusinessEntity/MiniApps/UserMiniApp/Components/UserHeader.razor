@@ -1,0 +1,62 @@
+@namespace BusinessEntity.MiniApps.UserMiniApp.Components
+@inherits ModuleComponentBase
+@inject BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors.IUserConnector Users
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<div class="app-header__actions">
+    @if (IsAuthenticated)
+    {
+        <div class="app-header__user-menu" @onmouseenter="CancelAutoClose" @onmouseleave="ScheduleAutoClose">
+            <button type="button" class="app-header__avatar" title="@UserName" aria-expanded="@IsOpen" @onclick="Toggle">@Initials</button>
+            @if (IsOpen)
+            {
+                <div class="app-header__dropdown">
+                    <a class="app-header__dropdown-item" href="/profile">Профиль</a>
+                    <div class="app-header__dropdown-separator" aria-hidden="true"></div>
+                    <ShellModuleHostArea Area="User.HeaderSpaces" />
+                    <div class="app-header__dropdown-separator" aria-hidden="true"></div>
+                    <a class="app-header__dropdown-item" href="/auth/logout">Выход</a>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <ShellModuleHostArea Area="User.HeaderSpaces" />
+        <a class="app-header__login" href="@LoginUrl">Войти</a>
+    }
+</div>
+
+@code {
+    private bool IsAuthenticated, IsOpen, _disposed;
+    private string UserName = string.Empty;
+    private string Initials => UserName.Length >= 2 ? UserName[..2].ToUpperInvariant() : UserName.ToUpperInvariant();
+    private CancellationTokenSource? _close;
+    private string LoginUrl => "/login?returnUrl=" + Uri.EscapeDataString(CurrentReturnUrl());
+    // Identity и меню принадлежат User; содержимое пространств предоставляет отдельный slot владельца.
+    protected override async Task OnParametersSetAsync()
+    {
+        var user = await Users.GetCurrentUserAsync(); IsAuthenticated = user?.IsAuthenticated == true;
+        UserName = user?.UserName?.Trim() ?? string.Empty;
+    }
+    // Auth-маршрут не используется как returnUrl нового входа.
+    private string CurrentReturnUrl()
+    {
+        var path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+        return path.StartsWith("/auth", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/login", StringComparison.OrdinalIgnoreCase) ? "/" : path;
+    }
+    // Сохраняет прежнее раскрытие пользовательского меню.
+    private void Toggle() { CancelAutoClose(); IsOpen = !IsOpen; }
+    // Наведение отменяет отложенное закрытие.
+    private void CancelAutoClose() { _close?.Cancel(); _close?.Dispose(); _close = null; }
+    // Закрывает меню после короткой задержки, не удерживая освобождённый компонент.
+    private async Task ScheduleAutoClose()
+    {
+        CancelAutoClose(); var source = _close = new();
+        try { await Task.Delay(250, source.Token); if (!_disposed) { IsOpen = false; StateHasChanged(); } }
+        catch (OperationCanceledException) when (source.IsCancellationRequested) { }
+    }
+    // Завершает единственный отложенный callback.
+    public void Dispose() { _disposed = true; CancelAutoClose(); }
+}

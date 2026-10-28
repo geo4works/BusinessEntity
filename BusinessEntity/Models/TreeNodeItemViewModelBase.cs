@@ -16,49 +16,28 @@ namespace BusinessEntity.Models
         public string Title { get; set; } = string.Empty;
         public string Icon { get; set; } = string.Empty;
         public BusinessEntity.Core.Classes.BusinessEntity? Entity { get; set; }
-        
+
         // Родительский узел
         public TreeNodeItemViewModelBase? Parent { get; set; }
-        
+
         // Свойство Children должно быть public и никогда не null для корректной работы с Radzen Tree
         public List<TreeNodeItemViewModelBase> Children { get; set; } = new List<TreeNodeItemViewModelBase>();
-        
+
         public bool Expanded { get; set; } = false;
         public string EntityType { get; set; } = string.Empty;
-        
+
         // Состояние выбора узла для мульти-селекта
         public bool IsSelected { get; set; } = false;
-        
+
         // Состояние перетаскивания узла
         public bool IsDragging { get; set; } = false;
-        
+
         // Вспомогательное свойство для определения наличия дочерних элементов
         public bool HasChildren => Children?.Any() == true;
-        
+
         // Виртуальные свойства для текста и иконки меню
         public virtual string MenuText => "Элемент";
         public virtual string MenuIcon => "help";
-
-        // Делегат для обратного вызова в TreeComponent для создания сущностей
-        public Func<TreeNodeItemViewModelBase, string, Task>? OnEntityCreateRequested { get; set; }
-        
-        // Делегат для обратного вызова в TreeComponent для удаления сущностей
-        public Func<TreeNodeItemViewModelBase, Task>? OnEntityDeleteRequested { get; set; }
-        
-        // Делегат для обратного вызова переименования в TreeComponent
-        public Func<TreeNodeItemViewModelBase, string, Task<bool>>? OnEntityRenameRequested { get; set; }
-
-        // Делегат для открытия сущности в обычном режиме.
-        public Func<TreeNodeItemViewModelBase, Task>? OnEntityOpenRequested { get; set; }
-
-        // Делегат для открытия сущности сразу в режиме редактирования.
-        public Func<TreeNodeItemViewModelBase, Task>? OnEntityOpenForEditRequested { get; set; }
-        
-        // Абстрактный метод для создания контекстного меню
-        public abstract List<ContextMenuItem> CreateContextMenu();
-        
-        // Абстрактный метод для обработки действий меню
-        public abstract Task HandleMenuActionAsync(string action);
 
         // Метод для переключения состояния выбора
         public void ToggleSelection()
@@ -71,7 +50,7 @@ namespace BusinessEntity.Models
         {
             IsSelected = selected;
         }
-        
+
         // Метод для установки состояния перетаскивания
         public void SetDragging(bool dragging)
         {

@@ -35,14 +35,14 @@
     line-height: 1;
 }
 
-.document-actions__edit-button {
+.document-actions ::deep .document-actions__edit-button {
     background: #9c27b0;
     border-color: #9c27b0;
     color: #ffffff;
 }
 
-.document-actions__edit-button:hover,
-.document-actions__edit-button:focus {
+.document-actions ::deep .document-actions__edit-button:hover,
+.document-actions ::deep .document-actions__edit-button:focus {
     background: #822096;
     border-color: #822096;
     color: #ffffff;

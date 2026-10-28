@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.Classes;
@@ -22,9 +23,17 @@ public static class MediaServerMiniAppRegistration
         services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.MediaVideo, true));
         services.AddSingleton(new EntityUrlPattern("/media-server-files/videos/"));
         services.AddMiniAppHost("MediaServerMiniApp", new ModuleDefinition("MediaServerMiniApp", "uploads", "Загрузки", null,
-                ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 50, OpenOnStartup: true));
+                ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 50, OpenOnStartup: true),
+            new ModuleDefinition("MediaServerMiniApp", "MediaServer.Library", "Мультимедиа", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "media.library", RequiredPermission: "Authenticated"),
+            new ModuleDefinition("MediaServerMiniApp", "MediaServer.Uploads", "Загрузки", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "media.uploads", "RightPanel", Order: 10, OpenOnStartup: true, RequiredPermission: "Authenticated"));
             services.AddSingleton(new ModuleRuntimeRegistration("MediaServerMiniApp:uploads", provider =>
                 new HostedModuleRuntime(provider.GetRequiredService<MediaServerUploadManager>())));
-            return services;
+
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.MediaServerMiniApp.Components.MediaLibrary>("media.library");
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.MediaServerMiniApp.Components.MediaServerUploadWidget>("media.uploads");
+        services.AddMiniAppButtons(
+            new ButtonDefinition("MediaServerMiniApp", "nav.media", "Nav.Main", "Мультимедиа", "oi oi-video", 50, RequiredPermission: "Authenticated", TargetRoute: "/multimedia"));
+
+        return services;
     }
 }

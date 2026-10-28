@@ -1,0 +1,17 @@
+@namespace BusinessEntity.Infrastructure.Commands
+@inject ButtonCatalog Catalog
+@if (Definition != null)
+{
+    <a class="@Definition.CssClass" href="@Route" title="@Definition.Title">@ChildContent</a>
+}
+@code {
+    [Parameter, EditorRequired] public string MiniAppId { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CommandId { get; set; } = string.Empty;
+    [Parameter] public Guid ContextId { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private ButtonDefinition? Definition;
+    private string Route => (Definition?.TargetRoute ?? throw new InvalidOperationException("У ссылки не объявлен маршрут."))
+        .Replace("{contextId}", ContextId.ToString("D"), StringComparison.Ordinal);
+    // Маршрут объявляет владелец, целевая page проверяет актуальные серверные права.
+    protected override void OnParametersSet() => Definition = Catalog.Get(MiniAppId, CommandId, "Document.Toolbar");
+}

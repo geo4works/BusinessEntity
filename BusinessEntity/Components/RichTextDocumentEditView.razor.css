@@ -48,7 +48,7 @@
     margin-top: 0.25rem;
 }
 
-.rich-text-document-read-mode-button {
+.rich-text-document-actions ::deep .rich-text-document-read-mode-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;

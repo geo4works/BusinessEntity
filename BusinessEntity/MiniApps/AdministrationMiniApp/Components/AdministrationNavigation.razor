@@ -1,0 +1,22 @@
+@namespace BusinessEntity.MiniApps.AdministrationMiniApp.Components
+@inherits ModuleComponentBase
+@inject ButtonCatalog Buttons
+
+<h3 class="mb-3">Администрирование</h3>
+<nav class="nav nav-pills mb-3" aria-label="Разделы администрирования">
+    @foreach (var link in Links)
+    {
+        <NavLink class="nav-link" href="@link.TargetRoute" Match="NavLinkMatch.All">@link.Title</NavLink>
+    }
+</nav>
+@code {
+    private IReadOnlyList<ButtonDefinition> Links = [];
+    // Каждая ссылка объявлена владельцем; скрытие не заменяет guard её целевого page-модуля.
+    protected override async Task OnParametersSetAsync()
+    {
+        var links = new List<ButtonDefinition>();
+        foreach (var link in Buttons.GetForHost("Administration.Navigation"))
+            if (Module != null && await ModuleManager.CanExecuteAsync(Module.ModuleId, link.RequiredPermission)) links.Add(link);
+        Links = links;
+    }
+}
