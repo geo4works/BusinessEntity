@@ -147,6 +147,27 @@ public sealed class ModularityTests
             Assert.Single(scope.ServiceProvider.GetRequiredService<WindowModularityManager>().Modules);
         });
     }
+    // Dirty и исход Save публикуются адресными immutable значениями, окна одного пользователя независимы.
+    [Fact]
+    public async Task SaveStateEventsHaveWindowAddressAndMonotonicRevision()
+    {
+        var bus = new MessageBus(); await using var provider = new ServiceCollection().BuildServiceProvider();
+        await using var catalog = new ModuleCatalog(bus, provider.GetRequiredService<IServiceScopeFactory>(), [], [], NullLogger<ModuleCatalog>.Instance);
+        catalog.Accept(new(Guid.NewGuid(), "owner", [Definition("page")]));
+        var user = Guid.NewGuid(); var firstScope = new BusRequestScope(); firstScope.SetUser(user);
+        var secondScope = new BusRequestScope(); secondScope.SetUser(user);
+        await using var first = new WindowModularityManager(catalog, firstScope, new TestTransport(), new AllowAccess(), bus);
+        await using var second = new WindowModularityManager(catalog, secondScope, new TestTransport(), new AllowAccess(), bus);
+        var states = new List<MiniAppSaveStateChanged>(); using var subscription = bus.Listen<MiniAppSaveStateChanged>().Subscribe(states.Add);
+        var id = Guid.NewGuid(); var a = await first.OpenAsync("owner:page", id); var b = await second.OpenAsync("owner:page", id);
+        a.SaveContext!.RegisterParticipant(new TestParticipant()); b.SaveContext!.RegisterParticipant(new TestParticipant());
+        a.SaveContext.MarkChanged(); b.SaveContext.MarkChanged(); await a.SaveContext.SaveAsync(a.ModuleId);
+        var own = states.Where(x => x.LogicalWindowId == first.LogicalWindowId).ToArray();
+        Assert.All(own, x => { Assert.Equal(user, x.UserId); Assert.Equal(a.EditSessionId, x.EditSessionId); Assert.Equal(id, x.ContextId); });
+        Assert.True(own.Zip(own.Skip(1), (x, y) => x.StateRevision < y.StateRevision).All(x => x));
+        Assert.False(own.Last().IsDirty); Assert.Equal(MiniAppSaveStatus.Saved, own.Last().Status);
+        Assert.True(states.Last(x => x.LogicalWindowId == second.LogicalWindowId).IsDirty);
+    }
     // Общая тестовая декларация редактора не зависит от предметного типа.
     private static ModuleDefinition Definition(string id) => new("owner", id, id, null, ModulePlacement.Page, ModuleInstancePolicy.PerContext, "test-ui", HasSaveContext: true);
     // Startup definition для проверки порядка.

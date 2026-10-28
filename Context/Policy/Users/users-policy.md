@@ -112,7 +112,7 @@ BusinessEntity/MiniApps/UserMiniApp
 
 - `BusinessEntityUser`
 - `BusinessEntityClaim`
-- `IUserMiniApp`
+- типизированные Request/Response
 - `IUserConnector`
 - `GetUserRequest`
 - `GetUserResponse`
@@ -554,7 +554,7 @@ Re-seed не должен удалять пользователя из `Authenti
 
 - `BusinessEntityUser`
 - `IUserConnector`
-- `UserMiniAppService`
+- `UserIdentityService` (текущая identity-сессия владельца)
 
 ### 16.3. App-specific persistent user data
 
@@ -564,8 +564,8 @@ Re-seed не должен удалять пользователя из `Authenti
 - `UserPropertyDto`
 - новый `UserPropertyTypeEnum`
 - typed payload model
-- upsert/read/delete методы в `UserMiniAppService`
-- публичные методы в `IUserMiniApp` и `IUserConnector`, если функция нужна снаружи mini-app
+- upsert/read/delete методы в `UserPreferencesService`
+- публичные методы в типизированных Request/Response и `IUserConnector`, если функция нужна снаружи mini-app
 
 ### 16.4. Shared business data
 
@@ -597,11 +597,15 @@ Re-seed не должен удалять пользователя из `Authenti
 
 - `BusinessEntity/Services/AuthentikSessionManager.cs`
 - `BusinessEntity/Controllers/AuthController.cs`
-- `BusinessEntity/Components/GeneralAdministration.razor`
+- `BusinessEntity/MiniApps/UserMiniApp/Components/UsersAdministration.razor`
 - `BusinessEntity/MiniApps/UserMiniApp/Contracts/...`
 - `BusinessEntity/MiniApps/UserMiniApp/Connectors/UserConnector.cs`
-- `BusinessEntity/MiniApps/UserMiniApp/Facade/UserMiniApp.cs`
-- `BusinessEntity/MiniApps/UserMiniApp/Internal/UserMiniAppService.cs`
+- `BusinessEntity/MiniApps/UserMiniApp/Registration/UserMiniAppRegistration.cs`
+- `BusinessEntity/MiniApps/UserMiniApp/Internal/UserIdentityService.cs`
+- `BusinessEntity/MiniApps/UserMiniApp/Internal/UserAccountsService.cs`
+- `BusinessEntity/MiniApps/UserMiniApp/Internal/UserAccessService.cs`
+- `BusinessEntity/MiniApps/UserMiniApp/Internal/UserPreferencesService.cs`
+- `BusinessEntity/MiniApps/UserMiniApp/Internal/UserFormsWorkingSet.cs`
 - `BusinessEntity/MiniApps/UserMiniApp/Internal/BusinessEntityUserFactory.cs`
 - `BusinessEntity/MiniApps/UserMiniApp/Storage/UserMiniAppDbContext.cs`
 - `BusinessEntity/MiniApps/UserMiniApp/Storage/UserMiniAppStorageSchema.cs`

@@ -665,4 +665,81 @@ beforeunload, ожидание ввода и сохранение поздних
 Данные и восстановление: схема 2/archive 2 сохранены, БД/storage/volumes не сбрасывались.
 Новые smoke-документы и restore-пространства оставлены для проверки; временные
 пользователи/группы очищены штатным UI, без очистки пользовательского хранилища.
-Версия и коммит: CMMTP 3 — 0.16.11; hash/push записываются после команды git.
+Версия и коммит: CMMTP 3 — 0.16.11, 6f3cb79, push main выполнен.
+
+
+## Этап 9 — Итоговый аудит и документация (2026-10-29)
+
+### Сделано
+
+- Пройден весь применимый §6. Полная таблица и границы проверки —
+  [итоговый аудит](TASK_ARCH_001_final-audit.md).
+- Переписаны index и rollout-context, граф/storage policy. Актуализированы Core,
+  saving/lifecycle, история, права и rich-text ownership-ссылки. Добавлены реестр
+  рабочих наборов и политика capability toolset-ов без конкретной реализации.
+- Каталог пересобран из 168 действующих C# records; все Request/Response найдены,
+  удалённые EntityMessages и битые ссылки убраны. Модули/маршруты/15 владельцев и
+  семь HasSaveContext определений сверены с Registration. Относительные ссылки
+  index/rollout/реестров/политик разрешаются.
+- Аудит выявил два остатка: dirty не имел отдельного typed bus event, а UserHeader
+  ещё использовал собственный UserConnector. Добавлен MiniAppSaveStateChanged
+  с адресом/двумя ревизиями и прямой own identity-вызов. Этап 6 этот самозапрос
+  не обнаружил; новая автоматическая проверка покрывает own UI/services.
+- Дополнены проверки SQL-владельцев и бюджета DI-конструкторов. Единственный
+  BusinessEntityHelper сохранён; внешние Internal недоступны по source-тестам.
+  Metadata-аргументы описателей не смешиваются с DI-зависимостями.
+- Удалены неиспользуемый Functions, tracked .objtmp cache и мёртвые csproj exclusions.
+  CommonOperationResult оставлен: его использует logger, это не miniapp bus envelope.
+  Индикатор dirty получил читаемый цвет. README запуска не менялся: команды
+  остались прежними; пользовательские env/template-правки сохранены.
+
+### Итоговые проверки
+
+Полная Release-сборка решения: 0 ошибок, исходные предупреждения видимы.
+Полный test: 126 passed, 0 failed, 0 skipped; 35 Postgres в отдельном кластере.
+Последние четыре проверки — адресный dirty snapshot, DI budget, self-connector
+и допустимые владельцы DbContext. Реальные SQL-тесты проверяют атомарность,
+конкуренцию, durable retry, историю/публикацию, чанки, файлы/recovery, cache и restore.
+
+RSTT: оба образа собраны, оба контейнера force-recreate. Image ID приложения
+5b7426965c7caf7fc2e02b3ec3514b3848820f4c309f465c6ea330e3ff14dd35 совпал;
+logger image 96b8296992ce7595eeb7df0c2595d0b98628a8f2eb1385edf517c9f3d163e68c совпал.
+В живом контейнере deps metadata подтвердили BusinessEntity/0.17.0.
+
+Один финальный Playwright runner: 33 сценария, exit 0. Basic 9, selection 2,
+storage 6, anonymous 3, system/media 2, navigation/native 8, routes/guards 3.
+Проверены два автора от одной базы, Restore и независимая публикация, upload/read/
+Range, import, backup/restore, анонимный published-only UI, административные URL,
+Save/Discard/Cancel, late input, native reload/close и forceLoad выбора пространства.
+Late input во время настоящего сохранения отдельно покрывается управляемыми unit
+и working-set/SQL тестами; browser matrix не объявляется проверкой каждой гонки.
+
+Визуально осмотрен guard при 1600px; локальный черновик отброшен через UI.
+Итоговые App/logger/Authentik HTTP 200, зависимости healthy, runtime без
+fail/unhandled/circuit exceptions. SQL: 0 smoke-guard users, 0 Smoke guests groups.
+.env и Authentic/.env ignored. git diff --check и проверка локальных doc links чисты.
+
+### §8 — окончательный отчёт
+
+Этап 9 — Итоговый аудит и документация: готово.
+Сделано: аудит всех инвариантов, исправление найденных остатков, актуальные нормы
+и реестры, пакет 0.17.0 с общим CHANGELOG этапов 0–9.
+Отклонения от ТЗ и почему: нет по архитектурному объёму.
+Вопросы к пользователю: новая отдельная развилка прав на прямые HTTP-файлы вынесена
+пользователю; без её решения сохранён прежний режим. По реализованной архитектуре
+открытых продуктовых решений нет. Тестовый video GET без cookie вернул 200;
+полная file authorization не приписывается выполненному пакету.
+Проверки: build ✓, tests ✓ (126; PostgreSQL 35), RSTT ✓, smoke ✓ (33, один runner), visual ✓.
+Чек-лист §6: CHK-01/01a и CHK-02…32 ✓, основания — итоговая таблица аудита.
+Данные и восстановление: после разрешённого сброса этапа 2 новые БД/storage/volumes
+не очищались; текущая схема/история/файлы проходят весь цикл RSTT и restore.
+Версия и коммит: CMMTP 2 — 0.17.0, общий CHANGELOG этапов 0–9; окончательный hash
+и результат push указаны в финальном отчёте чата (собственный hash коммита в его
+содержимое не записывается).
+
+Ограничения: local drafts живут в circuit; Authentik API вне SQL; retention outcomes
+по настройке (7 дней); один server/DataProvider без кластерной синхронизации;
+исходные nullable/async/AutoMapper NU1903; прежний прямой GET файлов до отдельного
+решения по file authorization. Dirty/history Space, вкладочный UI и конкретные
+toolset-ы не добавлялись. Не запущенный в этом этапе standalone DB-pause browser
+сценарий не засчитан: применимые отказы покрыты перечисленными SQL/unit/UI тестами.

@@ -345,3 +345,6 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+# Local experimental restore cache is not source code.
+**/.objtmp/

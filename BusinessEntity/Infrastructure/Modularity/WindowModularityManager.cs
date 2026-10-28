@@ -17,6 +17,9 @@ public sealed class WindowModularityManager : IAsyncDisposable
     private readonly IWebLoggerService? _logger;
     private readonly List<MiniAppModule> _modules = [];
     private readonly List<MiniAppSaveContext> _contexts = [];
+    private readonly object _saveStateGate = new();
+    private readonly Dictionary<Guid, MiniAppSaveStateChanged> _saveStates = new();
+    private long _saveStateRevision;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _disposed;
     private readonly HashSet<Guid> _inactive = [];
@@ -78,7 +81,7 @@ public sealed class WindowModularityManager : IAsyncDisposable
     public event Action? Changed;
     public Guid LogicalWindowId => _scope.LogicalWindowId;
     public IReadOnlyList<MiniAppModule> Modules => _modules.ToArray();
-    public IReadOnlyList<MiniAppSaveContext> DirtyContexts => _contexts.Where(x => x.IsDirty).ToArray();
+    public IReadOnlyList<MiniAppSaveContext> DirtyContexts { get { lock (_saveStateGate) return _contexts.Where(x => x.IsDirty).ToArray(); } }
     // Шесть зависимостей: каталог, адрес, сохранение, доступ, события и внешний lifecycle-журнал.
     public WindowModularityManager(ModuleCatalog catalog, BusRequestScope scope, ISaveBatchTransport transport,
         IModuleAccessPolicy access, IMessageBus bus, IWebLoggerService? logger = null)
@@ -114,7 +117,7 @@ public sealed class WindowModularityManager : IAsyncDisposable
                 if (save == null)
                 {
                     save = new(definition.MiniAppId, contextId, _scope, _transport);
-                    save.Changed += OnChanged; _contexts.Add(save);
+                    save.Changed += OnChanged; lock (_saveStateGate) _contexts.Add(save);
                 }
             }
             var module = new MiniAppModule(Guid.NewGuid(), definition, LogicalWindowId, contextId, save);
@@ -164,7 +167,7 @@ public sealed class WindowModularityManager : IAsyncDisposable
             if (!_inactive.Remove(moduleId)) Publish(module, ModuleLifecycle.Deactivated);
             _modules.Remove(module); Publish(module, ModuleLifecycle.Closed);
             if (last && module.SaveContext != null)
-            { module.SaveContext.Changed -= OnChanged; _contexts.Remove(module.SaveContext); }
+            { module.SaveContext.Changed -= OnChanged; lock (_saveStateGate) { _contexts.Remove(module.SaveContext); _saveStates.Remove(module.SaveContext.EditSessionId); } }
             OnChanged();
         }
         finally { _gate.Release(); }
@@ -177,7 +180,21 @@ public sealed class WindowModularityManager : IAsyncDisposable
         if (_logger != null) _ = _logger.Information($"[modules] {lifecycle} module={module.ModuleId} definition={module.Definition.Key} window={LogicalWindowId}");
     }
     // Сообщает хостам и guard об изменении их собственного окна.
-    private void OnChanged() => Changed?.Invoke();
+    private void OnChanged()
+    {
+        lock (_saveStateGate)
+        {
+            foreach (var context in _contexts.ToArray())
+            {
+                var state = new MiniAppSaveStateChanged(LogicalWindowId, context.UserId, context.MiniAppId,
+                    context.EditSessionId, context.ContextId, 0, context.Revision, context.IsDirty, context.Status, context.OperationId);
+                if (_saveStates.TryGetValue(context.EditSessionId, out var previous) && previous with { StateRevision = 0 } == state) continue;
+                state = state with { StateRevision = ++_saveStateRevision }; _saveStates[context.EditSessionId] = state;
+                _bus.SendMessage(state);
+            }
+        }
+        Changed?.Invoke();
+    }
     // Circuit удерживается при reconnect; финальный disposal закрывает все адреса и освобождает подписчиков.
     public async ValueTask DisposeAsync()
     {

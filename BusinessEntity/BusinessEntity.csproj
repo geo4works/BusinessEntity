@@ -5,18 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-    <Version>0.16.11</Version>
-    <AssemblyVersion>0.16.11.0</AssemblyVersion>
-    <FileVersion>0.16.11.0</FileVersion>
-    <InformationalVersion>0.16.11</InformationalVersion>
+    <Version>0.17.0</Version>
+    <AssemblyVersion>0.17.0.0</AssemblyVersion>
+    <FileVersion>0.17.0.0</FileVersion>
+    <InformationalVersion>0.17.0</InformationalVersion>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Remove="DataAccess\Contracts\**" />
-    <Content Remove="DataAccess\Contracts\**" />
-    <EmbeddedResource Remove="DataAccess\Contracts\**" />
-    <None Remove="DataAccess\Contracts\**" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="13.0.1" />

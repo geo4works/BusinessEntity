@@ -1,6 +1,6 @@
 # Модули и маршруты
 
-Фактическая регистрация этапа 8 TASK_ARCH_001. ModuleCatalog singleton получает
+Фактическая регистрация итогового пакета TASK_ARCH_001, 0.17.0. ModuleCatalog singleton получает
 декларации host-service; WindowModularityManager scoped создаёт UI-адреса.
 Декларации с AppSingleton — только Headless; внутренних вкладочных placement нет.
 
@@ -82,3 +82,5 @@ ButtonCommandInvoked/Result с корреляцией, серверным авт
 
 UI bindings переводят выполнение на dispatcher владельца; registry допускает
 фоновую доставку и независимые bindings одной команды в одном модуле.
+
+[Подробный реестр рабочих наборов и Save](save-contexts.md).

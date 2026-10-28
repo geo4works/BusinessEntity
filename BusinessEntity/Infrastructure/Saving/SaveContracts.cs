@@ -27,3 +27,8 @@ public interface ISaveBatchTransport
 public enum MiniAppSaveStatus { Idle, Saving, Saved, Failed, Unknown }
 // Ответ guard/команды, не объявляющий неизвестный исход успешным.
 public sealed record MiniAppSaveAttempt(bool Success, MiniAppSaveStatus Status, string? Error = null);
+
+// Адресный immutable статус рабочего экземпляра на единственной шине приложения.
+public sealed record MiniAppSaveStateChanged(Guid LogicalWindowId, Guid? UserId, string MiniAppId,
+    Guid EditSessionId, Guid? ContextId, long StateRevision, long EditRevision,
+    bool IsDirty, MiniAppSaveStatus Status, Guid? OperationId);

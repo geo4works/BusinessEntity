@@ -327,7 +327,7 @@ Toolbar работает с активным Tiptap editor.
 
 Название сохраняется вместе с содержимым по `Save` и при переходе из edit mode в read mode через кнопку открытой книги.
 
-Фильтрация и нормализация названия находятся в `RichTextDocumentHelper`.
+Фильтрация и нормализация названия находятся в `RichTextTitleRules` владельца RichTextDocumentMiniApp.
 
 Текущие правила:
 
@@ -352,7 +352,7 @@ Save flow:
 
 1. editor viewport вызывает `CaptureCurrentEditorsAsync`;
 2. собираются только dirty drafts;
-3. dirty drafts передаются в `RichTextDocumentHelper.SaveEditedChunksAsync`;
+3. dirty drafts фиксируются в `RichTextWorkingSet.Capture`, затем `RichTextEditService.PrepareEditorBatchAsync` готовит пакет;
 4. helper сохраняет только измененные chunks как новые versioned rows;
 5. название проходит нормализацию и сохраняется через `SaveRichTextDocumentTitleAsync`;
 6. успешно сохраненные editor instances помечаются clean через JS `markClean`;

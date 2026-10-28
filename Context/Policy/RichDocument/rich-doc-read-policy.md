@@ -620,7 +620,7 @@ Data provider может предоставлять generic storage operations �
 Принципиальный подход:
 
 - держать DTO persistence в data provider
-- держать rich-document decisions в `RichTextDocumentHelper` и UI components
+- держать rich-document decisions в `RichTextDocumentReader`, Search/Outline/Edit services владельца и его UI components
 - ограничить converters переводом storage payload
 
 Избегать:

@@ -5,7 +5,7 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Models;
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 
 /// <summary>
-/// DbContext, используемый репозиториями BusinessEntityData. Конфигурация таблиц настраивается в вызывающем коде.
+/// Единственный контекст канонического графа; таблицы и ограничения задаёт владелец DataProvider.
 /// </summary>
 internal sealed class KmsBusinessEntityDbContext : DbContext
 {

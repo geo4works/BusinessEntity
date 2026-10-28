@@ -119,3 +119,13 @@ Save/Discard guard дожидается снятия browser warning до forceL
 Rich-text после Save использует подтверждённые название/описание и не закрывает
 редактор для read/publish, если пока сохранялся пакет, появились новые правки.
 Ввод названия до асинхронного сбора HTML не затирается поздним старым аргументом.
+
+
+## Адресный статус на общей шине
+
+Менеджер публикует MiniAppSaveStateChanged с StateRevision, EditRevision,
+IsDirty, Status и OperationId в адрес LogicalWindowId/MiniAppId/EditSessionId/
+ContextId. Значения immutable, черновики и секреты в событие не входят.
+Подписчик отбрасывает чужое окно/старую StateRevision. Источник dirty остаётся
+сам MiniAppSaveContext; отдельный изменяемый state миниаппа не создаётся.
+[Реестр контекстов](../../Registry/save-contexts.md).
