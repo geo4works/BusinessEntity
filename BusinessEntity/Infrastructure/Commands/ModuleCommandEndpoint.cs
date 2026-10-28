@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Infrastructure.Bus;
 using ReactiveUI;
 
@@ -16,6 +17,10 @@ public sealed class ModuleCommandEndpoint : ScopedBusEndpoint
         Subscribe<ButtonCommandInvoked, ButtonCommandResult>(async request =>
         {
             if (request.Context.UserId != _scope.UserId || request.Context.IsSystem != _scope.IsSystem) throw new UnauthorizedAccessException();
-            await _commands.InvokeAsync(request.Context, request.DeclarationOwner, request.CommandId, request.BindingId); return new(request.RequestId); }, (id, error) => new(id, error));
+            try { await _commands.InvokeAsync(request.Context, request.DeclarationOwner, request.CommandId, request.BindingId); return new(request.RequestId); }
+            // Поздняя команда завершённого browser runtime получает явный отказ, не исполняя закрытый UI.
+            catch (ObjectDisposedException error) when (error.ObjectName == nameof(WindowModularityManager))
+            { return new(request.RequestId, new BusError("command.closed", "Страница команды уже закрыта.")); }
+        }, (id, error) => new(id, error));
     }
 }

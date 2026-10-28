@@ -12,6 +12,8 @@ public abstract class ModuleComponentBase : ComponentBase, IHandleEvent
     // Повторяет renderer lifecycle ComponentBase внутри адресной async-операции.
     async Task IHandleEvent.HandleEventAsync(EventCallbackWorkItem callback, object? arg)
     {
+        using var edit = arg is ChangeEventArgs ? ModuleManager.TrackEditEvent() : null;
+        if (arg is not ChangeEventArgs) await ModuleManager.WaitForPendingEditsAsync();
         Task task = Module == null ? callback.InvokeAsync(arg) : ModuleManager.ExecuteAsync(Module.ModuleId, _ => callback.InvokeAsync(arg));
         StateHasChanged();
         if (task.IsCompletedSuccessfully) return;

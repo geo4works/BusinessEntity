@@ -19,7 +19,7 @@ public static class ModularityRegistration
         services.AddHostedService(provider => provider.GetRequiredService<ModuleCatalog>());
         services.AddSingleton<IModuleUiFactory, ModuleUiFactory>();
         services.TryAddScoped<ISaveBatchTransport, SaveBatchTransport>();
-        services.AddScoped<WindowModularityManager>();
+        services.AddScoped<WindowModularityManager>(); services.AddScoped<WindowSaveGuard>();
         return services;
     }
     // Регистрирует один декларативный singleton на логический миниапп.

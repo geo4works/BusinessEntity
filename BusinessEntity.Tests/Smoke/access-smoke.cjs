@@ -53,9 +53,7 @@ async function run() {
     assert((await assignment.innerText()).includes("Документы"));
     assert((await assignment.innerText()).includes("Гость"));
     await page.goto(base + "/space-selection", { waitUntil: "networkidle" });
-    // При одном доступном пространстве штатный выбор происходит автоматически.
-    if (new URL(page.url()).pathname === "/space-selection")
-      await page.locator("li.list-group-item").filter({ hasText: "Документы" }).getByRole("button", { name: "Перейти", exact: true }).click();
+    // Единственное разрешённое пространство выбирается автоматически; ожидаем сам переход.
     await page.waitForURL(/\/(?:rich-)?document\/[a-f0-9-]+/);
     await page.goto(fixtures.documents.document, { waitUntil: "networkidle" });
     await page.locator(".document-layout__content").getByText(/^Проверка сохранения документа /).waitFor();

@@ -38,6 +38,43 @@ public sealed class WindowModularityManager : IAsyncDisposable
         CurrentSelectionSource = null; ++_selectionSourceRevision;
         _bus.SendMessage(new SelectionSourceChanged(LogicalWindowId, null));
     }
+    private readonly object _editGate = new();
+    private readonly AsyncLocal<int> _editDepth = new();
+    private int _pendingEdits;
+    private TaskCompletionSource? _editsSettled;
+    public bool HasPendingEdits { get { lock (_editGate) return _pendingEdits > 0; } }
+    // Ввод регистрируется до первого await проверки права; уход не обгоняет обработку последнего поля.
+    public IDisposable TrackEditEvent()
+    {
+        lock (_editGate)
+        {
+            if (_pendingEdits++ == 0) _editsSettled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+        _editDepth.Value++; OnChanged();
+        return new EditEventLease(() =>
+        {
+            _editDepth.Value--;
+            lock (_editGate) { if (--_pendingEdits == 0) _editsSettled!.TrySetResult(); }
+            OnChanged();
+        });
+    }
+    // Вложенный callback того же ввода не ждёт сам себя; отдельная навигация ждёт все начатые изменения.
+    public async Task WaitForPendingEditsAsync(CancellationToken ct = default)
+    {
+        if (_editDepth.Value > 0) return;
+        while (true)
+        {
+            Task pending;
+            lock (_editGate) { if (_pendingEdits == 0) return; pending = _editsSettled!.Task; }
+            await pending.WaitAsync(ct);
+        }
+    }
+    // Снимает учёт одного события ввода ровно один раз.
+    private sealed class EditEventLease(Action release) : IDisposable
+    {
+        private Action? _release = release;
+        public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();
+    }
     public event Action? Changed;
     public Guid LogicalWindowId => _scope.LogicalWindowId;
     public IReadOnlyList<MiniAppModule> Modules => _modules.ToArray();

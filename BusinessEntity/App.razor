@@ -5,6 +5,7 @@
 @using BusinessEntity.Infrastructure.UI
 
 <CascadingAuthenticationState>
+    <BusinessEntity.Infrastructure.Saving.UnsavedChangesGuard />
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(BusinessEntity.Shared.MainLayout)">

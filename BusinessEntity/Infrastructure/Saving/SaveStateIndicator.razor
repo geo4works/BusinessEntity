@@ -1,0 +1,36 @@
+@namespace BusinessEntity.Infrastructure.Saving
+@implements IDisposable
+
+@if (SaveContext != null && (SaveContext.IsDirty || SaveContext.Status != MiniAppSaveStatus.Idle))
+{
+    <div class="miniapp-save-state small mb-2 @(SaveContext.IsDirty ? "text-warning" : "text-muted")"
+         role="status" data-edit-session="@SaveContext.EditSessionId" data-dirty="@SaveContext.IsDirty.ToString().ToLowerInvariant()">
+        @StatusText
+        @if (SaveContext.Status == MiniAppSaveStatus.Unknown) { <span> Повторите «Сохранить», чтобы проверить исход.</span> }
+    </div>
+}
+@code {
+    [Parameter] public MiniAppSaveContext? SaveContext { get; set; }
+    private MiniAppSaveContext? _subscribed;
+    private bool _disposed;
+    private string StatusText => SaveContext!.Status switch
+    {
+        MiniAppSaveStatus.Saving => "Идёт сохранение…",
+        MiniAppSaveStatus.Unknown => "Исход сохранения пока неизвестен.",
+        MiniAppSaveStatus.Failed => "Сохранение не завершено; правки сохранены в редакторе.",
+        _ when SaveContext.IsDirty => "Есть несохранённые изменения.",
+        MiniAppSaveStatus.Saved => "Рабочий набор сохранён.",
+        _ => "Изменений нет."
+    };
+    // Подписывается на общий контекст экземпляра, не создавая копии его dirty.
+    protected override void OnParametersSet()
+    {
+        if (_subscribed == SaveContext) return;
+        if (_subscribed != null) _subscribed.Changed -= Refresh;
+        _subscribed = SaveContext; if (_subscribed != null) _subscribed.Changed += Refresh;
+    }
+    // Изменение с любого потока переводится в owning renderer.
+    private void Refresh() { if (!_disposed) _ = InvokeAsync(() => { if (!_disposed) StateHasChanged(); }); }
+    // Освобождает единственную подписку при снятии host.
+    public void Dispose() { _disposed = true; if (_subscribed != null) _subscribed.Changed -= Refresh; }
+}

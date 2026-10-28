@@ -1,6 +1,6 @@
 # Реестр миниаппов
 
-Фактическое состояние этапа 7 TASK_ARCH_001, 2026-10-29.
+Фактическое состояние этапа 8 TASK_ARCH_001, 2026-10-29.
 15 логических владельцев внутри одного проекта. Каждый AddXxxMiniApp регистрирует
 один декларативный singleton MiniAppHostService. Core/Infrastructure — общие слои.
 
@@ -57,7 +57,7 @@ WindowModularityManager создаёт ModuleId и edit session. Контекс�
 
 Documents, RichText, User profile/admin, SysParameters admin, Spaces admin и Media
 library используют Save/Discard рабочего набора. Успех подтверждает отправленную
-ревизию; поздние правки остаются dirty. Навигационный UX guard — этап 8.
+ревизию; поздние правки остаются dirty. Навигационный guard и beforeunload подключены общим слоем.
 Dirty пространства и общий Save приложения отсутствуют.
 
 Служебные формы User применяются UserOwnedStorageWriter через открытую транзакцию

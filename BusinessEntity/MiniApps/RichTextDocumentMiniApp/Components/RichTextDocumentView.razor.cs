@@ -188,20 +188,23 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
                     return false;
                 }
 
-                var versionDescription = EditView.VersionDescription;
                 var saved = await EditView.SaveAsync(EditableEntityName);
                 await OnEditorSaved.InvokeAsync(new RichTextDocumentEditorSaveRequest
                 {
                     SavedVersion = saved.Version,
                     TitleChanged = saved.TitleChanged,
                     SavedChunkCount = saved.SavedChunkCount,
-                    Title = EditableEntityName,
-                    VersionDescription = versionDescription,
+                    Title = Working.ConfirmedTitle,
+                    VersionDescription = Working.ConfirmedDescription,
                     RefreshReadWindow = refreshReadWindow,
                     ViewportPosition = viewportPosition
                 });
                 EditView.ClearVersionDescription();
-
+                if (Module.IsDirty)
+                {
+                    SaveError = "Отправленные правки сохранены. Есть новые изменения; редактор остаётся открытым.";
+                    return false;
+                }
                 return true;
             }
             catch (Exception exception)

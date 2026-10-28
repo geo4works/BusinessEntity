@@ -128,6 +128,7 @@
     private readonly string UploadInputId = $"media-video-upload-{Guid.NewGuid():N}";
     private readonly CancellationTokenSource UploadRefreshCancellation = new();
     private Task? UploadRefreshTask;
+    private bool _disposed;
     private DotNetObjectReference<MediaLibrary>? DotNetReference;
 
     private List<MediaVideoInfo> Videos { get; set; } = new();
@@ -140,12 +141,15 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadVideosAsync();
+        if (_disposed) return;
         LoadUploadJobs();
         UploadRefreshTask = RefreshUploadJobsLoopAsync(UploadRefreshCancellation.Token);
     }
 
     private async Task LoadVideosAsync(bool clearMessage = true)
     {
+        if (_disposed) return;
+        var ct = UploadRefreshCancellation.Token;
         IsLoading = true;
         if (clearMessage)
         {
@@ -154,17 +158,26 @@
 
         try
         {
-            Videos = (await MediaServerService.GetVideosAsync(UserContext.CurrentSpaceId, FilterText)).ToList();
-            await Working.OpenAsync(Videos);
+            var videos = (await MediaServerService.GetVideosAsync(UserContext.CurrentSpaceId, FilterText, ct)).ToList();
+            ct.ThrowIfCancellationRequested();
+            await Working.OpenAsync(videos, ct); ct.ThrowIfCancellationRequested();
+            Videos = videos;
 
             if (ExpandedVideoId.HasValue && Videos.All(x => x.Id != ExpandedVideoId.Value))
             {
                 ExpandedVideoId = null;
             }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (ObjectDisposedException) when (_disposed) { }
+        catch (Exception error)
+        {
+            // Живой экран показывает явный отказ чтения, сохраняя circuit и свой рабочий набор.
+            Message = global::BusinessEntity.Infrastructure.Bus.BusError.FromException(error).Message;
+        }
         finally
         {
-            IsLoading = false;
+            if (!_disposed) IsLoading = false;
         }
     }
 
@@ -179,7 +192,7 @@
     private async Task RefreshUploadJobsAndVideosAsync()
     {
         var allJobs = UploadJobTracker.GetVideoUploadJobs();
-        var hasNewCompletedVideo = allJobs.Any(x =>
+        var hasNewCompletedVideo = allJobs.Where(ShouldDisplayUploadJob).Any(x =>
             x.State == MediaVideoUploadJobState.Completed &&
             x.VideoId.HasValue &&
             Videos.All(video => video.Id != x.VideoId.Value));
@@ -205,8 +218,9 @@
             {
                 await InvokeAsync(async () =>
                 {
+                    if (_disposed) return;
                     await RefreshUploadJobsAndVideosAsync();
-                    StateHasChanged();
+                    if (!_disposed) StateHasChanged();
                 });
             }
         }
@@ -432,6 +446,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         UploadRefreshCancellation.Cancel();
         UploadRefreshCancellation.Dispose();
         DotNetReference?.Dispose();

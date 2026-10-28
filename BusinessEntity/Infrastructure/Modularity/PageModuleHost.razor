@@ -7,6 +7,7 @@
 @if (Module != null)
 {
     <CascadingValue Value="Module" IsFixed="true" @key="Module.ModuleId">
+        <BusinessEntity.Infrastructure.Saving.SaveStateIndicator SaveContext="Module.SaveContext" />
         <DynamicComponent Type="UiFactory.Resolve(Module.Definition.ComponentKey!)" Parameters="Parameters" />
     </CascadingValue>
 }

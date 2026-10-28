@@ -15,6 +15,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         private readonly string EditorViewportElementId = $"rich-text-editor-viewport-{Guid.NewGuid():N}";
         private readonly string OutlineTreeElementId = $"rich-text-edit-outline-tree-{Guid.NewGuid():N}";
         private bool _outlineTreeRegistered;
+        private bool _disposed;
 
         [Inject] public RichTextSearchService RichTextSearchService { get; set; } = default!;
         [Parameter] public string EditableEntityName { get; set; } = string.Empty;
@@ -69,6 +70,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
 
         protected override async Task OnInitializedAsync()
         {
+            Module.SaveContext!.Changed += OnSaveStateChanged;
             var settings = await RichTextDocumentSettingsService.GetSettingsAsync();
             HideTableOfContentsScrollbar = settings.HideTableOfContentsScrollbar;
         }
@@ -346,8 +348,12 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
             return result;
         }
 
+        // Адресная доступность Save отражает dirty всего рабочего набора, включая ввод из JS.
+        private void OnSaveStateChanged() { if (!_disposed) _ = InvokeAsync(() => { if (!_disposed) StateHasChanged(); }); }
+
         public async ValueTask DisposeAsync()
         {
+            _disposed = true; Module.SaveContext!.Changed -= OnSaveStateChanged;
             if (!_outlineTreeRegistered)
             {
                 return;

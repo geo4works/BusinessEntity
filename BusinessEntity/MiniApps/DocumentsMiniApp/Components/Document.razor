@@ -83,7 +83,7 @@
                             <span class="form-check-label">Общий</span>
                         </label>
                     }
-                    <DeclaredButton MiniAppId="DocumentsMiniApp" CommandId="document.save" OnInvoked="SaveAsync" Enabled="@(!IsSaving)" CssClass="btn btn-sm btn-primary">
+                    <DeclaredButton MiniAppId="DocumentsMiniApp" CommandId="document.save" OnInvoked="SaveAsync" Enabled="@(!IsSaving && Module?.SaveContext?.IsDirty == true)" CssClass="btn btn-sm btn-primary">
                         @(IsSaving ? "Сохранение..." : "Сохранить")
                     </DeclaredButton>
                     <DeclaredButton MiniAppId="DocumentsMiniApp" CommandId="document.cancel" OnInvoked="CancelEdit" Enabled="@(!IsSaving)" CssClass="btn btn-sm btn-outline-secondary">Отмена</DeclaredButton>

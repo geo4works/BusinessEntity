@@ -19,6 +19,8 @@ public sealed class RichTextWorkingSet(MiniAppSaveContext context, RichTextEditS
     private string _acknowledgedDescription = string.Empty;
     private string _savedTitle = string.Empty;
     private Captured? _captured;
+    public string ConfirmedTitle => _savedTitle;
+    public string ConfirmedDescription => _acknowledgedDescription;
     public RichTextDocumentSaveResult? LastSave { get; private set; }
     public IReadOnlyDictionary<long, string> AcknowledgedHtml { get; private set; } = new Dictionary<long, string>();
     public IReadOnlyList<long> AcknowledgedSortOrders { get; private set; } = [];

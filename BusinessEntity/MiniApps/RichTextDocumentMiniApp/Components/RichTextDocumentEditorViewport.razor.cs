@@ -177,8 +177,8 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         // Сохраняет заголовок и чанки одним пакетом от фиксированной базы окна редактора.
         public async Task<RichTextDocumentSaveResult> SaveAsync(string title, string description)
         {
-            await CaptureCurrentEditorsAsync();
             Working.SetTitle(title); Working.SetDescription(description);
+            await CaptureCurrentEditorsAsync();
             var hadChanges = Module.SaveContext!.IsDirty;
             var result = await Module.SaveContext.SaveAsync(Module.ModuleId);
             if (!result.Success) throw new InvalidOperationException(result.Error);

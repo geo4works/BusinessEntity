@@ -1,6 +1,6 @@
 # Модули и маршруты
 
-Фактическая регистрация этапа 7 TASK_ARCH_001. ModuleCatalog singleton получает
+Фактическая регистрация этапа 8 TASK_ARCH_001. ModuleCatalog singleton получает
 декларации host-service; WindowModularityManager scoped создаёт UI-адреса.
 Декларации с AppSingleton — только Headless; внутренних вкладочных placement нет.
 
@@ -61,7 +61,7 @@ MediaServer.Library. Участники рабочих наборов живут
 а не в компонентах. Менеджер создаёт EditSessionId в пределах окна/владельца/
 ContextId; несколько представлений могут явно использовать один edit session.
 Возврат dirty статьи читает базовую версию её автора; новые версии других окон
-не подменяют содержимое этого черновика. Навигационный guard — этап 8.
+не подменяют содержимое этого черновика. UnsavedChangesGuard вызывает Save/Discard/Cancel до перехода; beforeunload предупреждает о закрытии/перезагрузке.
 У пространства нет aggregate dirty или общей версии.
 
 ## Команды

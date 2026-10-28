@@ -92,7 +92,7 @@ public sealed class MiniAppSaveContext
                 if (_committed == null)
                 {
                     var definite = exception is BusRequestFailedException failure &&
-                        failure.Error.Code is "validation.failed" or "access.denied" or "payload.invalid" or "payload.unsupported";
+                        failure.Error.Code is "validation.failed" or "access.denied" or "payload.invalid" or "payload.unsupported" or "record.not_found";
                     if (definite) { _pending = null; return Fail(BusError.FromException(exception).Message); }
                     Status = MiniAppSaveStatus.Unknown;
                     Error = "Исход сохранения пока не установлен. Повторите проверку: будет использован тот же пакет.";
@@ -121,7 +121,8 @@ public sealed class MiniAppSaveContext
         {
             if (_pending != null) throw new InvalidOperationException("Сначала установите исход сохранения.");
             if (_participant == null) throw new InvalidOperationException("Владелец черновика не зарегистрирован.");
-            await _participant.DiscardAsync(ct); _acknowledged = _revision;
+            var discardedRevision = _revision;
+            await _participant.DiscardAsync(ct); _acknowledged = discardedRevision;
             Status = MiniAppSaveStatus.Idle; Error = null; Changed?.Invoke();
         }
         finally { _operation.Release(); }

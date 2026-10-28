@@ -70,7 +70,7 @@
                             <path d="M11 7.6h2" />
                         </svg>
                     </DeclaredButton>
-                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.save" OnInvoked="HandleSaveAsync" Enabled="@(!IsSaving)" CssClass="btn btn-sm btn-primary">
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.save" OnInvoked="HandleSaveAsync" Enabled="@(!IsSaving && Module.IsDirty)" CssClass="btn btn-sm btn-primary">
                         Save
                     </DeclaredButton>
                     <button type="button"

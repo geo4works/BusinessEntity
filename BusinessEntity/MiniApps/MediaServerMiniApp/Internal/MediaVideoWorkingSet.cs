@@ -13,8 +13,8 @@ public sealed class MediaVideoWorkingSet(MiniAppSaveContext context, MediaServer
 {
     private readonly EntityPayloadWorkingSet _payloads = new(context, types);
     // Загружает полные metadata один раз и сохраняет черновики при обновлении списка загрузок.
-    public async Task OpenAsync(IEnumerable<MediaVideoInfo> videos)
-    { foreach (var video in videos) _payloads.Open(await media.GetEditableVideoDataAsync(video.Id)); }
+    public async Task OpenAsync(IEnumerable<MediaVideoInfo> videos, CancellationToken ct = default)
+    { foreach (var video in videos) { ct.ThrowIfCancellationRequested(); _payloads.Open(await media.GetEditableVideoDataAsync(video.Id, ct)); } }
     // UI работает с принадлежащим владельцу payload, а не с собственной копией dirty.
     public MediaVideo Get(Guid id) => _payloads.Get<MediaVideo>(id);
     // Название и комментарий попадут в один payload одной транзакции.

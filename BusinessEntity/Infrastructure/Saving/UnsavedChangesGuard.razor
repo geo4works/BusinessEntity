@@ -1,0 +1,101 @@
+@namespace BusinessEntity.Infrastructure.Saving
+@using Microsoft.AspNetCore.Components.Routing
+@using BusinessEntity.Infrastructure.Modularity
+@inject WindowModularityManager Manager
+@inject WindowSaveGuard Guard
+@inject NavigationManager Navigation
+@inject Microsoft.JSInterop.IJSRuntime JS
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+
+@if (_visible)
+{
+    <div class="unsaved-changes-backdrop">
+        <section class="unsaved-changes-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-changes-title">
+            <h5 id="unsaved-changes-title">Несохранённые изменения</h5>
+            <p>Сохраните правки или откажитесь от них перед переходом.</p>
+            @if (_error != null) { <div class="alert alert-danger" role="alert">@_error</div> }
+            @if (_busy) { <p role="status">Проверяем сохранение…</p> }
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="() => Choose(NavigationSaveDecision.Save)">Сохранить и перейти</button>
+                <button type="button" class="btn btn-outline-danger" disabled="@_busy" @onclick="() => Choose(NavigationSaveDecision.Discard)">Отбросить и перейти</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="() => Choose(NavigationSaveDecision.Cancel)">Остаться</button>
+            </div>
+        </section>
+    </div>
+}
+@code {
+    private IDisposable? _navigation;
+    private TaskCompletionSource<NavigationSaveDecision>? _decision;
+    private bool _visible, _busy, _disposed;
+    private string? _error;
+    private long _generation;
+    private bool _browserReady;
+    private string BrowserOwner => Manager.LogicalWindowId.ToString("N");
+    // Общий guard существует один раз на browser circuit, включая страницы других layout.
+    protected override void OnInitialized() => Manager.Changed += Refresh;
+    // Browser runtime уже подключён; prerender не создаёт второй navigation handler.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                _navigation = Navigation.RegisterLocationChangingHandler(OnLocationChangingAsync);
+                await JS.InvokeVoidAsync("beUnsavedChanges.attach", BrowserOwner); _browserReady = true;
+            }
+            await SetBrowserWarningAsync(Manager.DirtyContexts.Count > 0 || Manager.HasPendingEdits);
+        }
+        catch (Exception error) when (error is JSDisconnectedException or OperationCanceledException) { }
+    }
+    // Явное подтверждение browser lock завершается до forceLoad, поэтому второго вопроса браузера нет.
+    private async Task SetBrowserWarningAsync(bool dirty)
+    { if (_browserReady && !_disposed) await JS.InvokeVoidAsync("beUnsavedChanges.setDirty", BrowserOwner, dirty); }
+    // Внутренний переход и программный forceLoad проходят один guard до завершения старого модуля.
+    private ValueTask OnLocationChangingAsync(LocationChangingContext context)
+        => new(InvokeAsync(() => ConfirmAsync(context)));
+    // Повторное намерение отменяет прежний диалог, не отменяя принятую SQL-операцию.
+    private async Task ConfirmAsync(LocationChangingContext context)
+    {
+        if (_disposed) return;
+        try { await Manager.WaitForPendingEditsAsync(context.CancellationToken); }
+        catch (OperationCanceledException) { context.PreventNavigation(); return; }
+        if (Manager.DirtyContexts.Count == 0) return;
+        var generation = ++_generation; _decision?.TrySetResult(NavigationSaveDecision.Cancel);
+        _visible = true; _busy = false; _error = null;
+        try
+        {
+            while (true)
+            {
+                var choice = new TaskCompletionSource<NavigationSaveDecision>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _decision = choice; StateHasChanged();
+                using var cancelled = context.CancellationToken.Register(() => choice.TrySetCanceled(context.CancellationToken));
+                var answer = await choice.Task;
+                context.CancellationToken.ThrowIfCancellationRequested();
+                if (answer == NavigationSaveDecision.Cancel) { context.PreventNavigation(); return; }
+                _busy = true; StateHasChanged();
+                // Принятую запись не прерывает новое намерение навигации: её исход установит save context.
+                var result = await Guard.ResolveAsync(answer);
+                context.CancellationToken.ThrowIfCancellationRequested();
+                if (result.CanLeave) { await SetBrowserWarningAsync(false); return; }
+                _busy = false; _error = result.Error; StateHasChanged();
+            }
+        }
+        catch (Exception error) when (error is OperationCanceledException or JSDisconnectedException) { context.PreventNavigation(); }
+        finally
+        {
+            if (generation == _generation) { _decision = null; _visible = false; _busy = false; StateHasChanged(); }
+        }
+    }
+    // Решение принадлежит только текущему диалогу этого окна.
+    private void Choose(NavigationSaveDecision decision) => _decision?.TrySetResult(decision);
+    // Dirty меняет browser beforeunload lock и общий индикатор через renderer.
+    private void Refresh() { if (!_disposed) _ = InvokeAsync(() => { if (!_disposed) StateHasChanged(); }); }
+    // Снимает lock/handler и завершает ожидание при финальном завершении UI.
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true; ++_generation; _navigation?.Dispose(); Manager.Changed -= Refresh;
+        _decision?.TrySetResult(NavigationSaveDecision.Cancel); _decision = null;
+        if (_browserReady) await BusinessEntity.Infrastructure.UI.BrowserLifecycle.UnregisterAsync(JS, "beUnsavedChanges.detach", BrowserOwner);
+    }
+}
