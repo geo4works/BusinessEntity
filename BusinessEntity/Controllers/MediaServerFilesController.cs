@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.Contracts;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Internal;
@@ -14,17 +15,19 @@ public sealed class MediaServerFilesController : ControllerBase
     private readonly MediaServerUploadJobRegistry _uploadJobs;
     private readonly IMediaServerUploadManager _uploadManager;
     private readonly IUserContextService _userContextService;
+    private readonly IUserConnector _userConnector;
 
     public MediaServerFilesController(
         IMediaServerService mediaServerService,
         MediaServerUploadJobRegistry uploadJobs,
         IMediaServerUploadManager uploadManager,
-        IUserContextService userContextService)
+        IUserContextService userContextService, IUserConnector userConnector)
     {
         _mediaServerService = mediaServerService;
         _uploadJobs = uploadJobs;
         _uploadManager = uploadManager;
         _userContextService = userContextService;
+        _userConnector = userConnector;
     }
 
     [HttpGet("videos/{videoId:guid}/original")]
@@ -130,6 +133,8 @@ public sealed class MediaServerFilesController : ControllerBase
                 linkedCts.Token);
 
             _uploadJobs.MarkVideoUploadJobProcessing(jobId);
+            var actor = await _userConnector.EnsureCurrentUserAsync(linkedCts.Token)
+                ?? throw new UnauthorizedAccessException("Для загрузки видео нужно войти.");
             _uploadManager.EnqueueVideoProcessing(
                 jobId,
                 temporaryFilePath,
@@ -137,7 +142,7 @@ public sealed class MediaServerFilesController : ControllerBase
                 contentType,
                 length,
                 spaceId,
-                clientUploadToken);
+                clientUploadToken, actor.Id);
 
             return Accepted(_uploadJobs.GetVideoUploadJob(jobId));
         }
@@ -165,14 +170,7 @@ public sealed class MediaServerFilesController : ControllerBase
             return string.Empty;
         }
 
-        try
-        {
-            return Uri.UnescapeDataString(value);
-        }
-        catch
-        {
-            return value;
-        }
+        return Uri.UnescapeDataString(value);
     }
 
     private static long? TryReadLength(string? value)

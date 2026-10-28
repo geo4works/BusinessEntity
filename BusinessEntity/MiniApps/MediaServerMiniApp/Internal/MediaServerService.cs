@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Bus;
 using System.Buffers;
 using System.Text.Json;
 using BusinessEntity.Core.BaseClasses.Relations;
@@ -23,6 +24,7 @@ public sealed class MediaServerService : IMediaServerService
     private readonly IBusinessEntityFactory _businessEntityFactory;
     private readonly IMessageBus _messageBus;
     private readonly IUserConnector? _userConnector;
+    private readonly BusRequestScope _scope;
     private readonly string _storageRoot;
 
     public MediaServerService(
@@ -31,12 +33,13 @@ public sealed class MediaServerService : IMediaServerService
         IMessageBus messageBus,
         IWebHostEnvironment environment,
         IConfiguration configuration,
-        IUserConnector? userConnector = null)
+        BusRequestScope scope, IUserConnector? userConnector = null)
     {
         _dataProviderConnector = dataProviderConnector;
         _businessEntityFactory = businessEntityFactory;
         _messageBus = messageBus;
         _userConnector = userConnector;
+        _scope = scope;
 
         var contentRoot = environment.ContentRootPath ?? AppContext.BaseDirectory;
         var configuredRoot = configuration["Storage:RootPath"];
@@ -284,15 +287,9 @@ public sealed class MediaServerService : IMediaServerService
             return null;
         }
 
-        try
-        {
-            var user = await _userConnector.EnsureCurrentUserAsync(cancellationToken);
-            return user?.Id;
-        }
-        catch
-        {
-            return null;
-        }
+        if (_scope.UserId.HasValue) return _scope.UserId;
+        var user = await _userConnector.EnsureCurrentUserAsync(cancellationToken);
+        return user?.Id;
     }
 
     private async Task EnsureVideoSpaceRelationAsync(Guid? spaceId, Guid videoId, CancellationToken cancellationToken)

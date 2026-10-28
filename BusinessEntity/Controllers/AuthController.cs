@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using BusinessEntity.Services;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
-using ReactiveUI;
+
 
 namespace BusinessEntity.Controllers
 {
@@ -19,18 +19,18 @@ namespace BusinessEntity.Controllers
         private readonly ILogger<AuthController> _logger;
         private readonly AuthentikSessionManager _authService;
         private readonly IUserConnector _userConnector;
-        private readonly IMessageBus _messageBus;
+        private readonly IUserMessageFlashStore _messages;
 
         public AuthController(
             ILogger<AuthController> logger,
             AuthentikSessionManager authService,
             IUserConnector userConnector,
-            IMessageBus messageBus)
+            IUserMessageFlashStore messages)
         {
             _logger = logger;
             _authService = authService;
             _userConnector = userConnector;
-            _messageBus = messageBus;
+            _messages = messages;
         }
 
         /// <summary>
@@ -88,9 +88,7 @@ namespace BusinessEntity.Controllers
                     "[AuthController.PasswordLogin] Local user ensured. localUserId={LocalUserId} name={LocalUserName}",
                     localUser?.Id,
                     localUser?.ExternalId);
-                PublishClearUserMessages(localUser?.Id);
-                PublishLoginSuccessMessage(localUser?.Id, username.Trim());
-                return LocalRedirect(redirectUrl);
+                return LocalRedirect(AddLoginNotification(redirectUrl, localUser?.Id, username.Trim()));
             }
             catch (Exception ex)
             {
@@ -125,9 +123,7 @@ namespace BusinessEntity.Controllers
                     "[AuthController.Callback] Local user ensured. localUserId={LocalUserId} name={LocalUserName}",
                     localUser?.Id,
                     localUser?.ExternalId);
-                PublishClearUserMessages(localUser?.Id);
-                PublishLoginSuccessMessage(localUser?.Id, User.Identity?.Name);
-                return LocalRedirect(returnUrl);
+                return LocalRedirect(AddLoginNotification(returnUrl, localUser?.Id, User.Identity?.Name));
             }
             catch (Exception ex)
             {
@@ -159,35 +155,14 @@ namespace BusinessEntity.Controllers
                 });
         }
 
-        // Публикует команду очистки пользовательских сообщений при новом входе.
-        private void PublishClearUserMessages(Guid? userId)
+        // Передаёт уведомление одному окну после login; соседние окна не очищаются.
+        private string AddLoginNotification(string url, Guid? userId, string? userName)
         {
-            if (userId is not { } normalizedUserId || normalizedUserId == Guid.Empty)
-            {
-                return;
-            }
-
-            _messageBus.SendMessage(new ClearUserMessages(normalizedUserId));
-        }
-
-        // Публикует пользовательское сообщение о завершенном входе в систему.
-        private void PublishLoginSuccessMessage(Guid? userId, string? userName)
-        {
-            if (userId is not { } normalizedUserId || normalizedUserId == Guid.Empty)
-            {
-                return;
-            }
-
-            var normalizedUserName = userName?.Trim();
-            var messageText = string.IsNullOrWhiteSpace(normalizedUserName)
-                ? "Вход выполнен успешно."
-                : $"Вход выполнен успешно. Пользователь {normalizedUserName} авторизован.";
-
-            _messageBus.SendMessage(new PostUserMessage(
-                normalizedUserId,
-                messageText,
-                UserMessageLevel.Success,
-                "Логин успешен"));
+            if (!userId.HasValue) throw new InvalidOperationException("Login не создал локального пользователя.");
+            var text = string.IsNullOrWhiteSpace(userName) ? "Вход выполнен успешно."
+                : $"Вход выполнен успешно. Пользователь {userName.Trim()} авторизован.";
+            var key = _messages.Create(userId.Value, text, "Логин успешен");
+            return QueryHelpers.AddQueryString(url, "notification", key.ToString());
         }
 
         private static string NormalizeReturnUrl(string? returnUrl)

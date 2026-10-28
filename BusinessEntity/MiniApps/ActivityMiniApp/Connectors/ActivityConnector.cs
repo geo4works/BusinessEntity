@@ -1,35 +1,36 @@
+using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.Core.RichText;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Messages;
 
 namespace BusinessEntity.MiniApps.ActivityMiniApp.Connectors;
 
-/// <summary>
-/// Connector ActivityMiniApp для компактного доступа к операциям комментариев.
-/// </summary>
+// Публичный клиент предметных запросов через единственную шину.
 public sealed class ActivityConnector : IActivityConnector
 {
-    private readonly IActivityMiniApp _activityMiniApp;
+    private readonly BusRequestClient _client;
+    private readonly IUserConnector _user;
 
-    // Сохраняет публичный контракт ActivityMiniApp и гарантирует его инициализацию.
-    public ActivityConnector(IActivityMiniApp activityMiniApp)
+    // Получает клиент и серверный контекст без фасадов и внутренних сервисов.
+    public ActivityConnector(BusRequestClient client, IUserConnector user)
+    { _client = client; _user = user; }
+
+    // Выполняет GetComments через адресный request/response.
+    public async Task<IReadOnlyList<BusinessEntityCommentRecord>> GetCommentsAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
     {
-        _activityMiniApp = activityMiniApp;
-        _activityMiniApp.EnsureInitialized();
+        var response = await _client.SendAsync<GetCommentsRequest, GetCommentsResponse>(
+            new GetCommentsRequest(Guid.NewGuid(), businessEntityId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
     }
 
-    // Возвращает комментарии указанной BusinessEntity.
-    public Task<IReadOnlyList<BusinessEntityCommentRecord>> GetCommentsAsync(
-        Guid businessEntityId,
-        CancellationToken cancellationToken = default)
+    // Выполняет CreateComment через адресный request/response.
+    public async Task<BusinessEntityCommentRecord> CreateCommentAsync(BusinessEntityCommentCreateRequest request, CancellationToken cancellationToken = default)
     {
-        return _activityMiniApp.GetCommentsAsync(businessEntityId, cancellationToken);
-    }
-
-    // Создает комментарий или ответ к указанной BusinessEntity.
-    public Task<BusinessEntityCommentRecord> CreateCommentAsync(
-        BusinessEntityCommentCreateRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return _activityMiniApp.CreateCommentAsync(request, cancellationToken);
+        await _user.EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<CreateCommentRequest, CreateCommentResponse>(
+            new CreateCommentRequest(Guid.NewGuid(), request), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
     }
 }

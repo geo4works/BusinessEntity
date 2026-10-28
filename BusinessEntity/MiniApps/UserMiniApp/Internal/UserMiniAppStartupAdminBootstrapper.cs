@@ -366,25 +366,12 @@ internal sealed class UserMiniAppStartupAdminBootstrapper
         };
     }
 
-    // Читает UserData из локального payload tolerant-способом.
+    // Проверяет обязательный payload существующей локальной учётной записи.
     private static UserData ReadUserData(UserDto user)
     {
-        if (string.IsNullOrWhiteSpace(user.Payload))
-        {
-            return new UserData { ExtId = user.ExternalId };
-        }
-
-        try
-        {
-            var userData = JsonSerializer.Deserialize<UserData>(user.Payload, UserMiniAppJsonOptions.Default)
-                           ?? new UserData { ExtId = user.ExternalId };
-            userData.ExtId = string.IsNullOrWhiteSpace(userData.ExtId) ? user.ExternalId : userData.ExtId;
-            return userData;
-        }
-        catch (JsonException)
-        {
-            return new UserData { ExtId = user.ExternalId };
-        }
+        if (string.IsNullOrWhiteSpace(user.Payload)) throw new InvalidDataException("Отсутствует payload пользователя.");
+        return JsonSerializer.Deserialize<UserData>(user.Payload, UserMiniAppJsonOptions.Default)
+            ?? throw new InvalidDataException("Пустой payload пользователя.");
     }
 
     // Сериализует payload локального пользователя едиными JSON options UserMiniApp.

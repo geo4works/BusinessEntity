@@ -1,3 +1,5 @@
+using BusinessEntity.Infrastructure.Bus;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
@@ -43,6 +45,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.AddSingleton<DataProviderMessageHandler>();
             services.AddSingleton<IDataProviderMiniApp, Facade.DataProviderMiniApp>();
             services.AddScoped<IDataProviderConnector, DataProviderConnector>();
+
+            services.AddBusEndpoint<DataProviderMessageHandler>(typeof(GetBusinessEntitiesRequest), typeof(GetBusinessEntityByIdRequest), typeof(GetBusinessEntityDataRequest), typeof(GetBusinessEntityDataVersionRequest), typeof(GetBusinessEntityDataVersionsRequest), typeof(UpdateBusinessEntityDataVersionDescriptionRequest), typeof(AddBusinessEntityRequest), typeof(UpdateBusinessEntityRequest), typeof(DeleteBusinessEntityRequest), typeof(ClearDataProviderStorageRequest), typeof(UpdateBusinessEntityDataRequest), typeof(GetAllRelationsRequest), typeof(GetRelationsRequest), typeof(GetRelationByIdRequest), typeof(CreateRelationRequest), typeof(UpdateRelationRequest), typeof(DeleteRelationRequest), typeof(GetRichTextChunksRequest), typeof(GetRichTextTableOfContentsEntriesRequest), typeof(RebuildRichTextTableOfContentsEntriesRequest), typeof(ReplaceRichTextChunksRequest), typeof(SaveRichTextEmbeddedFilesRequest), typeof(GetRichTextEmbeddedFileRequest), typeof(DeleteRichTextStorageRequest));
 
             return services;
         }

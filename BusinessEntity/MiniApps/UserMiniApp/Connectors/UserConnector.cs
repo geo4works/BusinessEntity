@@ -1,330 +1,402 @@
+using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
-using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
-using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Messages;
 
-namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
+namespace BusinessEntity.MiniApps.UserMiniApp.Connectors;
+
+// Публичный клиент предметных запросов через единственную шину.
+public sealed class UserConnector : IUserConnector
 {
-    // Предоставляет другим модулям короткий доступ к данным user mini-app.
-    public sealed class UserConnector : IUserConnector
+    private readonly BusRequestClient _client;
+    private readonly BusRequestScope _scope;
+
+    // Получает клиент и серверный контекст без фасадов и внутренних сервисов.
+    public UserConnector(BusRequestClient client, BusRequestScope scope)
+    { _client = client; _scope = scope; }
+
+    // Выполняет GetCurrentUser через адресный request/response.
+    public async Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
-        private readonly IUserMiniApp _userMiniApp;
+        var response = await _client.SendAsync<GetCurrentUserRequest, GetCurrentUserResponse>(
+            new GetCurrentUserRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result;
+    }
 
-        // Инициализирует connector прямой ссылкой на публичный контракт user mini-app.
-        public UserConnector(IUserMiniApp userMiniApp)
-        {
-            _userMiniApp = userMiniApp;
-        }
+    // Выполняет EnsureCurrentUser через адресный request/response.
+    public async Task<UserDto?> EnsureCurrentUserAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await _client.SendAsync<EnsureCurrentUserRequest, EnsureCurrentUserResponse>(
+            new EnsureCurrentUserRequest(Guid.NewGuid()), cancellationToken);
+        _scope.SetUser(response.Result?.Id);
+        return response.Result;
+    }
 
-        // Возвращает текущего пользователя без bus-roundtrip, чтобы не плодить межscope подписки.
-        public Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetCurrentUserAsync(cancellationToken);
-        }
+    // Выполняет DeleteCurrentUser через адресный request/response.
+    public async Task<bool> DeleteCurrentUserAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<DeleteCurrentUserRequest, DeleteCurrentUserResponse>(
+            new DeleteCurrentUserRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result;
+    }
 
-        public Task<UserDto?> EnsureCurrentUserAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.EnsureCurrentUserAsync(cancellationToken);
-        }
+    // Выполняет GetAdministrationUsers через адресный request/response.
+    public async Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetAdministrationUsersRequest, GetAdministrationUsersResponse>(
+            new GetAdministrationUsersRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Удаляет локальную учетную запись текущего пользователя через публичный контракт mini-app.
-        public Task<bool> DeleteCurrentUserAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.DeleteCurrentUserAsync(cancellationToken);
-        }
+    // Выполняет ReadAdministrationUsersFromAuthentik через адресный request/response.
+    public async Task<IReadOnlyList<UserAdministrationRecord>> ReadAdministrationUsersFromAuthentikAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<ReadAdministrationUsersFromAuthentikRequest, ReadAdministrationUsersFromAuthentikResponse>(
+            new ReadAdministrationUsersFromAuthentikRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает локальных пользователей через публичный контракт user mini-app.
-        public Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetAdministrationUsersAsync(cancellationToken);
-        }
+    // Выполняет CreateAdministrationUser через адресный request/response.
+    public async Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<CreateAdministrationUserRequest, CreateAdministrationUserResponse>(
+            new CreateAdministrationUserRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Читает пользователей Authentik по явной команде администратора.
-        public Task<IReadOnlyList<UserAdministrationRecord>> ReadAdministrationUsersFromAuthentikAsync(
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.ReadAdministrationUsersFromAuthentikAsync(cancellationToken);
-        }
+    // Выполняет UpdateAdministrationUser через адресный request/response.
+    public async Task<UserAdministrationRecord> UpdateAdministrationUserAsync(Guid userId, UserAdministrationSaveRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<UpdateAdministrationUserRequest, UpdateAdministrationUserResponse>(
+            new UpdateAdministrationUserRequest(Guid.NewGuid(), userId, request), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Создает пользователя приложения в Authentik через публичный контракт user mini-app.
-        public Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.CreateAdministrationUserAsync(cancellationToken);
-        }
+    // Выполняет DeleteAdministrationUser через адресный request/response.
+    public async Task<bool> DeleteAdministrationUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<DeleteAdministrationUserRequest, DeleteAdministrationUserResponse>(
+            new DeleteAdministrationUserRequest(Guid.NewGuid(), userId), cancellationToken);
+        return response.Result;
+    }
 
-        // Обновляет локального пользователя через публичный контракт user mini-app.
-        public Task<UserAdministrationRecord> UpdateAdministrationUserAsync(
-            Guid userId,
-            UserAdministrationSaveRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.UpdateAdministrationUserAsync(userId, request, cancellationToken);
-        }
+    // Выполняет GetRoles через адресный request/response.
+    public async Task<IReadOnlyList<UserRoleRecord>> GetRolesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetRolesRequest, GetRolesResponse>(
+            new GetRolesRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Удаляет локального пользователя через публичный контракт user mini-app.
-        public Task<bool> DeleteAdministrationUserAsync(Guid userId, CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.DeleteAdministrationUserAsync(userId, cancellationToken);
-        }
+    // Выполняет CreateRole через адресный request/response.
+    public async Task<UserRoleRecord> CreateRoleAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<CreateRoleRequest, CreateRoleResponse>(
+            new CreateRoleRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает роли через публичный контракт user mini-app.
-        public Task<IReadOnlyList<UserRoleRecord>> GetRolesAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetRolesAsync(cancellationToken);
-        }
+    // Выполняет UpdateRole через адресный request/response.
+    public async Task<UserRoleRecord> UpdateRoleAsync(Guid roleId, UserRoleSaveRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<UpdateRoleRequest, UpdateRoleResponse>(
+            new UpdateRoleRequest(Guid.NewGuid(), roleId, request), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Создает роль через публичный контракт user mini-app.
-        public Task<UserRoleRecord> CreateRoleAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.CreateRoleAsync(cancellationToken);
-        }
+    // Выполняет DeleteRole через адресный request/response.
+    public async Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<DeleteRoleRequest, DeleteRoleResponse>(
+            new DeleteRoleRequest(Guid.NewGuid(), roleId), cancellationToken);
+        return response.Result;
+    }
 
-        // Обновляет роль через публичный контракт user mini-app.
-        public Task<UserRoleRecord> UpdateRoleAsync(
-            Guid roleId,
-            UserRoleSaveRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.UpdateRoleAsync(roleId, request, cancellationToken);
-        }
+    // Выполняет GetUserGroups через адресный request/response.
+    public async Task<IReadOnlyList<UserGroupRecord>> GetUserGroupsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetUserGroupsRequest, GetUserGroupsResponse>(
+            new GetUserGroupsRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Удаляет роль через публичный контракт user mini-app.
-        public Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.DeleteRoleAsync(roleId, cancellationToken);
-        }
+    // Выполняет CreateUserGroup через адресный request/response.
+    public async Task<UserGroupRecord> CreateUserGroupAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<CreateUserGroupRequest, CreateUserGroupResponse>(
+            new CreateUserGroupRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает группы пользователей через публичный контракт user mini-app.
-        public Task<IReadOnlyList<UserGroupRecord>> GetUserGroupsAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetUserGroupsAsync(cancellationToken);
-        }
+    // Выполняет UpdateUserGroup через адресный request/response.
+    public async Task<UserGroupRecord> UpdateUserGroupAsync(Guid groupId, UserGroupSaveRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<UpdateUserGroupRequest, UpdateUserGroupResponse>(
+            new UpdateUserGroupRequest(Guid.NewGuid(), groupId, request), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Создает группу пользователей через публичный контракт user mini-app.
-        public Task<UserGroupRecord> CreateUserGroupAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.CreateUserGroupAsync(cancellationToken);
-        }
+    // Выполняет DeleteUserGroup через адресный request/response.
+    public async Task<bool> DeleteUserGroupAsync(Guid groupId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<DeleteUserGroupRequest, DeleteUserGroupResponse>(
+            new DeleteUserGroupRequest(Guid.NewGuid(), groupId), cancellationToken);
+        return response.Result;
+    }
 
-        // Обновляет группу пользователей через публичный контракт user mini-app.
-        public Task<UserGroupRecord> UpdateUserGroupAsync(
-            Guid groupId,
-            UserGroupSaveRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.UpdateUserGroupAsync(groupId, request, cancellationToken);
-        }
+    // Выполняет GetUserGroupMemberships через адресный request/response.
+    public async Task<IReadOnlyList<UserGroupMembershipRecord>> GetUserGroupMembershipsAsync(Guid groupId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetUserGroupMembershipsRequest, GetUserGroupMembershipsResponse>(
+            new GetUserGroupMembershipsRequest(Guid.NewGuid(), groupId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Удаляет группу пользователей через публичный контракт user mini-app.
-        public Task<bool> DeleteUserGroupAsync(Guid groupId, CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.DeleteUserGroupAsync(groupId, cancellationToken);
-        }
+    // Выполняет UpdateUserGroupMemberships через адресный request/response.
+    public async Task<IReadOnlyList<UserGroupMembershipRecord>> UpdateUserGroupMembershipsAsync(Guid groupId, UserGroupMembershipSaveRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<UpdateUserGroupMembershipsRequest, UpdateUserGroupMembershipsResponse>(
+            new UpdateUserGroupMembershipsRequest(Guid.NewGuid(), groupId, request), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает назначение пользователей в группу через публичный контракт user mini-app.
-        public Task<IReadOnlyList<UserGroupMembershipRecord>> GetUserGroupMembershipsAsync(
-            Guid groupId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetUserGroupMembershipsAsync(groupId, cancellationToken);
-        }
+    // Выполняет GetRoleAssignmentSpaces через адресный request/response.
+    public async Task<IReadOnlyList<UserSpaceRecord>> GetRoleAssignmentSpacesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetRoleAssignmentSpacesRequest, GetRoleAssignmentSpacesResponse>(
+            new GetRoleAssignmentSpacesRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Сохраняет назначение пользователей в группу через публичный контракт user mini-app.
-        public Task<IReadOnlyList<UserGroupMembershipRecord>> UpdateUserGroupMembershipsAsync(
-            Guid groupId,
-            UserGroupMembershipSaveRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.UpdateUserGroupMembershipsAsync(groupId, request, cancellationToken);
-        }
+    // Выполняет GetRoleAssignments через адресный request/response.
+    public async Task<IReadOnlyList<UserRoleAssignmentRecord>> GetRoleAssignmentsAsync(Guid spaceId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetRoleAssignmentsRequest, GetRoleAssignmentsResponse>(
+            new GetRoleAssignmentsRequest(Guid.NewGuid(), spaceId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает пространства для вкладки назначения ролей через публичный контракт user mini-app.
-        public Task<IReadOnlyList<UserSpaceRecord>> GetRoleAssignmentSpacesAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetRoleAssignmentSpacesAsync(cancellationToken);
-        }
+    // Выполняет CreateRoleAssignment через адресный request/response.
+    public async Task<UserRoleAssignmentRecord> CreateRoleAssignmentAsync(Guid spaceId, UserRoleAssignmentSaveRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<CreateRoleAssignmentRequest, CreateRoleAssignmentResponse>(
+            new CreateRoleAssignmentRequest(Guid.NewGuid(), spaceId, request), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает назначения ролей для выбранного пространства через публичный контракт user mini-app.
-        public Task<IReadOnlyList<UserRoleAssignmentRecord>> GetRoleAssignmentsAsync(
-            Guid spaceId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetRoleAssignmentsAsync(spaceId, cancellationToken);
-        }
+    // Выполняет DeleteRoleAssignment через адресный request/response.
+    public async Task<bool> DeleteRoleAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<DeleteRoleAssignmentRequest, DeleteRoleAssignmentResponse>(
+            new DeleteRoleAssignmentRequest(Guid.NewGuid(), assignmentId), cancellationToken);
+        return response.Result;
+    }
 
-        // Создает назначение роли через публичный контракт user mini-app.
-        public Task<UserRoleAssignmentRecord> CreateRoleAssignmentAsync(
-            Guid spaceId,
-            UserRoleAssignmentSaveRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.CreateRoleAssignmentAsync(spaceId, request, cancellationToken);
-        }
+    // Выполняет GetProfile через адресный request/response.
+    public async Task<UserProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetProfileRequest, GetProfileResponse>(
+            new GetProfileRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result;
+    }
 
-        // Удаляет назначение роли через публичный контракт user mini-app.
-        public Task<bool> DeleteRoleAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.DeleteRoleAssignmentAsync(assignmentId, cancellationToken);
-        }
+    // Выполняет UpdateProfile через адресный request/response.
+    public async Task<UserProfileDto> UpdateProfileAsync(UserProfileUpdateRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<UpdateProfileRequest, UpdateProfileResponse>(
+            new UpdateProfileRequest(Guid.NewGuid(), request), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает профиль текущего пользователя через публичный контракт user mini-app.
-        public Task<UserProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetProfileAsync(cancellationToken);
-        }
+    // Выполняет GetGroups через адресный request/response.
+    public async Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetGroupsRequest, GetGroupsResponse>(
+            new GetGroupsRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Обновляет профиль текущего пользователя через публичный контракт user mini-app.
-        public Task<UserProfileDto> UpdateProfileAsync(
-            UserProfileUpdateRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.UpdateProfileAsync(request, cancellationToken);
-        }
+    // Выполняет IsInGroup через адресный request/response.
+    public async Task<bool> IsInGroupAsync(string groupName, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<IsInGroupRequest, IsInGroupResponse>(
+            new IsInGroupRequest(Guid.NewGuid(), groupName), cancellationToken);
+        return response.Result;
+    }
 
-        // Возвращает только список групп поверх общего объекта пользователя.
-        public async Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default)
-        {
-            return await _userMiniApp.GetCurrentUserGroupNamesAsync(cancellationToken);
-        }
+    // Выполняет GetRichDocBookmarks через адресный request/response.
+    public async Task<IReadOnlyList<RichTextDocumentBookmark>> GetRichDocBookmarksAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetRichDocBookmarksRequest, GetRichDocBookmarksResponse>(
+            new GetRichDocBookmarksRequest(Guid.NewGuid(), documentId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Проверяет membership в группе поверх общего объекта пользователя.
-        public async Task<bool> IsInGroupAsync(string groupName, CancellationToken cancellationToken = default)
-        {
-            var groups = await _userMiniApp.GetCurrentUserGroupNamesAsync(cancellationToken);
-            return groups.Any(group => string.Equals(group, groupName, StringComparison.OrdinalIgnoreCase));
-        }
+    // Выполняет AddRichDocBookmark через адресный request/response.
+    public async Task<RichTextDocumentBookmark?> AddRichDocBookmarkAsync(Guid documentId, RichTextDocumentTextSelection? selection, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<AddRichDocBookmarkRequest, AddRichDocBookmarkResponse>(
+            new AddRichDocBookmarkRequest(Guid.NewGuid(), documentId, selection), cancellationToken);
+        return response.Result;
+    }
 
-        public Task<IReadOnlyList<RichTextDocumentBookmark>> GetRichDocBookmarksAsync(
-            Guid documentId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetRichDocBookmarksAsync(documentId, cancellationToken);
-        }
+    // Выполняет DeleteRichDocBookmark через адресный request/response.
+    public async Task<bool> DeleteRichDocBookmarkAsync(Guid bookmarkId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<DeleteRichDocBookmarkRequest, DeleteRichDocBookmarkResponse>(
+            new DeleteRichDocBookmarkRequest(Guid.NewGuid(), bookmarkId), cancellationToken);
+        return response.Result;
+    }
 
-        public Task<RichTextDocumentBookmark?> AddRichDocBookmarkAsync(
-            Guid documentId,
-            RichTextDocumentTextSelection? selection,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.AddRichDocBookmarkAsync(documentId, selection, cancellationToken);
-        }
+    // Выполняет GetRichDocDisplayedLevel через адресный request/response.
+    public async Task<int> GetRichDocDisplayedLevelAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetRichDocDisplayedLevelRequest, GetRichDocDisplayedLevelResponse>(
+            new GetRichDocDisplayedLevelRequest(Guid.NewGuid(), documentId), cancellationToken);
+        return response.Result;
+    }
 
-        public Task<bool> DeleteRichDocBookmarkAsync(Guid bookmarkId, CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.DeleteRichDocBookmarkAsync(bookmarkId, cancellationToken);
-        }
+    // Выполняет SaveRichDocDisplayedLevel через адресный request/response.
+    public async Task SaveRichDocDisplayedLevelAsync(Guid documentId, int displayLevelCount, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<SaveRichDocDisplayedLevelRequest, SaveRichDocDisplayedLevelResponse>(
+            new SaveRichDocDisplayedLevelRequest(Guid.NewGuid(), documentId, displayLevelCount), cancellationToken);
+    }
 
-        public Task<int> GetRichDocDisplayedLevelAsync(
-            Guid documentId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetRichDocDisplayedLevelAsync(documentId, cancellationToken);
-        }
+    // Выполняет GetCurrentUserProperties через адресный request/response.
+    public async Task<IReadOnlyList<UserPropertyDto>> GetCurrentUserPropertiesAsync(int propertyType, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetCurrentUserPropertiesRequest, GetCurrentUserPropertiesResponse>(
+            new GetCurrentUserPropertiesRequest(Guid.NewGuid(), propertyType), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        public Task SaveRichDocDisplayedLevelAsync(
-            Guid documentId,
-            int displayLevelCount,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
-        }
+    // Выполняет UpsertCurrentUserProperty через адресный request/response.
+    public async Task<UserPropertyDto?> UpsertCurrentUserPropertyAsync(Guid? propertyId, int propertyType, string data, string metadata, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<UpsertCurrentUserPropertyRequest, UpsertCurrentUserPropertyResponse>(
+            new UpsertCurrentUserPropertyRequest(Guid.NewGuid(), propertyId, propertyType, data, metadata), cancellationToken);
+        return response.Result;
+    }
 
-        public Task<IReadOnlyList<UserPropertyDto>> GetCurrentUserPropertiesAsync(
-            int propertyType,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetCurrentUserPropertiesAsync(propertyType, cancellationToken);
-        }
+    // Выполняет DeleteCurrentUserProperty через адресный request/response.
+    public async Task<bool> DeleteCurrentUserPropertyAsync(Guid propertyId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<DeleteCurrentUserPropertyRequest, DeleteCurrentUserPropertyResponse>(
+            new DeleteCurrentUserPropertyRequest(Guid.NewGuid(), propertyId), cancellationToken);
+        return response.Result;
+    }
 
-        public Task<UserPropertyDto?> UpsertCurrentUserPropertyAsync(
-            Guid? propertyId,
-            int propertyType,
-            string data,
-            string metadata,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.UpsertCurrentUserPropertyAsync(
-                propertyId,
-                propertyType,
-                data,
-                metadata,
-                cancellationToken);
-        }
+    // Выполняет GetDocPrintPresets через адресный request/response.
+    public async Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetDocPrintPresetsRequest, GetDocPrintPresetsResponse>(
+            new GetDocPrintPresetsRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        public Task<bool> DeleteCurrentUserPropertyAsync(
-            Guid propertyId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.DeleteCurrentUserPropertyAsync(propertyId, cancellationToken);
-        }
+    // Выполняет SaveDocPrintPreset через адресный request/response.
+    public async Task<DocPrintSettingsPreset> SaveDocPrintPresetAsync(DocPrintSettingsPreset preset, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<SaveDocPrintPresetRequest, SaveDocPrintPresetResponse>(
+            new SaveDocPrintPresetRequest(Guid.NewGuid(), preset), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает пользовательские пресеты печати через публичный контракт user mini-app.
-        public Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetDocPrintPresetsAsync(cancellationToken);
-        }
+    // Выполняет DeleteDocPrintPreset через адресный request/response.
+    public async Task<bool> DeleteDocPrintPresetAsync(string presetName, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<DeleteDocPrintPresetRequest, DeleteDocPrintPresetResponse>(
+            new DeleteDocPrintPresetRequest(Guid.NewGuid(), presetName), cancellationToken);
+        return response.Result;
+    }
 
-        // Сохраняет пользовательский пресет печати через публичный контракт user mini-app.
-        public Task<DocPrintSettingsPreset> SaveDocPrintPresetAsync(
-            DocPrintSettingsPreset preset,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.SaveDocPrintPresetAsync(preset, cancellationToken);
-        }
+    // Выполняет GetCurrentUserPermissionsForSpace через адресный request/response.
+    public async Task<UserEffectivePermissions> GetCurrentUserPermissionsForSpaceAsync(Guid spaceId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetCurrentUserPermissionsForSpaceRequest, GetCurrentUserPermissionsForSpaceResponse>(
+            new GetCurrentUserPermissionsForSpaceRequest(Guid.NewGuid(), spaceId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Удаляет пользовательский пресет печати через публичный контракт user mini-app.
-        public Task<bool> DeleteDocPrintPresetAsync(
-            string presetName,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.DeleteDocPrintPresetAsync(presetName, cancellationToken);
-        }
+    // Выполняет GetCurrentUserPermissionsForEntity через адресный request/response.
+    public async Task<UserEffectivePermissions> GetCurrentUserPermissionsForEntityAsync(Guid entityId, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetCurrentUserPermissionsForEntityRequest, GetCurrentUserPermissionsForEntityResponse>(
+            new GetCurrentUserPermissionsForEntityRequest(Guid.NewGuid(), entityId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает effective permissions текущего или anonymous пользователя в пространстве.
-        public Task<UserEffectivePermissions> GetCurrentUserPermissionsForSpaceAsync(
-            Guid spaceId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetCurrentUserPermissionsForSpaceAsync(spaceId, cancellationToken);
-        }
+    // Выполняет GetCurrentUserContentAccessForEntity через адресный request/response.
+    public async Task<UserContentAccessDecision> GetCurrentUserContentAccessForEntityAsync(UserContentAccessRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
+        var response = await _client.SendAsync<GetCurrentUserContentAccessForEntityRequest, GetCurrentUserContentAccessForEntityResponse>(
+            new GetCurrentUserContentAccessForEntityRequest(Guid.NewGuid(), request), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает effective permissions текущего или anonymous пользователя для пространства сущности.
-        public Task<UserEffectivePermissions> GetCurrentUserPermissionsForEntityAsync(
-            Guid entityId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetCurrentUserPermissionsForEntityAsync(entityId, cancellationToken);
-        }
+    // Выполняет GetAnonymousPermissionsForSpace через адресный request/response.
+    public async Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(Guid spaceId, CancellationToken cancellationToken = default)
+    {
+        var response = await _client.SendAsync<GetAnonymousPermissionsForSpaceRequest, GetAnonymousPermissionsForSpaceResponse>(
+            new GetAnonymousPermissionsForSpaceRequest(Guid.NewGuid(), spaceId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает готовое решение по доступу текущего или anonymous пользователя к контентной сущности.
-        public Task<UserContentAccessDecision> GetCurrentUserContentAccessForEntityAsync(
-            UserContentAccessRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetCurrentUserContentAccessForEntityAsync(request, cancellationToken);
-        }
+    // Выполняет GetAnonymousAccessibleSpaces через адресный request/response.
+    public async Task<IReadOnlyList<UserSpaceRecord>> GetAnonymousAccessibleSpacesAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await _client.SendAsync<GetAnonymousAccessibleSpacesRequest, GetAnonymousAccessibleSpacesResponse>(
+            new GetAnonymousAccessibleSpacesRequest(Guid.NewGuid()), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
+    }
 
-        // Возвращает effective permissions anonymous-пользователя в пространстве.
-        public Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
-            Guid spaceId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetAnonymousPermissionsForSpaceAsync(spaceId, cancellationToken);
-        }
-
-        // Возвращает пространства, где anonymous имеет права и есть доступные объекты.
-        public Task<IReadOnlyList<UserSpaceRecord>> GetAnonymousAccessibleSpacesAsync(CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetAnonymousAccessibleSpacesAsync(cancellationToken);
-        }
-
-        // Возвращает anonymous-доступные документы в пространстве через user mini-app.
-        public Task<IReadOnlyList<UserAccessibleDocumentRecord>> GetAnonymousAccessibleDocumentsAsync(
-            Guid spaceId,
-            CancellationToken cancellationToken = default)
-        {
-            return _userMiniApp.GetAnonymousAccessibleDocumentsAsync(spaceId, cancellationToken);
-        }
+    // Выполняет GetAnonymousAccessibleDocuments через адресный request/response.
+    public async Task<IReadOnlyList<UserAccessibleDocumentRecord>> GetAnonymousAccessibleDocumentsAsync(Guid spaceId, CancellationToken cancellationToken = default)
+    {
+        var response = await _client.SendAsync<GetAnonymousAccessibleDocumentsRequest, GetAnonymousAccessibleDocumentsResponse>(
+            new GetAnonymousAccessibleDocumentsRequest(Guid.NewGuid(), spaceId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
     }
 }

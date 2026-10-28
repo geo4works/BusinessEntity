@@ -1,3 +1,5 @@
+using BusinessEntity.Infrastructure.Bus;
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.TreeMiniApp.Connectors;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Connectors;
@@ -16,6 +18,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Registration
             services.AddScoped<ITreeMiniApp, Facade.TreeMiniApp>();
             services.AddScoped<ITreeConnector, TreeConnector>();
 
+            services.AddBusEndpoint<TreeMiniAppMessageHandler>(typeof(GetTreeForSpaceRequest));
             return services;
         }
     }

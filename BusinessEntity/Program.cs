@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.Contracts;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Services;
@@ -156,7 +157,7 @@ namespace BusinessEntity
             builder.Services.AddScoped<IRichTextClipboardPasteDetector, RichTextClipboardPasteDetector>();
             builder.Services.AddScoped<RichTextClipboardImportHelper>();
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
-            builder.Services.AddSingleton<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
+            builder.Services.AddBusinessEntityBus();
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
             builder.Services.AddSingleton<IBusinessEntityBackupHandler, GenericBusinessEntityBackupHandler>();
             builder.Services.AddSingleton<IBusinessEntityRestoreHandler, GenericBusinessEntityRestoreHandler>();
@@ -193,6 +194,7 @@ namespace BusinessEntity
             // Явно поднимает DataProviderMiniApp при старте приложения.
             using (var scope = app.Services.CreateScope())
             {
+                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
                 var dataProviderMiniApp = scope.ServiceProvider.GetRequiredService<IDataProviderMiniApp>();
                 dataProviderMiniApp.EnsureInitialized();
             }
@@ -200,6 +202,7 @@ namespace BusinessEntity
             // Явно поднимает ActivityMiniApp при старте приложения.
             using (var scope = app.Services.CreateScope())
             {
+                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
                 var activityMiniApp = scope.ServiceProvider.GetRequiredService<IActivityMiniApp>();
                 activityMiniApp.EnsureInitialized();
             }
@@ -211,6 +214,7 @@ namespace BusinessEntity
             // Явно поднимает UserMiniApp при старте приложения.
             using (var scope = app.Services.CreateScope())
             {
+                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
                 var userMiniApp = scope.ServiceProvider.GetRequiredService<IUserMiniApp>();
                 userMiniApp.EnsureInitialized();
             }
@@ -218,6 +222,7 @@ namespace BusinessEntity
             // Явно поднимает MediaServerMiniApp при старте приложения.
             using (var scope = app.Services.CreateScope())
             {
+                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
                 var mediaServerMiniApp = scope.ServiceProvider.GetRequiredService<IMediaServerMiniApp>();
                 mediaServerMiniApp.EnsureInitialized();
             }
@@ -225,20 +230,15 @@ namespace BusinessEntity
             // Явно поднимает TreeMiniApp при старте приложения.
             using (var scope = app.Services.CreateScope())
             {
+                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
                 var treeMiniApp = scope.ServiceProvider.GetRequiredService<ITreeMiniApp>();
                 treeMiniApp.EnsureInitialized();
-            }
-
-            // Явно поднимает UserMessagesMiniApp при старте приложения.
-            using (var scope = app.Services.CreateScope())
-            {
-                var userMessagesMiniApp = scope.ServiceProvider.GetRequiredService<IUserMessagesMiniApp>();
-                userMessagesMiniApp.EnsureInitialized();
             }
 
             // Инициализирует тестовые данные при старте приложения.
             using (var scope = app.Services.CreateScope())
             {
+                scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
                 try
                 {
                     var sampleDataMiniApp = scope.ServiceProvider.GetRequiredService<ISampleDataMiniApp>();

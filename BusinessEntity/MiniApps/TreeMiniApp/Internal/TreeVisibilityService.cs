@@ -112,7 +112,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
                     await _webLogger.Error(ex);
                 }
 
-                return 0;
+                throw;
             }
         }
 

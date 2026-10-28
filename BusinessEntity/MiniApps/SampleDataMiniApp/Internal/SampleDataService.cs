@@ -209,8 +209,9 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                     _webLogger?.Error(FormatException(ex, "InitializeSampleDataAsync"));
                     _webLogger?.Warning("[Seed] Seeding failed. Resetting seeded flag.");
                 }
-                catch
+                catch (Exception loggingError)
                 {
+                    Console.Error.WriteLine($"Seed diagnostic logging failed: {loggingError.GetType().Name}");
                 }
 
                 lock (_syncLock)

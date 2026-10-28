@@ -1,3 +1,8 @@
+@if (!string.IsNullOrWhiteSpace(SaveError))
+{
+    <div class="alert alert-danger document-save-error" role="alert">@SaveError</div>
+}
+
 <div class="document-shell">
     <div class="document-layout">
         <div class="document-layout__content">

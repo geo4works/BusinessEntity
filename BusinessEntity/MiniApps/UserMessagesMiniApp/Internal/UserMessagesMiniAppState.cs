@@ -8,6 +8,7 @@ internal sealed class UserMessagesMiniAppState
     private const int MaxMessages = 50;
     private readonly Dictionary<Guid, List<UserMessageRecord>> _messagesByUser = new();
     private readonly object _syncRoot = new();
+    private readonly HashSet<Guid> _delivered = new();
 
     // Сообщает подписчикам, что стек пользовательских сообщений изменился.
     public event Action? Changed;
@@ -40,7 +41,7 @@ internal sealed class UserMessagesMiniAppState
         }
 
         var record = new UserMessageRecord(
-            Guid.NewGuid(),
+            message.CorrelationId,
             message.UserId,
             message.Text.Trim(),
             message.Level,
@@ -49,6 +50,7 @@ internal sealed class UserMessagesMiniAppState
 
         lock (_syncRoot)
         {
+            if (!_delivered.Add(message.CorrelationId)) return;
             if (!_messagesByUser.TryGetValue(message.UserId, out var messages))
             {
                 messages = new List<UserMessageRecord>();
@@ -59,6 +61,7 @@ internal sealed class UserMessagesMiniAppState
 
             if (messages.Count > MaxMessages)
             {
+                foreach (var expired in messages.Skip(MaxMessages)) _delivered.Remove(expired.Id);
                 messages.RemoveRange(MaxMessages, messages.Count - MaxMessages);
             }
         }
@@ -77,7 +80,11 @@ internal sealed class UserMessagesMiniAppState
         var changed = false;
         lock (_syncRoot)
         {
-            changed = _messagesByUser.Remove(message.UserId);
+            if (_messagesByUser.Remove(message.UserId, out var removed))
+            {
+                foreach (var record in removed) _delivered.Remove(record.Id);
+                changed = true;
+            }
         }
 
         if (changed)

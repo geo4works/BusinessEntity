@@ -430,7 +430,7 @@ internal sealed class UserSpaceContentAccessHelper
         return TryReadPublishedVersion(latestData?.Data);
     }
 
-    // Извлекает publishedVersion из storage-envelope или legacy payload.
+    // Извлекает указатель публикации из обязательного storage-envelope до переноса в отдельную таблицу на этапе 2.
     private static int TryReadPublishedVersion(string? dataJson)
     {
         if (string.IsNullOrWhiteSpace(dataJson))
@@ -442,18 +442,17 @@ internal sealed class UserSpaceContentAccessHelper
         {
             using var document = JsonDocument.Parse(dataJson);
             var root = document.RootElement;
-            var payload = root.TryGetProperty("payload", out var payloadElement)
-                ? payloadElement
-                : root;
+            if (!root.TryGetProperty("payload", out var payload))
+                throw new InvalidDataException("Отсутствует payload manifest статьи.");
 
             return payload.TryGetProperty("publishedVersion", out var versionElement) &&
                    versionElement.TryGetInt32(out var version)
                 ? version
                 : 0;
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            return 0;
+            throw new InvalidDataException("Повреждён manifest публикации статьи.", exception);
         }
     }
 

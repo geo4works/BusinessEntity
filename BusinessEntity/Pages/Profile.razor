@@ -6,6 +6,7 @@
 @using ReactiveUI
 @inject IUserConnector UserConnector
 @inject IMessageBus MessageBus
+@inject BusinessEntity.Infrastructure.Bus.BusRequestScope BusScope
 
 <PageTitle>Профиль</PageTitle>
 
@@ -172,7 +173,7 @@
             : "Профиль сохранен.";
 
         MessageBus.SendMessage(new PostUserMessage(
-            CurrentUserId,
+            CurrentUserId, BusScope.LogicalWindowId, Guid.NewGuid(),
             text,
             UserMessageLevel.Success,
             "Профиль сохранен"));

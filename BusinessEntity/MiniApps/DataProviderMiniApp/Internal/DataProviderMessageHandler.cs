@@ -1,3 +1,6 @@
+using BusinessEntity.Infrastructure.Bus;
+using BusinessEntity.Core.Contracts;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Conversion;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using ReactiveUI;
@@ -9,21 +12,24 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
     /// <summary>
     /// Централизованно подписывает mini-app на bus-запросы к хранилищу и публикует ответы.
     /// </summary>
-    internal sealed class DataProviderMessageHandler : IDisposable
+    internal sealed class DataProviderMessageHandler : IDisposable, IBusEndpoint
     {
         private readonly IMessageBus _messageBus;
+        private readonly EntityDataStorageCodec _codec;
         private readonly IDataProviderCrudService _dataProviderService;
         private readonly ILogger<DataProviderMessageHandler> _logger;
         private readonly IWebLoggerService? _webLogger;
         private readonly List<IDisposable> _subscriptions = new();
+        private readonly object _subscriptionGate = new();
 
         public DataProviderMessageHandler(
             IMessageBus messageBus,
             IDataProviderCrudService dataProviderService,
             ILogger<DataProviderMessageHandler> logger,
-            IWebLoggerService? webLogger)
+            IWebLoggerService? webLogger, EntityDataStorageCodec codec)
         {
             _messageBus = messageBus;
+            _codec = codec;
             _dataProviderService = dataProviderService;
             _logger = logger;
             _webLogger = webLogger;
@@ -32,6 +38,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         // Один раз подписывает mini-app на все входящие bus-сообщения.
         public void EnsureSubscribed()
         {
+            lock (_subscriptionGate)
+            {
             if (_subscriptions.Count > 0)
             {
                 return;
@@ -43,6 +51,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             SubscribeRichTextMessages();
 
             _logger.LogInformation("DataProviderMiniApp subscribed to storage messages.");
+            }
         }
 
         // Подписывает сообщения, которые работают с BusinessEntityData.
@@ -95,12 +104,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var records = await _dataProviderService.GetAllAsync();
-                _messageBus.SendMessage(new GetBusinessEntitiesResponse(request.RequestId, records));
+                Reply(request, new GetBusinessEntitiesResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load business entities.");
-                _messageBus.SendMessage(new GetBusinessEntitiesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.Classes.BusinessEntity>(), ex.Message));
+                Reply(request, new GetBusinessEntitiesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.Classes.BusinessEntity>(), BusError.FromException(ex)));
             }
         }
 
@@ -110,52 +119,48 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var record = await _dataProviderService.GetByIdAsync(request.Id);
-                _messageBus.SendMessage(new GetBusinessEntityByIdResponse(request.RequestId, record));
+                Reply(request, new GetBusinessEntityByIdResponse(request.RequestId, record));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load business entityData {RecordId}.", request.Id);
-                _messageBus.SendMessage(new GetBusinessEntityByIdResponse(request.RequestId, null, ex.Message));
+                Reply(request, new GetBusinessEntityByIdResponse(request.RequestId, null, BusError.FromException(ex)));
             }
         }
 
         // Обрабатывает запрос на чтение JSON-envelope payload сущности.
+
         private async Task HandleGetDataAsync(GetBusinessEntityDataRequest request)
         {
             try
             {
-                var data = await _dataProviderService.GetDataPayloadRecordAsync(request.BusinessEntityId);
-                _messageBus.SendMessage(new GetBusinessEntityDataResponse(
-                    request.RequestId,
-                    data?.Data,
-                    data?.Version <= 0 ? 1 : data?.Version ?? 1));
+                var data = await ReadPayloadAsync(request.BusinessEntityId, null);
+                Reply(request, new GetBusinessEntityDataResponse(request.RequestId, data));
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                _logger.LogError(ex, "Failed to load business entityData data {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new GetBusinessEntityDataResponse(request.RequestId, null, ErrorMessage: ex.Message));
+                _logger.LogError(exception, "Failed to read payload {RequestId}", request.RequestId);
+                Reply(request, new GetBusinessEntityDataResponse(request.RequestId, null, BusError.FromException(exception)));
             }
         }
 
+
         // Обрабатывает запрос на чтение JSON-envelope payload конкретной версии сущности.
+
         private async Task HandleGetDataVersionAsync(GetBusinessEntityDataVersionRequest request)
         {
             try
             {
-                var data = await _dataProviderService.GetDataPayloadRecordAsync(
-                    request.BusinessEntityId,
-                    request.Version);
-                _messageBus.SendMessage(new GetBusinessEntityDataVersionResponse(
-                    request.RequestId,
-                    data?.Data,
-                    data?.Version <= 0 ? 1 : data?.Version ?? 1));
+                var data = await ReadPayloadAsync(request.BusinessEntityId, request.Version);
+                Reply(request, new GetBusinessEntityDataVersionResponse(request.RequestId, data));
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                _logger.LogError(ex, "Failed to load business entityData data {RecordId} version {Version}.", request.BusinessEntityId, request.Version);
-                _messageBus.SendMessage(new GetBusinessEntityDataVersionResponse(request.RequestId, null, ErrorMessage: ex.Message));
+                _logger.LogError(exception, "Failed to read payload {RequestId}", request.RequestId);
+                Reply(request, new GetBusinessEntityDataVersionResponse(request.RequestId, null, BusError.FromException(exception)));
             }
         }
+
 
         // Обрабатывает запрос на чтение списка версий payload сущности.
         private async Task HandleGetDataVersionsAsync(GetBusinessEntityDataVersionsRequest request)
@@ -163,12 +168,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var records = await _dataProviderService.GetDataVersionsAsync(request.BusinessEntityId);
-                _messageBus.SendMessage(new GetBusinessEntityDataVersionsResponse(request.RequestId, records));
+                Reply(request, new GetBusinessEntityDataVersionsResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load business entityData versions {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new GetBusinessEntityDataVersionsResponse(request.RequestId, Array.Empty<BusinessEntityDataVersionInfo>(), ex.Message));
+                Reply(request, new GetBusinessEntityDataVersionsResponse(request.RequestId, Array.Empty<BusinessEntityDataVersionInfo>(), BusError.FromException(ex)));
             }
         }
 
@@ -181,12 +186,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                     request.BusinessEntityId,
                     request.Version,
                     request.VersionDescription);
-                _messageBus.SendMessage(new UpdateBusinessEntityDataVersionDescriptionResponse(request.RequestId, true));
+                Reply(request, new UpdateBusinessEntityDataVersionDescriptionResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to update business entityData version description {RecordId} version {Version}.", request.BusinessEntityId, request.Version);
-                _messageBus.SendMessage(new UpdateBusinessEntityDataVersionDescriptionResponse(request.RequestId, false, ex.Message));
+                Reply(request, new UpdateBusinessEntityDataVersionDescriptionResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -197,12 +202,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             {
                 _webLogger?.Information($"[мини-апп:data-provider] [bus:received] [entity:add] Получено AddBusinessEntityRequest requestId={request.RequestId} entityId={request.Record.Id} type={request.Record.EntityType} name='{request.Record.Name}'");
                 var record = await _dataProviderService.AddAsync(request.Record);
-                _messageBus.SendMessage(new AddBusinessEntityResponse(request.RequestId, record));
+                Reply(request, new AddBusinessEntityResponse(request.RequestId, record));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to add business entityData.");
-                _messageBus.SendMessage(new AddBusinessEntityResponse(request.RequestId, null, ex.Message));
+                Reply(request, new AddBusinessEntityResponse(request.RequestId, null, BusError.FromException(ex)));
             }
         }
 
@@ -212,12 +217,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 await _dataProviderService.UpdateAsync(request.Record);
-                _messageBus.SendMessage(new UpdateBusinessEntityResponse(request.RequestId, true));
+                Reply(request, new UpdateBusinessEntityResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to update business entityData {RecordId}.", request.Record.Id);
-                _messageBus.SendMessage(new UpdateBusinessEntityResponse(request.RequestId, false, ex.Message));
+                Reply(request, new UpdateBusinessEntityResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -227,12 +232,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 await _dataProviderService.DeleteAsync(request.Id);
-                _messageBus.SendMessage(new DeleteBusinessEntityResponse(request.RequestId, true));
+                Reply(request, new DeleteBusinessEntityResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to delete business entityData {RecordId}.", request.Id);
-                _messageBus.SendMessage(new DeleteBusinessEntityResponse(request.RequestId, false, ex.Message));
+                Reply(request, new DeleteBusinessEntityResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -242,12 +247,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 await _dataProviderService.ClearAllAsync();
-                _messageBus.SendMessage(new ClearDataProviderStorageResponse(request.RequestId, true));
+                Reply(request, new ClearDataProviderStorageResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to clear DataProvider storage.");
-                _messageBus.SendMessage(new ClearDataProviderStorageResponse(request.RequestId, false, ex.Message));
+                Reply(request, new ClearDataProviderStorageResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -256,18 +261,17 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         {
             try
             {
-                // _webLogger?.Information($"[мини-апп:data-provider] [bus:received] [entity-data:update] Получено UpdateBusinessEntityDataRequest requestId={request.RequestId} entityId={request.BusinessEntityId} payloadLength={request.Data?.Length ?? 0}");
                 await _dataProviderService.UpdateDataPayloadAsync(
                     request.BusinessEntityId,
-                    request.Data,
+                    _codec.SerializePayload(request.Data),
                     request.HasVersions,
                     lastModifiedByUserId: request.LastModifiedByUserId);
-                _messageBus.SendMessage(new UpdateBusinessEntityDataResponse(request.RequestId, true));
+                Reply(request, new UpdateBusinessEntityDataResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to update business entityData data {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new UpdateBusinessEntityDataResponse(request.RequestId, false, ex.Message));
+                Reply(request, new UpdateBusinessEntityDataResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -277,12 +281,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var records = await _dataProviderService.GetAllRelationsAsync();
-                _messageBus.SendMessage(new GetAllRelationsResponse(request.RequestId, records));
+                Reply(request, new GetAllRelationsResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load relations.");
-                _messageBus.SendMessage(new GetAllRelationsResponse(request.RequestId, Array.Empty<BusinessEntityRelation>(), ex.Message));
+                Reply(request, new GetAllRelationsResponse(request.RequestId, Array.Empty<BusinessEntityRelation>(), BusError.FromException(ex)));
             }
         }
 
@@ -292,12 +296,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var records = await _dataProviderService.GetRelationsAsync(request.ObjectAId, request.ObjectBId);
-                _messageBus.SendMessage(new GetRelationsResponse(request.RequestId, records));
+                Reply(request, new GetRelationsResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load relations between {ObjectAId} and {ObjectBId}.", request.ObjectAId, request.ObjectBId);
-                _messageBus.SendMessage(new GetRelationsResponse(request.RequestId, Array.Empty<BusinessEntityRelation>(), ex.Message));
+                Reply(request, new GetRelationsResponse(request.RequestId, Array.Empty<BusinessEntityRelation>(), BusError.FromException(ex)));
             }
         }
 
@@ -307,12 +311,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var record = await _dataProviderService.GetRelationByIdAsync(request.Id);
-                _messageBus.SendMessage(new GetRelationByIdResponse(request.RequestId, record));
+                Reply(request, new GetRelationByIdResponse(request.RequestId, record));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load relation {RecordId}.", request.Id);
-                _messageBus.SendMessage(new GetRelationByIdResponse(request.RequestId, null, ex.Message));
+                Reply(request, new GetRelationByIdResponse(request.RequestId, null, BusError.FromException(ex)));
             }
         }
 
@@ -323,12 +327,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             {
                 // _webLogger?.Information($"[мини-апп:data-provider] [bus:received] [relation:add] Получено CreateRelationRequest requestId={request.RequestId} relationId={request.Record.Id} objectA={request.Record.ObjectAId} objectB={request.Record.ObjectBId} type={request.Record.RelationType}");
                 var record = await _dataProviderService.CreateRelationAsync(request.Record);
-                _messageBus.SendMessage(new CreateRelationResponse(request.RequestId, record));
+                Reply(request, new CreateRelationResponse(request.RequestId, record));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to add relation.");
-                _messageBus.SendMessage(new CreateRelationResponse(request.RequestId, null, ex.Message));
+                Reply(request, new CreateRelationResponse(request.RequestId, null, BusError.FromException(ex)));
             }
         }
 
@@ -338,12 +342,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 await _dataProviderService.UpdateRelationAsync(request.Record);
-                _messageBus.SendMessage(new UpdateRelationResponse(request.RequestId, true));
+                Reply(request, new UpdateRelationResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to update relation {RecordId}.", request.Record.Id);
-                _messageBus.SendMessage(new UpdateRelationResponse(request.RequestId, false, ex.Message));
+                Reply(request, new UpdateRelationResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -353,12 +357,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 await _dataProviderService.DeleteRelationAsync(request.Id);
-                _messageBus.SendMessage(new DeleteRelationResponse(request.RequestId, true));
+                Reply(request, new DeleteRelationResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to delete relation {RecordId}.", request.Id);
-                _messageBus.SendMessage(new DeleteRelationResponse(request.RequestId, false, ex.Message));
+                Reply(request, new DeleteRelationResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -368,12 +372,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var records = await _dataProviderService.GetRichTextChunksAsync(request.BusinessEntityId);
-                _messageBus.SendMessage(new GetRichTextChunksResponse(request.RequestId, records));
+                Reply(request, new GetRichTextChunksResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load rich-text chunks for document {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new GetRichTextChunksResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentChunk>(), ex.Message));
+                Reply(request, new GetRichTextChunksResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentChunk>(), BusError.FromException(ex)));
             }
         }
 
@@ -383,12 +387,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var records = await _dataProviderService.GetRichTextTableOfContentsEntriesAsync(request.BusinessEntityId);
-                _messageBus.SendMessage(new GetRichTextTableOfContentsEntriesResponse(request.RequestId, records));
+                Reply(request, new GetRichTextTableOfContentsEntriesResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load rich-text table of contents entries for document {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new GetRichTextTableOfContentsEntriesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentTableOfContentsEntry>(), ex.Message));
+                Reply(request, new GetRichTextTableOfContentsEntriesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentTableOfContentsEntry>(), BusError.FromException(ex)));
             }
         }
 
@@ -398,12 +402,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 var records = await _dataProviderService.RebuildRichTextTableOfContentsEntriesAsync(request.BusinessEntityId);
-                _messageBus.SendMessage(new RebuildRichTextTableOfContentsEntriesResponse(request.RequestId, records));
+                Reply(request, new RebuildRichTextTableOfContentsEntriesResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to rebuild rich-text table of contents entries for document {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new RebuildRichTextTableOfContentsEntriesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentTableOfContentsEntry>(), ex.Message));
+                Reply(request, new RebuildRichTextTableOfContentsEntriesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentTableOfContentsEntry>(), BusError.FromException(ex)));
             }
         }
 
@@ -413,12 +417,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 await _dataProviderService.ReplaceRichTextChunksAsync(request.BusinessEntityId, request.Records);
-                _messageBus.SendMessage(new ReplaceRichTextChunksResponse(request.RequestId, true));
+                Reply(request, new ReplaceRichTextChunksResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to replace rich-text chunks for document {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new ReplaceRichTextChunksResponse(request.RequestId, false, ex.Message));
+                Reply(request, new ReplaceRichTextChunksResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -431,12 +435,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                     request.BusinessEntityId,
                     request.Files,
                     request.ReplaceExistingFiles);
-                _messageBus.SendMessage(new SaveRichTextEmbeddedFilesResponse(request.RequestId, true));
+                Reply(request, new SaveRichTextEmbeddedFilesResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to save rich-text embedded files for document {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new SaveRichTextEmbeddedFilesResponse(request.RequestId, false, ex.Message));
+                Reply(request, new SaveRichTextEmbeddedFilesResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
@@ -449,12 +453,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                     request.BusinessEntityId,
                     request.ImageId,
                     request.Variant);
-                _messageBus.SendMessage(new GetRichTextEmbeddedFileResponse(request.RequestId, record));
+                Reply(request, new GetRichTextEmbeddedFileResponse(request.RequestId, record));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load rich-text embedded file for document {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new GetRichTextEmbeddedFileResponse(request.RequestId, null, ex.Message));
+                Reply(request, new GetRichTextEmbeddedFileResponse(request.RequestId, null, BusError.FromException(ex)));
             }
         }
 
@@ -464,16 +468,39 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 await _dataProviderService.DeleteRichTextStorageAsync(request.BusinessEntityId);
-                _messageBus.SendMessage(new DeleteRichTextStorageResponse(request.RequestId, true));
+                Reply(request, new DeleteRichTextStorageResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to delete rich-text storage for document {RecordId}.", request.BusinessEntityId);
-                _messageBus.SendMessage(new DeleteRichTextStorageResponse(request.RequestId, false, ex.Message));
+                Reply(request, new DeleteRichTextStorageResponse(request.RequestId, false, BusError.FromException(ex)));
             }
         }
 
-        // Снимает все bus-подписки при остановке mini-app.
+        // Возвращает предметный тип и полный адрес исходного запроса, включая ошибки.
+        private void Reply<TResponse>(BusRequest request, TResponse response) where TResponse : BusResponse
+            => _messageBus.SendMessage((TResponse)(response with { Context = request.Context }));
+
+        // Читает и преобразует payload внутри владельца физического хранения.
+        private async Task<IBusinessEntityData?> ReadPayloadAsync(Guid entityId, int? version)
+        {
+            var dto = version.HasValue
+                ? await _dataProviderService.GetDataPayloadRecordAsync(entityId, version.Value)
+                : await _dataProviderService.GetDataPayloadRecordAsync(entityId);
+            if (dto is null) return null;
+            if (dto.Version < 1 || string.IsNullOrWhiteSpace(dto.Data))
+                throw new InvalidDataException("Повреждена обязательная версия payload.");
+            var data = _codec.DeserializeEnvelope<IBusinessEntityData>(dto.Data);
+            data.Version = dto.Version;
+            if (data is BusinessEntityData typed)
+            {
+                var entity = await _dataProviderService.GetByIdAsync(entityId);
+                if (entity is null) throw new InvalidDataException("Payload не имеет сущности-владельца.");
+            }
+            return data;
+        }
+
+        // Снимает все bus-подписки при остановке владельца хранения.
         public void Dispose()
         {
             foreach (var subscription in _subscriptions)

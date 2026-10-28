@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.Core.Classes;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages
@@ -13,8 +14,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages
         IReadOnlyList<TreeNodeSnapshot> Children);
 
     // Запрос на полную загрузку дерева пространства.
-    public sealed record GetTreeForSpaceRequest(Guid RequestId, Guid SpaceId);
+    public sealed record GetTreeForSpaceRequest(Guid RequestId, Guid SpaceId) : BusRequest(RequestId);
 
     // Ответ со снимком дерева пространства.
-    public sealed record GetTreeForSpaceResponse(Guid RequestId, TreeSpaceSnapshot? Snapshot, string? ErrorMessage = null);
+    public sealed record GetTreeForSpaceResponse(Guid RequestId, TreeSpaceSnapshot? Snapshot, BusError? Error = null) : BusResponse(RequestId, Error);
 }

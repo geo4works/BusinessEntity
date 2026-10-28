@@ -1,5 +1,7 @@
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Internal;
+using BusinessEntity.Infrastructure.Bus;
+using ReactiveUI;
 
 namespace BusinessEntity.MiniApps.UserMessagesMiniApp.Facade;
 
@@ -7,14 +9,16 @@ namespace BusinessEntity.MiniApps.UserMessagesMiniApp.Facade;
 internal sealed class UserMessagesMiniApp : IUserMessagesMiniApp
 {
     private readonly UserMessagesMiniAppState _state;
+    private readonly BusRequestScope _scope;
+    private readonly IMessageBus _bus;
     private readonly UserMessagesMiniAppMessageHandler _messageHandler;
 
     // Создает фасад и активирует bus-подписки mini-app.
     public UserMessagesMiniApp(
-        UserMessagesMiniAppState state,
+        UserMessagesMiniAppState state, BusRequestScope scope, IMessageBus bus,
         UserMessagesMiniAppMessageHandler messageHandler)
     {
-        _state = state;
+        _state = state; _scope = scope; _bus = bus;
         _messageHandler = messageHandler;
         _messageHandler.EnsureSubscribed();
     }
@@ -41,12 +45,12 @@ internal sealed class UserMessagesMiniApp : IUserMessagesMiniApp
     // Добавляет сообщение напрямую в state mini-app.
     public void Post(PostUserMessage message)
     {
-        _state.Add(message);
+        _bus.SendMessage(message);
     }
 
     // Очищает стек сообщений указанного пользователя.
     public void Clear(Guid userId)
     {
-        _state.Clear(new ClearUserMessages(userId));
+        _bus.SendMessage(new ClearUserMessages(userId, _scope.LogicalWindowId));
     }
 }

@@ -9,10 +9,11 @@ public static class UserMessagesMiniAppRegistration
     // Подключает state, bus handler и фасад mini-app пользовательских сообщений.
     public static IServiceCollection AddUserMessagesMiniApp(this IServiceCollection services)
     {
-        services.AddSingleton<UserMessagesMiniAppState>();
-        services.AddSingleton<UserMessagesMiniAppMessageHandler>();
-        services.AddSingleton<IUserMessagesMiniApp, Facade.UserMessagesMiniApp>();
+        services.AddScoped<UserMessagesMiniAppState>();
+        services.AddScoped<UserMessagesMiniAppMessageHandler>();
+        services.AddScoped<IUserMessagesMiniApp, Facade.UserMessagesMiniApp>();
 
+        services.AddSingleton<IUserMessageFlashStore, UserMessageFlashStore>();
         return services;
     }
 }

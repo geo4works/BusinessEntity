@@ -11,6 +11,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
     {
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
+        [Inject] public BusinessEntity.Infrastructure.Bus.BusRequestScope BusScope { get; set; } = default!;
 
         private IReadOnlyList<UserAdministrationRecord> Users { get; set; } = Array.Empty<UserAdministrationRecord>();
         private IReadOnlyList<UserRoleRecord> Roles { get; set; } = Array.Empty<UserRoleRecord>();
@@ -128,15 +129,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         // Запоминает текущего локального пользователя, чтобы сообщения администрирования попадали в его правую панель.
         private async Task ResolveCurrentMessageUserAsync()
         {
-            try
-            {
-                var currentUser = await UserConnector.EnsureCurrentUserAsync();
-                CurrentMessageUserId = currentUser?.Id ?? Guid.Empty;
-            }
-            catch
-            {
-                CurrentMessageUserId = Guid.Empty;
-            }
+            var currentUser = await UserConnector.EnsureCurrentUserAsync();
+            CurrentMessageUserId = currentUser?.Id ?? Guid.Empty;
         }
 
         // Публикует пользовательское сообщение из административного UI в правую колонку.
@@ -148,7 +142,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
 
             MessageBus.SendMessage(new PostUserMessage(
-                CurrentMessageUserId,
+                CurrentMessageUserId, BusScope.LogicalWindowId, Guid.NewGuid(),
                 message,
                 level,
                 title));

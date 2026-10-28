@@ -173,26 +173,12 @@ internal sealed class ActivityCommentService
         };
     }
 
-    // Читает payload комментария и поддерживает fallback для некорректного JSON.
+    // Повреждённый комментарий даёт отказ вместо подмены текстом старого формата.
     private static BusinessEntityCommentPayload ReadPayload(string? data)
     {
-        if (string.IsNullOrWhiteSpace(data))
-        {
-            return new BusinessEntityCommentPayload();
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<BusinessEntityCommentPayload>(data, ActivityJsonOptions.Default)
-                ?? new BusinessEntityCommentPayload();
-        }
-        catch
-        {
-            return new BusinessEntityCommentPayload
-            {
-                Text = data
-            };
-        }
+        if (string.IsNullOrWhiteSpace(data)) throw new InvalidDataException("Отсутствует payload комментария.");
+        return JsonSerializer.Deserialize<BusinessEntityCommentPayload>(data, ActivityJsonOptions.Default)
+            ?? throw new InvalidDataException("Пустой payload комментария.");
     }
 
     // Собирает плоский порядок отображения по дереву комментариев.
@@ -279,23 +265,13 @@ internal sealed class ActivityCommentService
             : normalized[..MaxCommentTextLength];
     }
 
-    // Возвращает отображаемое имя автора из локального user payload.
+    // Читает обязательный payload автора; отображаемое имя выбирается из его действительных полей.
     private static string ResolveAuthorDisplayName(UserDto user)
     {
-        if (string.IsNullOrWhiteSpace(user.Payload))
-        {
-            return user.ExternalId;
-        }
-
-        try
-        {
-            var userData = JsonSerializer.Deserialize<UserData>(user.Payload, ActivityJsonOptions.Default);
-            return FirstNonEmpty(userData?.DisplayedName, userData?.AuthentikLogin, userData?.ExtId, user.ExternalId);
-        }
-        catch
-        {
-            return user.ExternalId;
-        }
+        if (string.IsNullOrWhiteSpace(user.Payload)) throw new InvalidDataException("Отсутствует payload пользователя.");
+        var data = JsonSerializer.Deserialize<UserData>(user.Payload, ActivityJsonOptions.Default)
+            ?? throw new InvalidDataException("Пустой payload пользователя.");
+        return FirstNonEmpty(data.DisplayedName, data.AuthentikLogin, data.ExtId, user.ExternalId);
     }
 
     // Возвращает первое непустое значение из списка.

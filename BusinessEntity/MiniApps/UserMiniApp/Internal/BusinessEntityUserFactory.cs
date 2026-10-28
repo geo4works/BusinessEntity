@@ -89,19 +89,11 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 var value = claim.Value.Trim();
                 if (value.StartsWith("[", StringComparison.Ordinal))
                 {
-                    try
-                    {
-                        var parsed = JsonSerializer.Deserialize<List<string>>(value);
-                        if (parsed != null)
-                        {
-                            groups.AddRange(parsed.Where(group => !string.IsNullOrWhiteSpace(group)));
-                            continue;
-                        }
-                    }
-                    catch
-                    {
-                        // Keep the raw claim below if Authentik or middleware changes the format.
-                    }
+                    // Authentik middleware может передать массив одним claim; повреждённый массив даёт отказ.
+                    var parsed = JsonSerializer.Deserialize<List<string>>(value)
+                        ?? throw new InvalidDataException("Пустой список групп identity.");
+                    groups.AddRange(parsed.Where(group => !string.IsNullOrWhiteSpace(group)));
+                    continue;
                 }
 
                 groups.Add(value);

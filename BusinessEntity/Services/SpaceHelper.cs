@@ -233,24 +233,14 @@ namespace BusinessEntity.Services
                 .FirstOrDefault();
         }
 
+        // Новое пространство без свойства получает настройки по умолчанию; повреждённое свойство даёт отказ.
         private static GenericSpaceProperties DeserializeGenericSpaceProperties(BusinessEntityPropertyDto? property)
         {
-            if (property == null || string.IsNullOrWhiteSpace(property.Data))
-            {
-                return new GenericSpaceProperties();
-            }
-
-            try
-            {
-                return JsonSerializer.Deserialize<GenericSpaceProperties>(property.Data, PropertyJsonOptions)
-                    is { } settings
-                        ? NormalizeGenericSpaceProperties(settings)
-                        : new GenericSpaceProperties();
-            }
-            catch (JsonException)
-            {
-                return new GenericSpaceProperties();
-            }
+            if (property == null) return new GenericSpaceProperties();
+            var settings = JsonSerializer.Deserialize<GenericSpaceProperties>(property.Data, PropertyJsonOptions);
+            if (settings?.SchemaVersion != 1 || settings.Kind != nameof(GenericSpaceProperties))
+                throw new InvalidDataException("Неизвестный формат настроек пространства.");
+            return NormalizeGenericSpaceProperties(settings);
         }
 
         private static GenericSpaceProperties NormalizeGenericSpaceProperties(GenericSpaceProperties? settings)

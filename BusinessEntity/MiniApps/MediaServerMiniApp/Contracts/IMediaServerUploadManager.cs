@@ -14,5 +14,6 @@ public interface IMediaServerUploadManager
         string? contentType,
         long? length,
         Guid? spaceId,
-        string? clientUploadToken);
+        string? clientUploadToken,
+        Guid userId);
 }

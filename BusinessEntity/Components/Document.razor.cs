@@ -28,6 +28,7 @@ namespace BusinessEntity.Components
 
         private bool IsEditing;
         private bool IsSaving;
+        private string? SaveError;
         private string EditTitle = string.Empty;
         private string EditBody = string.Empty;
         private List<global::BusinessEntity.Core.Classes.BusinessEntityData> LocalData = new();
@@ -71,6 +72,7 @@ namespace BusinessEntity.Components
         {
             if (Entity == null || !CanEdit) return;
             IsSaving = true;
+            SaveError = null;
             try
             {
                 WebLogger?.Information($"[Doc] SaveAsync started: entityId={Entity.Id}, prevTitle='{Entity.Name}', newTitle='{EditTitle}'");
@@ -135,6 +137,12 @@ namespace BusinessEntity.Components
                     }
                 }
                 IsEditing = false;
+            }
+            catch (Exception exception)
+            {
+                // Отказ не закрывает редактор и не заменяет отправленный пользователем текст.
+                SaveError = BusinessEntity.Infrastructure.Bus.BusError.FromException(exception).Message;
+                WebLogger?.Error(exception);
             }
             finally
             {

@@ -2,6 +2,9 @@
 @using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
 @inject IUserMessagesMiniApp UserMessages
 @inject IUserConnector UserConnector
+@inject BusinessEntity.Infrastructure.Bus.BusRequestScope BusScope
+@inject IUserMessageFlashStore FlashMessages
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <div class="widget user-messages-panel">
@@ -32,6 +35,19 @@
         var currentUser = await UserConnector.EnsureCurrentUserAsync();
         CurrentUserId = currentUser?.Id ?? Guid.Empty;
         UserMessages.MessagesChanged += OnMessagesChanged;
+    }
+
+    // Забирает HTTP-уведомление после prerender, когда создано настоящее окно circuit.
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return Task.CompletedTask;
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        if (query.TryGetValue("notification", out var value) && Guid.TryParse(value, out var key))
+        {
+            var notification = FlashMessages.Take(key, CurrentUserId, BusScope.LogicalWindowId);
+            if (notification != null) UserMessages.Post(notification);
+        }
+        return Task.CompletedTask;
     }
 
     // Обновляет UI, когда mini-app получает новое пользовательское сообщение.

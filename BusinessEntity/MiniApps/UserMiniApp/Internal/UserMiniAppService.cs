@@ -27,9 +27,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         private const string AllSpacesDisplayName = "[ВсеПространства]";
 
         private readonly UserMiniAppState _state;
-        private readonly BusinessEntityUserFactory _userFactory;
+        private readonly UserIdentitySession _identitySession;
         private readonly AuthentikManagementClient _authentikManagementClient;
-        private readonly AuthentikSessionManager _authentikSessionManager;
         private readonly UserMiniAppStartupAdminBootstrapper _startupAdminBootstrapper;
         private readonly IUserMiniAppRepository<UserDto> _userRepository;
         private readonly IUserMiniAppRepository<UserPropertyDto> _userPropertyRepository;
@@ -44,9 +43,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         // Получает state mini-app и фабрику, которая умеет собирать пользователя из Authentik principal.
         public UserMiniAppService(
             UserMiniAppState state,
-            BusinessEntityUserFactory userFactory,
+            UserIdentitySession identitySession,
             AuthentikManagementClient authentikManagementClient,
-            AuthentikSessionManager authentikSessionManager,
             UserMiniAppStartupAdminBootstrapper startupAdminBootstrapper,
             IUserMiniAppRepository<UserDto> userRepository,
             IUserMiniAppRepository<UserPropertyDto> userPropertyRepository,
@@ -59,9 +57,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             UserSpaceContentAccessHelper spaceContentAccessHelper)
         {
             _state = state;
-            _userFactory = userFactory;
+            _identitySession = identitySession;
             _authentikManagementClient = authentikManagementClient;
-            _authentikSessionManager = authentikSessionManager;
             _startupAdminBootstrapper = startupAdminBootstrapper;
             _userRepository = userRepository;
             _userPropertyRepository = userPropertyRepository;
@@ -75,17 +72,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         }
 
         // Возвращает пользователя из state или один раз строит его через factory.
-        public async Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
-        {
-            if (_state.IsLoaded)
-            {
-                return _state.CurrentUser;
-            }
-
-            _state.CurrentUser = await _userFactory.CreateAsync(cancellationToken);
-            _state.IsLoaded = true;
-            return _state.CurrentUser;
-        }
+        public Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
+            => _identitySession.GetCurrentUserAsync(cancellationToken);
 
         // Гарантирует наличие всех системных записей UserMiniApp.
         public async Task EnsureSystemDefaultsAsync(CancellationToken cancellationToken = default)
@@ -1400,28 +1388,12 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             return true;
         }
 
+        // Читает обязательные данные локального пользователя без молчаливого восстановления.
         private static UserData ReadUserData(UserDto user)
         {
-            UserData userData;
-            if (string.IsNullOrWhiteSpace(user.Payload))
-            {
-                userData = new UserData { ExtId = user.ExternalId };
-            }
-            else
-            {
-                try
-                {
-                    userData = JsonSerializer.Deserialize<UserData>(user.Payload, UserMiniAppJsonOptions.Default)
-                               ?? new UserData { ExtId = user.ExternalId };
-                }
-                catch (JsonException)
-                {
-                    userData = new UserData { ExtId = user.ExternalId };
-                }
-            }
-
-            userData.ExtId = string.IsNullOrWhiteSpace(userData.ExtId) ? user.ExternalId : userData.ExtId;
-            return userData;
+            if (string.IsNullOrWhiteSpace(user.Payload)) throw new InvalidDataException("Отсутствует payload пользователя.");
+            return JsonSerializer.Deserialize<UserData>(user.Payload, UserMiniAppJsonOptions.Default)
+                ?? throw new InvalidDataException("Пустой payload пользователя.");
         }
 
         // Создает payload системного anonymous-пользователя без Authentik-идентификаторов.
@@ -2321,7 +2293,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 throw new ArgumentException("Новый пароль и повторение пароля не совпадают.");
             }
 
-            var isOldPasswordValid = await _authentikSessionManager.ValidatePasswordAsync(
+            var isOldPasswordValid = await _identitySession.ValidatePasswordAsync(
                 authentikUser.Username,
                 request.OldPassword,
                 cancellationToken);
@@ -2450,30 +2422,15 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 .OrderByDescending(x => x.DateLastModified)
                 .FirstOrDefault();
 
-            if (property == null || string.IsNullOrWhiteSpace(property.Data))
+            if (property == null)
             {
                 return new RichTextDocumentBookmarksPayload();
             }
 
-            try
-            {
-                var payload = JsonSerializer.Deserialize<RichTextDocumentBookmarksPayload>(
-                    property.Data,
-                    UserMiniAppJsonOptions.Default);
-
-                if (payload?.SchemaVersion == 1 &&
-                    string.Equals(payload.Kind, "RichDocBookmarks", StringComparison.Ordinal))
-                {
-                    payload.Bookmarks ??= new List<RichTextDocumentBookmark>();
-                    return payload;
-                }
-            }
-            catch (JsonException)
-            {
-                // Invalid user property payload is treated as empty.
-            }
-
-            return new RichTextDocumentBookmarksPayload();
+            var payload = JsonSerializer.Deserialize<RichTextDocumentBookmarksPayload>(property.Data, UserMiniAppJsonOptions.Default);
+            if (payload?.SchemaVersion != 1 || payload.Kind != "RichDocBookmarks" || payload.Bookmarks == null)
+                throw new InvalidDataException("Неизвестный формат закладок пользователя.");
+            return payload;
         }
 
         // Читает payload пользовательских пресетов печати из единственной user-property.
@@ -2488,29 +2445,15 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 .OrderByDescending(x => x.DateLastModified)
                 .FirstOrDefault();
 
-            if (property == null || string.IsNullOrWhiteSpace(property.Data))
+            if (property == null)
             {
                 return new DocPrintSettingsPresetCollection();
             }
 
-            try
-            {
-                var payload = JsonSerializer.Deserialize<DocPrintSettingsPresetCollection>(
-                    property.Data,
-                    UserMiniAppJsonOptions.Default);
-
-                if (payload?.SchemaVersion == 1 &&
-                    string.Equals(payload.Kind, nameof(DocPrintSettingsPresetCollection), StringComparison.Ordinal))
-                {
-                    return NormalizeDocPrintPresetsPayload(payload);
-                }
-            }
-            catch (JsonException)
-            {
-                // Invalid user property payload is treated as empty.
-            }
-
-            return new DocPrintSettingsPresetCollection();
+            var payload = JsonSerializer.Deserialize<DocPrintSettingsPresetCollection>(property.Data, UserMiniAppJsonOptions.Default);
+            if (payload?.SchemaVersion != 1 || payload.Kind != nameof(DocPrintSettingsPresetCollection))
+                throw new InvalidDataException("Неизвестный формат пресетов печати.");
+            return NormalizeDocPrintPresetsPayload(payload);
         }
 
         private async Task<RichDocDisplayedLevelProperty?> ReadDisplayedLevelPropertyAsync(
@@ -2704,32 +2647,15 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             }
         }
 
-        private static RichDocDisplayedLevelProperty? TryReadDisplayedLevelProperty(string? data)
+        // Отсутствие свойства обрабатывается запросом; повреждённая строка не игнорируется.
+        private static RichDocDisplayedLevelProperty TryReadDisplayedLevelProperty(string? data)
         {
-            if (string.IsNullOrWhiteSpace(data))
-            {
-                return null;
-            }
-
-            try
-            {
-                var payload = JsonSerializer.Deserialize<RichDocDisplayedLevelProperty>(
-                    data,
-                    UserMiniAppJsonOptions.Default);
-
-                if (payload?.SchemaVersion == 1 &&
-                    string.Equals(payload.Kind, "RichDocDisplayedLevelProperty", StringComparison.Ordinal))
-                {
-                    payload.DisplayLevelCount = NormalizeDisplayedLevel(payload.DisplayLevelCount);
-                    return payload;
-                }
-            }
-            catch (JsonException)
-            {
-                // Invalid user property payload is ignored.
-            }
-
-            return null;
+            if (string.IsNullOrWhiteSpace(data)) throw new InvalidDataException("Отсутствует настройка отображения статьи.");
+            var payload = JsonSerializer.Deserialize<RichDocDisplayedLevelProperty>(data, UserMiniAppJsonOptions.Default);
+            if (payload?.SchemaVersion != 1 || payload.Kind != "RichDocDisplayedLevelProperty")
+                throw new InvalidDataException("Неизвестный формат настройки отображения статьи.");
+            payload.DisplayLevelCount = NormalizeDisplayedLevel(payload.DisplayLevelCount);
+            return payload;
         }
 
         // Нормализует collection payload пресетов печати после чтения или перед записью.

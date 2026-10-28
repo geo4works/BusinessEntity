@@ -1,3 +1,5 @@
+using BusinessEntity.Infrastructure.Bus;
+using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.ActivityMiniApp.Connectors;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Connectors;
@@ -17,6 +19,10 @@ public static class ActivityMiniAppRegistration
         services.AddScoped<IActivityMiniApp, Facade.ActivityMiniApp>();
         services.AddScoped<IActivityConnector, ActivityConnector>();
 
-        return services;
+        services.AddScoped<ActivityMiniAppMessageHandler>();
+
+            services.AddBusEndpoint<ActivityMiniAppMessageHandler>(typeof(GetCommentsRequest), typeof(CreateCommentRequest));
+
+            return services;
     }
 }

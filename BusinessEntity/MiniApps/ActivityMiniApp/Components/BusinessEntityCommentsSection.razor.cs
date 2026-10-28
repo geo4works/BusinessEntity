@@ -41,14 +41,16 @@ public partial class BusinessEntityCommentsSection : ComponentBase
     // Перечитывает комментарии при первом рендере и при смене BusinessEntityId.
     protected override async Task OnParametersSetAsync()
     {
-        CanWriteEffective = await ResolveCanWriteEffectiveAsync();
-
-        if (LoadedBusinessEntityId == BusinessEntityId && HasLoaded)
+        try
         {
-            return;
+            CanWriteEffective = await ResolveCanWriteEffectiveAsync();
+            if (LoadedBusinessEntityId == BusinessEntityId && HasLoaded) return;
+            await ReloadAsync();
         }
-
-        await ReloadAsync();
+        catch (Exception exception)
+        {
+            Error = exception.Message;
+        }
     }
 
     // Загружает актуальную пачку комментариев из ActivityMiniApp.
@@ -98,14 +100,7 @@ public partial class BusinessEntityCommentsSection : ComponentBase
             return false;
         }
 
-        try
-        {
-            var user = await UserConnector.GetCurrentUserAsync();
-            return user?.IsAuthenticated == true;
-        }
-        catch
-        {
-            return false;
-        }
+        var user = await UserConnector.GetCurrentUserAsync();
+        return user?.IsAuthenticated == true;
     }
 }

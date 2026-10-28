@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Bus;
 using System.Buffers;
 using System.Threading.Channels;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
@@ -96,7 +97,8 @@ public sealed class MediaServerUploadManager : BackgroundService, IMediaServerUp
         string? contentType,
         long? length,
         Guid? spaceId,
-        string? clientUploadToken)
+        string? clientUploadToken,
+        Guid userId)
     {
         if (string.IsNullOrWhiteSpace(temporaryFilePath))
         {
@@ -110,7 +112,7 @@ public sealed class MediaServerUploadManager : BackgroundService, IMediaServerUp
             contentType,
             length,
             spaceId,
-            clientUploadToken));
+            clientUploadToken, userId));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -138,6 +140,7 @@ public sealed class MediaServerUploadManager : BackgroundService, IMediaServerUp
             _uploadJobs.MarkVideoUploadJobProcessing(item.JobId);
 
             using var scope = _scopeFactory.CreateScope();
+            scope.ServiceProvider.GetRequiredService<BusRequestScope>().SetUser(item.UserId);
             var mediaServerService = scope.ServiceProvider.GetRequiredService<IMediaServerService>();
             await using var input = new FileStream(
                 item.TemporaryFilePath,
@@ -189,7 +192,8 @@ public sealed class MediaServerUploadManager : BackgroundService, IMediaServerUp
             item.SpaceId));
     }
 
-    private static void TryDeleteFile(string path)
+    // Ошибка уборки временного файла диагностируется и не подменяет исход операции.
+    private void TryDeleteFile(string path)
     {
         try
         {
@@ -198,8 +202,9 @@ public sealed class MediaServerUploadManager : BackgroundService, IMediaServerUp
                 File.Delete(path);
             }
         }
-        catch
+        catch (Exception exception)
         {
+            _logger.LogWarning(exception, "Cannot remove temporary upload file {Path}", path);
         }
     }
 
@@ -210,5 +215,6 @@ public sealed class MediaServerUploadManager : BackgroundService, IMediaServerUp
         string? ContentType,
         long? Length,
         Guid? SpaceId,
-        string? ClientUploadToken);
+        string? ClientUploadToken,
+        Guid UserId);
 }
