@@ -5,6 +5,7 @@ using BusinessEntity.Core.RichText;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Registration;
 using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Registration;
 using BusinessEntity.MiniApps.UserMiniApp.Connectors;
@@ -28,7 +29,7 @@ public sealed class TransactionBusTests
         services.AddDocumentsMiniApp();
         services.AddSingleton<BusinessEntity.Core.Saving.IEntityArchivePolicy>(new BusinessEntity.Core.Saving.NoStoredReferencesArchivePolicy(BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Folder, false));
         services.AddRichTextDocumentMiniApp();
-        services.AddSingleton(fixture.Options);
+        services.AddSingleton(fixture.Options); services.AddSingleton(fixture.Metrics);
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?> { ["Storage:RootPath"] = fixture.StorageRoot }).Build());
         services.AddScoped<IUserConnector, UserConnector>();
@@ -43,6 +44,10 @@ public sealed class TransactionBusTests
         Assert.Equal(batch.OperationId, result.OperationId);
         Assert.Equal(result.CommittedAt, outcome!.CommittedAt);
         Assert.Null(outcome.AuthorUserId);
+        var beforeGraph = await connector.GetCacheStatisticsAsync();
+        Assert.Equal(batch.Entities[0].Id, (await connector.QueryGraphAsync(GraphQueryKind.All)).Entities.Single().Id);
+        Assert.Equal(beforeGraph.StorageReads, (await connector.GetCacheStatisticsAsync()).StorageReads);
+        Assert.Empty(await connector.GetPublishedEntityNamesAsync([batch.Entities[0].Id]));
         var entityId = batch.Entities[0].Id;
         var propertyId = Guid.NewGuid(); var commentId = Guid.NewGuid();
         await connector.SaveAsync(new(Guid.NewGuid(), "test", null)

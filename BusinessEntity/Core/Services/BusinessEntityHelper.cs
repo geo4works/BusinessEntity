@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
 using BusinessEntity.Core.Saving;
 using System;
 using System.Threading.Tasks;
@@ -121,42 +122,29 @@ namespace BusinessEntity.Core.Services
         // Возвращает дочерние entity по связи Contains
         public async Task<IEnumerable<Classes.BusinessEntity>> GetContainedEntitiesAsync(Guid parentId, CancellationToken ct = default)
         {
-            // Ищем relation вида родитель -> ребенок
-            var relations = (await _dataProviderConnector.GetAllRelationsAsync(ct))
-                .Where(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
-                .ToList();
-            var childIds = relations.Select(r => r.ObjectBId).ToList();
-            
-            // Загружаем дочерние entity по найденным Id
-            var children = new List<Classes.BusinessEntity>();
-            foreach (var childId in childIds)
-            {
-                var child = await _dataProviderConnector.GetByIdAsync(childId);
-                if (child != null)
-                {
-                    children.Add(child);
-                }
-            }
-            
-            // Сортируем дочерние элементы по дате создания
-            return children.OrderBy(c => c.CreatedDate);
+            var projection = await _dataProviderConnector.QueryGraphAsync(GraphQueryKind.Children, parentId, cancellationToken: ct);
+            return projection.Entities.OrderBy(entity => entity.CreatedDate);
         }
 
-        // Возвращает корневые entity, у которых нет родителя по Contains
+        // Возвращает корневые узлы согласованного снимка.
         public async Task<IEnumerable<Classes.BusinessEntity>> GetRootEntitiesAsync()
         {
-            // Находим все сущности, которые НЕ являются объектом B в отношении "Contains"
-            var allEntities = await _dataProviderConnector.GetAllAsync();
-            var containsRelations = (await _dataProviderConnector.GetAllRelationsAsync())
-                .Where(r => r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
-                .ToList();
-            var childIds = containsRelations.Select(r => r.ObjectBId).ToHashSet();
-            
-            var rootEntities = allEntities.Where(e => !childIds.Contains(e.Id));
-            
-            // Сортируем корневые элементы по дате создания
-            return rootEntities.OrderBy(e => e.CreatedDate);
+            var projection = await _dataProviderConnector.QueryGraphAsync(GraphQueryKind.Roots);
+            return projection.Entities.OrderBy(entity => entity.CreatedDate);
         }
+
+        // Читает поддерево единым запросом, без SQL на каждого потомка.
+        public Task<GraphProjection> GetSubgraphAsync(Guid rootId, CancellationToken ct = default)
+            => _dataProviderConnector.QueryGraphAsync(GraphQueryKind.Subgraph, rootId, cancellationToken: ct);
+
+        // Возвращает путь от корня до узла на одной ревизии графа.
+        public async Task<IReadOnlyList<Classes.BusinessEntity>> GetPathToRootAsync(Guid entityId, CancellationToken ct = default)
+            => (await _dataProviderConnector.QueryGraphAsync(GraphQueryKind.PathToRoot, entityId, cancellationToken: ct)).Entities;
+
+        // Ищет имена в выбранном поддереве или всём графе без загрузки payload.
+        public async Task<IReadOnlyList<Classes.BusinessEntity>> SearchByNameAsync(string query, Guid? rootId = null,
+            int take = 100, CancellationToken ct = default)
+            => (await _dataProviderConnector.QueryGraphAsync(GraphQueryKind.SearchName, rootId, query, take, ct)).Entities;
 
         // Генерирует уникальное имя нового дочернего элемента
         private async Task<string> GetNewItemNameAsync(
@@ -264,31 +252,9 @@ namespace BusinessEntity.Core.Services
             return await IsDescendantInDatabase(newParentId, childId);
         }
 
-        // Проверяет, лежит ли один узел внутри поддерева другого
+        // Проверяет принадлежность предку по согласованному пути, без рекурсивных storage-вызовов.
         private async Task<bool> IsDescendantInDatabase(Guid descendantId, Guid ancestorId)
-        {
-            // Получаем родителя descendantId
-            var parentRelations = (await _dataProviderConnector.GetAllRelationsAsync())
-                .Where(r =>
-                    r.ObjectBId == descendantId &&
-                    r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
-                .ToList();
-
-            foreach (var relation in parentRelations)
-            {
-                var parentId = relation.ObjectAId;
-                
-                // Если родитель - это ancestor, то descendant является потомком ancestor
-                if (parentId == ancestorId)
-                    return true;
-
-                // Рекурсивно проверяем выше по иерархии
-                if (await IsDescendantInDatabase(parentId, ancestorId))
-                    return true;
-            }
-
-            return false;
-        }
+            => (await GetPathToRootAsync(descendantId)).Any(entity => entity.Id == ancestorId);
 
         // Загружает payload-объекты для сущности
         public async Task<IReadOnlyList<BusinessEntityData>> GetData(Classes.BusinessEntity entityData)

@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Caching;
 using BusinessEntity.Core.Saving;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -26,13 +27,15 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
         // Регистрирует все зависимости mini-app в контейнере DI.
         public static IServiceCollection AddDataProviderMiniApp(this IServiceCollection services)
         {
+            services.AddSingleton<StorageCommandMetrics>();
+            services.AddSingleton<BoundedPayloadCache>();
+            services.AddSingleton<DataProviderGraphCache>();
             services.TryAddSingleton(provider => new DbContextOptionsBuilder<KmsBusinessEntityDbContext>()
                 .UseNpgsql(provider.GetRequiredService<IConfiguration>().GetConnectionString("DockerConnection")
-                    ?? throw new InvalidOperationException("ConnectionStrings:DockerConnection обязателен.")).Options);
+                    ?? throw new InvalidOperationException("ConnectionStrings:DockerConnection обязателен.")).AddInterceptors(provider.GetRequiredService<StorageCommandMetrics>()).Options);
             services.TryAddSingleton<EntityUrlRewriter>();
             services.TryAddSingleton<GraphArchiveRemapper>();
             services.AddSingleton<ExportFileLeases>();
-            // Подключаем Postgres-репозитории для всех DTO-хранилищ mini-app.
             // Регистрируем поэкземплярные payload-конвертеры для всех поддерживаемых typed business-data объектов.
             services.AddSingleton<IEntityDataStorageConverter, DocumentEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, FolderEntityDataStorageConverter>();
@@ -53,7 +56,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.AddBusEndpoint<DataProviderTransactionHandler>(typeof(ExportSubgraphRequest), typeof(ReleaseExportRequest), typeof(SaveEntityBatchRequest), typeof(GetOperationOutcomeRequest), typeof(GetStoredCommentsRequest), typeof(GetStoredPropertiesRequest), typeof(GetVersionChunkWindowRequest), typeof(GetStoredFileRequest), typeof(GetVersionChunkMembershipRequest));
             services.AddScoped<IDataProviderConnector, DataProviderConnector>();
 
-            services.AddBusEndpoint<DataProviderMessageHandler>(typeof(GetBusinessEntitiesRequest), typeof(GetBusinessEntityByIdRequest), typeof(GetBusinessEntityDataRequest), typeof(GetBusinessEntityDataVersionRequest), typeof(GetBusinessEntityDataVersionsRequest), typeof(GetAllRelationsRequest), typeof(GetRelationsRequest), typeof(GetRelationByIdRequest), typeof(GetRichTextEmbeddedFileRequest));
+            services.AddBusEndpoint<DataProviderMessageHandler>(typeof(QueryGraphRequest), typeof(GetPublishedEntityNamesRequest), typeof(GetDataProviderCacheStatisticsRequest), typeof(GetBusinessEntitiesRequest), typeof(GetBusinessEntityByIdRequest), typeof(GetBusinessEntityDataRequest), typeof(GetBusinessEntityDataVersionRequest), typeof(GetBusinessEntityDataVersionsRequest), typeof(GetAllRelationsRequest), typeof(GetRelationsRequest), typeof(GetRelationByIdRequest), typeof(GetRichTextEmbeddedFileRequest));
 
             return services;
         }
@@ -64,6 +67,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             await services.GetRequiredService<ImmutableEntityFileStore>().RecoverAsync(
                 services.GetRequiredService<DbContextOptions<KmsBusinessEntityDbContext>>(), ct);
             services.GetRequiredService<ExportFileLeases>().RecoverAfterRestart();
+            await services.GetRequiredService<DataProviderGraphCache>().InitializeAsync(ct);
             return fresh;
         }
     }

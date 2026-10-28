@@ -10,6 +10,13 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
     /// </summary>
     public interface IDataProviderConnector
     {
+        // Структурная проекция одной ревизии; авторизацию выполняет владелец сценария.
+        Task<Navigation.GraphProjection> QueryGraphAsync(Navigation.GraphQueryKind kind, Guid? rootId = null,
+            string? searchText = null, int take = 100, CancellationToken cancellationToken = default);
+        // Названия опубликованных снимков без материализации содержимого.
+        Task<IReadOnlyDictionary<Guid, string>> GetPublishedEntityNamesAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default);
+        // Статистика кэша и реальных storage-команд DataProvider.
+        Task<Navigation.DataProviderCacheStatistics> GetCacheStatisticsAsync(CancellationToken cancellationToken = default);
         // Экспорт полного снимка подграфа с временными потоковыми источниками файлов.
         Task<Archives.SubgraphExportResult> ExportSubgraphAsync(Archives.SubgraphExportScope scope, CancellationToken cancellationToken = default);
         // Освобождает только свой временный экспорт.

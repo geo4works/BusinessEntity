@@ -1,12 +1,12 @@
 # Реестр миниаппов
 
-Фактическое состояние этапа 2 TASK_ARCH_001, 2026-10-28.
+Фактическое состояние этапа 3 TASK_ARCH_001, 2026-10-28.
 Приложение содержит семь действующих миниаппов и четыре регистрации владельцев типов. Host-service, декларативные модули
 и общий контекст сохранения добавляются в этапах 4–6, пока их нет.
 
 | Миниапп | Назначение | Текущее время жизни | Доступ и состояние |
 |---|---|---|---|
-| DataProviderMiniApp | Граф, payload, чанки, properties, файлы | Writer/readers/handlers singleton; connector scoped | Типизированные Bus Request/Response; codec только внутри DataProvider, connector использует BusRequestClient; SQL и постоянные файлы закрыты внутри Internal; единственная запись — SaveEntityBatch |
+| DataProviderMiniApp | Граф, payload, чанки, properties, файлы | Writer/readers/cache/handlers singleton; connector scoped | Типизированные Bus Request/Response; codec только внутри DataProvider, connector использует BusRequestClient; SQL и постоянные файлы закрыты внутри Internal; единственная запись — SaveEntityBatch |
 | UserMiniApp | Identity, локальные пользователи, роли, группы, права | Scoped | Connector через BusRequestClient; отдельный UserIdentitySession, scoped session/general handlers с фильтром адреса |
 | TreeMiniApp | Дерево пространства и действия над узлами | Scoped | Bus connector без facade; scoped handler проверяет scope/окно перед исполнением |
 | ActivityMiniApp | Комментарии | Scoped | Bus connector без facade; scoped handler; комментарии пишет и читает DataProvider через шину |
@@ -46,3 +46,7 @@ Core содержит модели, фабрики и BusinessEntityHelper. Ми
 фиксируется здесь вместе с кодом. После этапа 4 реестр содержит фактические
 host-service, размещения и владельцев контекстов сохранения.
 Источник: [ТЗ v2.2](../Tasks/TASK_ARCH_001_miniapp-bus-architecture-migration.md).
+
+Кэш DataProvider: согласованный structural snapshot, ограниченный payload LRU,
+публичные проекции навигации и статистика. Владельцы UI применяют права к копиям
+проекций. User SQL учитывается отдельно от storage counters.

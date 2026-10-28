@@ -14,6 +14,9 @@ internal sealed class DataProviderMessageHandler : BusEndpoint
     // Подписывает только чтение; все изменения проходят транзакционный endpoint.
     protected override void SubscribeRequests()
     {
+        Subscribe<QueryGraphRequest, QueryGraphResponse>(async r => new(r.RequestId, await _reader.QueryGraphAsync(r.Kind, r.RootId, r.SearchText, r.Take)), static (id, e) => new(id, null, e));
+        Subscribe<GetPublishedEntityNamesRequest, GetPublishedEntityNamesResponse>(async r => new(r.RequestId, await _reader.GetPublishedNamesAsync(r.EntityIds)), static (id, e) => new(id, null, e));
+        Subscribe<GetDataProviderCacheStatisticsRequest, GetDataProviderCacheStatisticsResponse>(async r => new(r.RequestId, await _reader.GetStatisticsAsync()), static (id, e) => new(id, null, e));
         Subscribe<GetBusinessEntitiesRequest, GetBusinessEntitiesResponse>(async r => new(r.RequestId, await _reader.GetAllAsync()), static (id, e) => new(id, [], e));
         Subscribe<GetBusinessEntityByIdRequest, GetBusinessEntityByIdResponse>(async r => new(r.RequestId, await _reader.GetByIdAsync(r.Id)), static (id, e) => new(id, null, e));
         Subscribe<GetBusinessEntityDataRequest, GetBusinessEntityDataResponse>(async r => new(r.RequestId, await _reader.GetPayloadAsync(r.BusinessEntityId, null)), static (id, e) => new(id, null, e));

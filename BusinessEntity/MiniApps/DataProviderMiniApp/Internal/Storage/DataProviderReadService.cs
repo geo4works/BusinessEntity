@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Caching;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
@@ -15,9 +16,11 @@ internal sealed partial class DataProviderReadService
     private readonly DbContextOptions<KmsBusinessEntityDbContext> _options;
     private readonly ImmutableEntityFileStore _files;
     private readonly EntityDataStorageCodec _codec;
+    private readonly DataProviderGraphCache _graph;
+    private readonly BoundedPayloadCache _payloads;
     // Получает только собственные зависимости хранения.
-    public DataProviderReadService(DbContextOptions<KmsBusinessEntityDbContext> options, ImmutableEntityFileStore files, EntityDataStorageCodec codec)
-    { _options = options; _files = files; _codec = codec; }
+    public DataProviderReadService(DbContextOptions<KmsBusinessEntityDbContext> options, ImmutableEntityFileStore files, EntityDataStorageCodec codec, DataProviderGraphCache graph, BoundedPayloadCache payloads)
+    { _options = options; _files = files; _codec = codec; _graph = graph; _payloads = payloads; }
 
     // Читает отдельную activity-таблицу по владельцу.
     public async Task<IReadOnlyList<StoredEntityComment>> GetCommentsAsync(Guid entityId, CancellationToken ct = default)

@@ -30,7 +30,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         // Возвращает полный снимок дерева для пространства.
         public async Task<TreeSpaceSnapshot?> GetTreeForSpaceAsync(Guid spaceId, CancellationToken cancellationToken = default)
         {
-            var space = await _businessEntityHelper.GetBusinessEntityById(spaceId);
+            var projection = await _businessEntityHelper.GetSubgraphAsync(spaceId, cancellationToken);
+            var space = projection.Entities.SingleOrDefault(entity => entity.Id == spaceId);
             if (space == null || space.EntityType != BusinessEntityTypeEnum.Space)
             {
                 return null;
@@ -40,8 +41,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             var currentBusinessUser = await _userConnector.GetCurrentUserAsync(cancellationToken);
             var permissions = await _userConnector.GetCurrentUserPermissionsForSpaceAsync(space.Id, cancellationToken);
             var isAccessAdmin = IsAccessAdmin(currentBusinessUser);
-            var children = await _treeVisibilityService.BuildVisibleChildrenAsync(
-                space.Id,
+            var children = _treeVisibilityService.BuildVisibleChildren(
+                space.Id, projection,
                 currentUser?.Id,
                 isAccessAdmin,
                 permissions,

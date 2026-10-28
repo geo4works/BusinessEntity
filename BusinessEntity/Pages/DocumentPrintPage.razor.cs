@@ -168,7 +168,7 @@ namespace BusinessEntity.Pages
             }
             else
             {
-                var latestDocument = await DataProviderConnector.GetDataVersionAsync<BusinessEntity.Core.DomainEntities.Document>(Id, entity.PublishedVersion, cancellationToken);
+                var latestDocument = await DataProviderConnector.GetDataAsync<BusinessEntity.Core.DomainEntities.Document>(Id, cancellationToken);
                 dataItems = latestDocument == null
                     ? Array.Empty<BusinessEntityData>()
                     : new BusinessEntityData[] { latestDocument };
@@ -210,6 +210,9 @@ namespace BusinessEntity.Pages
                 ViewedVersion = Math.Min(Manifest.PublishedVersion, LatestVersion);
             }
 
+            var selected = await DataProviderConnector.GetDataVersionAsync<RichTextDocument>(Id, ViewedVersion, cancellationToken)
+                ?? throw new InvalidDataException("Выбранная версия статьи отсутствует.");
+            Entity.Name = selected.Name;
             IsInitialContentLoading = true;
             await LoadInitialChunkWindowAsync(loadVersion, cancellationToken);
             _ = LoadOutlineAsync(loadVersion, cancellationToken);

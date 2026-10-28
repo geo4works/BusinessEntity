@@ -105,7 +105,8 @@ namespace BusinessEntity.Pages
                 }
                 else
                 {
-                    var published = await DataProviderConnector.GetDataVersionAsync<global::BusinessEntity.Core.DomainEntities.Document>(Id, Entity.PublishedVersion);
+                    // Обычный общий Document всегда опубликован по политике своего владельца.
+                    var published = latestDocument;
                     list = published == null ? throw new InvalidDataException("Отсутствует опубликованная версия.")
                         : new global::BusinessEntity.Core.Classes.BusinessEntityData[] { published };
                 }

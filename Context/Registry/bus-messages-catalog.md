@@ -1,6 +1,6 @@
 # Каталог сообщений общей шины
 
-Фактическое состояние этапа 2 TASK_ARCH_001, 2026-10-28.
+Фактическое состояние этапа 3 TASK_ARCH_001, 2026-10-28.
 Один singleton ReactiveUI.IMessageBus; регистрации маршрутов находятся в Registration владельцев.
 
 Все предметные Request/Response наследуют BusRequest/BusResponse.
@@ -165,3 +165,11 @@ Login передаёт уведомление новому circuit однора�
 Services/EntityMessages удалён. Этапы 4–8: декларации, жизненный цикл,
 контексты сохранения, команды и выделение. Запланированные сообщения здесь
 не выдаются за реализованные.
+
+## Проекции и статистика этапа 3
+
+DataProvider: `QueryGraphRequest/Response` (All, Roots, Children, Subgraph,
+PathToRoot, SearchName); `GetPublishedEntityNamesRequest/Response`;
+`GetDataProviderCacheStatisticsRequest/Response`. Все используют общий
+BusRequestClient. Структура выдаётся безопасными копиями одной ревизии;
+права применяют Tree/User и владельцы страниц до отображения.

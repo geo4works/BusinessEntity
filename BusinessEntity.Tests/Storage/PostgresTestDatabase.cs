@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Caching;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.DocumentsMiniApp.Registration;
@@ -32,24 +33,30 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
     private readonly IConfiguration _configuration;
     public TestStorageFaults Faults { get; } = new();
     public DataProviderTransactionService Writer { get; }
+    public StorageCommandMetrics Metrics { get; } = new();
+    public DataProviderGraphCache Cache => _services.GetRequiredService<DataProviderGraphCache>();
+    public BoundedPayloadCache Payloads => _services.GetRequiredService<BoundedPayloadCache>();
+    public DataProviderReadService Reader => _services.GetRequiredService<DataProviderReadService>();
     public GraphArchiveRemapper Remapper => _services.GetRequiredService<GraphArchiveRemapper>();
     public ExportFileLeases Leases => _services.GetRequiredService<ExportFileLeases>();
     public ReactiveUI.IMessageBus Bus => _services.GetRequiredService<ReactiveUI.IMessageBus>();
 
     // Собирает storage-сервисы без UI, Authentik и рабочей БД.
-    private PostgresTestDatabase(string adminConnection, string databaseName, string connection)
+    private PostgresTestDatabase(string adminConnection, string databaseName, string connection, long? payloadBytes, int? payloadEntries)
     {
         _adminConnection = adminConnection; _databaseName = databaseName;
         StorageRoot = Path.Combine(Path.GetTempPath(), "be-arch-tests", databaseName);
         _configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-            { ["Storage:RootPath"] = StorageRoot }).Build();
+            { ["Storage:RootPath"] = StorageRoot, ["DataProvider:PayloadCacheMaxBytes"] = (payloadBytes ?? 32L * 1024 * 1024).ToString(),
+                ["DataProvider:PayloadCacheMaxEntries"] = (payloadEntries ?? 128).ToString() }).Build();
         Files = new ImmutableEntityFileStore(_configuration, Faults, NullLogger<ImmutableEntityFileStore>.Instance);
-        Options = new DbContextOptionsBuilder<KmsBusinessEntityDbContext>().UseNpgsql(connection).Options;
+        Options = new DbContextOptionsBuilder<KmsBusinessEntityDbContext>().UseNpgsql(connection).AddInterceptors(Metrics).Options;
         var services = new ServiceCollection(); services.AddLogging(); services.AddBusinessEntityBus(); services.AddDataProviderMiniApp();
         services.AddDocumentsMiniApp(); services.AddRichTextDocumentMiniApp(); services.AddSpacesMiniApp(); services.AddSysParametersMiniApp();
         services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.Folder, false));
         services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.MediaVideo, true));
         services.AddSingleton(new EntityUrlPattern("/media-server-files/videos/"));
+        services.AddSingleton(Options); services.AddSingleton<IConfiguration>(_configuration); services.AddSingleton(Metrics);
         _services = services.BuildServiceProvider();
         Writer = CreateWriter();
     }
@@ -57,10 +64,10 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
     // Имитирует новый процесс с теми же SQL-данными и пустой памятью учёта операций.
     public DataProviderTransactionService CreateWriter() => new(Options,
         _services.GetRequiredService<EntityDataStorageCodec>(),
-        [new DocumentVersionPolicy(), new RichTextDocumentVersionPolicy()], Faults, _configuration, Files, _services.GetRequiredService<DataProviderCommitPublisher>(), _services.GetServices<IEntityArchivePolicy>());
+        [new DocumentVersionPolicy(), new RichTextDocumentVersionPolicy()], Faults, _configuration, Files, _services.GetRequiredService<DataProviderCommitPublisher>(), _services.GetServices<IEntityArchivePolicy>(), Cache);
 
     // Создаёт изолированную БД с безопасным сгенерированным именем и актуальной схемой.
-    public static async Task<PostgresTestDatabase> CreateAsync()
+    public static async Task<PostgresTestDatabase> CreateAsync(long? payloadBytes = null, int? payloadEntries = null)
     {
         var connection = Environment.GetEnvironmentVariable("BE_TEST_POSTGRES")
             ?? throw new InvalidOperationException("BE_TEST_POSTGRES не задан.");
@@ -71,8 +78,8 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
         await admin.OpenAsync();
         await using (var command = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin)) await command.ExecuteNonQueryAsync();
         builder.Database = name;
-        var result = new PostgresTestDatabase(adminConnection, name, builder.ConnectionString);
-        try { await new DataProviderSchema(result.Options).InitializeAsync(); return result; }
+        var result = new PostgresTestDatabase(adminConnection, name, builder.ConnectionString, payloadBytes, payloadEntries);
+        try { await new DataProviderSchema(result.Options).InitializeAsync(); await result.Cache.InitializeAsync(); return result; }
         catch { await result.DisposeAsync(); throw; }
     }
 

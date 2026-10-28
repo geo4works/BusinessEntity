@@ -29,6 +29,28 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             _userConnector = userConnector;
         }
 
+        // Получает целую навигационную проекцию одной ревизии через общий transport.
+        public async Task<Contracts.Navigation.GraphProjection> QueryGraphAsync(Contracts.Navigation.GraphQueryKind kind,
+            Guid? rootId = null, string? searchText = null, int take = 100, CancellationToken cancellationToken = default)
+        {
+            var response = await _client.SendAsync<QueryGraphRequest, QueryGraphResponse>(new(Guid.NewGuid(), kind, rootId, searchText, take), cancellationToken);
+            return response.Projection ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получена проекция графа."));
+        }
+
+        // Возвращает metadata опубликованного названия вместо чтения тяжёлого payload.
+        public async Task<IReadOnlyDictionary<Guid, string>> GetPublishedEntityNamesAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default)
+        {
+            var response = await _client.SendAsync<GetPublishedEntityNamesRequest, GetPublishedEntityNamesResponse>(new(Guid.NewGuid(), ids), cancellationToken);
+            return response.Names ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получены названия публикаций."));
+        }
+
+        // Публичная диагностика не открывает внутренних cache/EF объектов другим миниаппам.
+        public async Task<Contracts.Navigation.DataProviderCacheStatistics> GetCacheStatisticsAsync(CancellationToken cancellationToken = default)
+        {
+            var response = await _client.SendAsync<GetDataProviderCacheStatisticsRequest, GetDataProviderCacheStatisticsResponse>(new(Guid.NewGuid()), cancellationToken);
+            return response.Statistics ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получена статистика кэша."));
+        }
+
         // Большой архив формируется с явным длительным ожиданием; обычные запросы сохраняют короткий timeout.
         public async Task<Contracts.Archives.SubgraphExportResult> ExportSubgraphAsync(Contracts.Archives.SubgraphExportScope scope,
             CancellationToken cancellationToken = default)

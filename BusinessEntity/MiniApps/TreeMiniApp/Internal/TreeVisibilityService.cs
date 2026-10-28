@@ -1,5 +1,5 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Services;
@@ -13,51 +13,47 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         private const bool ShowFoldersWithoutVisibleContent = false;
         private static readonly StringComparer TreeNameComparer = StringComparer.Create(new CultureInfo("ru-RU"), ignoreCase: true);
 
-        private readonly BusinessEntityHelper _businessEntityHelper;
+        // Сервис только фильтрует уже готовый structural snapshot текущими правами.
+        public TreeVisibilityService() { }
 
-        public TreeVisibilityService(
-            BusinessEntityHelper businessEntityHelper)
-        {
-            _businessEntityHelper = businessEntityHelper;
-        }
-
-        public async Task<IReadOnlyList<TreeNodeSnapshot>> BuildVisibleChildrenAsync(
+        // Дерево строится из одной ревизии графа без повторных bus/SQL обращений для потомков.
+        public IReadOnlyList<TreeNodeSnapshot> BuildVisibleChildren(
             Guid parentId,
+            GraphProjection projection,
             Guid? currentUserId,
             bool isAccessAdmin,
             UserEffectivePermissions permissions,
             CancellationToken cancellationToken)
         {
-            var children = await _businessEntityHelper.GetContainedEntitiesAsync(parentId, cancellationToken);
-            var snapshots = new List<TreeNodeSnapshot>();
+            var entities = projection.Entities.ToDictionary(entity => entity.Id);
+            var children = projection.Relations.Where(relation => relation.RelationType == "Contains")
+                .GroupBy(relation => relation.ObjectAId).ToDictionary(group => group.Key, group => group.Select(relation => relation.ObjectBId).ToArray());
+            return Build(parentId);
 
-            foreach (var child in children)
+            // Права применяются поверх одной структурной ревизии без storage-вызова для каждого узла.
+            IReadOnlyList<TreeNodeSnapshot> Build(Guid parent)
             {
-                var descendants = await BuildVisibleChildrenAsync(
-                    child.Id,
-                    currentUserId,
-                    isAccessAdmin,
-                    permissions,
-                    cancellationToken);
-
-                if (IsFolderEntity(child.EntityType))
+                cancellationToken.ThrowIfCancellationRequested();
+                var result = new List<TreeNodeSnapshot>();
+                foreach (var id in children.GetValueOrDefault(parent) ?? [])
                 {
-                    if (descendants.Count > 0 ||
-                        (ShowFoldersWithoutVisibleContent && ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin)))
+                    var child = entities[id]; var descendants = Build(id);
+                    if (IsFolderEntity(child.EntityType))
                     {
-                        snapshots.Add(new TreeNodeSnapshot(child, descendants));
+                        if (descendants.Count > 0 || (ShowFoldersWithoutVisibleContent && ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin)))
+                            result.Add(new(child, descendants));
                     }
-
-                    continue;
+                    else if (CanDisplayTreeEntity(child, currentUserId, isAccessAdmin, permissions))
+                    {
+                        if (ContentAccessPolicy.RequiresPublishedVersion(child.EntityType) &&
+                            !ContentAccessPolicy.CanViewDraft(child.EntityType, child.IsPublic, child.CreatedByUserId, currentUserId, isAccessAdmin, permissions))
+                            child.Name = projection.PublishedNames.TryGetValue(child.Id, out var title) ? title
+                                : throw new InvalidDataException("Отсутствует название опубликованной версии.");
+                        result.Add(new(child, descendants));
+                    }
                 }
-
-                if (CanDisplayTreeEntity(child, currentUserId, isAccessAdmin, permissions))
-                {
-                    snapshots.Add(new TreeNodeSnapshot(child, descendants));
-                }
+                return SortTreeSnapshots(result);
             }
-
-            return SortTreeSnapshots(snapshots);
         }
 
         private static bool CanDisplayTreeEntity(

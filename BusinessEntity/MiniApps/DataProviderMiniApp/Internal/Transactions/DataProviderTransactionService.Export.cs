@@ -69,10 +69,10 @@ internal sealed partial class DataProviderTransactionService
                         await source.CopyToAsync(destination, ct);
                     files.Add(entry, new(entry, temporary));
                 }
-                entities.Add(new(DataProviderMapper.ToBusinessEntity(cards[id]), versions, chunks, references, properties, comments, manifest));
+                entities.Add(new(DataProviderMapper.ToBusinessEntity(cards[id]), versions, chunks, references, properties.OrderBy(x => x.Owner).ThenBy(x => x.Id).ToArray(), comments.OrderBy(x => x.CreatedDate).ThenBy(x => x.Id).ToArray(), manifest));
             }
             var relations = edges.Where(x => selected.Contains(x.ObjectAId) && selected.Contains(x.ObjectBId))
-                .Select(DataProviderMapper.ToBusinessEntityRelation).ToArray();
+                .OrderBy(x => x.Id).Select(DataProviderMapper.ToBusinessEntityRelation).ToArray();
             await transaction.CommitAsync(ct);
             return new(lease.Id, new(GraphArchiveFormat.CurrentVersion, scope.RootEntityId, entities, relations), files.Values.ToArray());
         }

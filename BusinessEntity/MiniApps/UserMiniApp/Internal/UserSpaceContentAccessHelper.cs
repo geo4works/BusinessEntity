@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
 using BusinessEntity.Contracts;
 using BusinessEntity.Core.BaseClasses.Relations;
 using BusinessEntity.Core.Classes;
@@ -102,14 +103,14 @@ internal sealed class UserSpaceContentAccessHelper
         CancellationToken cancellationToken = default)
     {
         var permissions = await GetEffectivePermissionsForSpaceAsync(userId, spaceId, isAnonymous, cancellationToken);
-        var entities = (await _data.GetAllAsync(cancellationToken))
-            .ToDictionary(entity => entity.Id);
+        var projection = await _data.QueryGraphAsync(GraphQueryKind.All, cancellationToken: cancellationToken);
+        var entities = projection.Entities.ToDictionary(entity => entity.Id);
         if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != BusinessEntityTypeEnum.Space)
         {
             return Array.Empty<UserAccessibleDocumentRecord>();
         }
 
-        var relations = (await _data.GetAllRelationsAsync(cancellationToken)).Where(relation =>
+        var relations = projection.Relations.Where(relation =>
                 relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString() ||
                 relation.RelationType == BusinessEntityRelationTypeEnum.RelatesTo.ToString()).ToArray();
         var childrenByParentId = relations
@@ -165,11 +166,16 @@ internal sealed class UserSpaceContentAccessHelper
                 return;
             }
 
+            var name = entity.Name;
+            if (ContentAccessPolicy.RequiresPublishedVersion(entity.EntityType) &&
+                !ContentAccessPolicy.CanViewDraft(entity.EntityType, entity.IsPublic, entity.CreatedByUserId, userId, false, permissions))
+                name = projection.PublishedNames.TryGetValue(entity.Id, out var publishedName) ? publishedName
+                    : throw new InvalidDataException("Отсутствует название опубликованной версии.");
             records.Add(new UserAccessibleDocumentRecord
             {
                 Id = entity.Id,
                 SpaceId = spaceId,
-                Name = entity.Name,
+                Name = name,
                 EntityType = entity.EntityType
             });
         }

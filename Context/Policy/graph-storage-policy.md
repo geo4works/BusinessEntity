@@ -776,3 +776,25 @@ DocumentVersion, Position, ChunkId и конкретную ChunkRowVersion. Вы
 - запись и чтение идут через `DataProviderMiniApp`
 
 Это и есть текущий канонический контур хранения бизнес-объектов в проекте.
+
+## Кэш (этап 3)
+
+DataProvider загружает immutable снимок карточек, связей и лёгких metadata
+истории при старте. Writer готовит новый снимок в SQL-транзакции; после
+успешного commit публикует его до data events. При отказе ревизия не меняется.
+Структурные проекции и BusinessEntityHelper читают RAM без SQL. Права User
+не входят в общий кэш и проверяются отдельно. Потребители получают копии.
+
+Payload загружается по требованию, чанки — окнами. Raw payload LRU ограничен
+`DataProvider:PayloadCacheMaxBytes` (по умолчанию 33554432) и
+`DataProvider:PayloadCacheMaxEntries` (128); ноль отключает удержание,
+отрицательное значение — ошибка конфигурации. Размер — оценка UTF-16 строк
+и накладных расходов, не измерение CLR heap. Большой payload не удерживается.
+Ключ содержит entity, exact version и поколение карточки; late attach после
+commit/delete не может вернуть старое содержимое под новой карточкой.
+
+Статистика: ревизия, размер графа, hits/misses/evictions, entries/bytes/limits
+payload, реальные EF SQL reads/writes DataProvider. Собственный DbContext
+UserMiniApp имеет отдельные options и не включён в эти storage counters.
+Снимок при записи перестраивается целиком четырьмя metadata-запросами;
+оптимизация инкрементального построения не заявляется.

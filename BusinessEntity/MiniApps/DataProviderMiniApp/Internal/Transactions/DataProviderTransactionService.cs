@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Caching;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -25,14 +26,15 @@ internal sealed partial class DataProviderTransactionService
     private readonly TimeSpan _outcomeRetention;
     private readonly ImmutableEntityFileStore _files;
     private readonly DataProviderCommitPublisher _publisher;
+    private readonly DataProviderGraphCache _graph;
     private readonly IReadOnlyDictionary<BusinessEntityTypeEnum, IEntityArchivePolicy> _archivePolicies;
 
     // Получает только общие механизмы хранения и предметные политики, объявленные владельцами.
     public DataProviderTransactionService(DbContextOptions<KmsBusinessEntityDbContext> options,
         EntityDataStorageCodec codec, IEnumerable<IEntityVersionPolicy> policies,
-        IStorageFaults faults, IConfiguration configuration, ImmutableEntityFileStore files, DataProviderCommitPublisher publisher, IEnumerable<IEntityArchivePolicy> archivePolicies)
+        IStorageFaults faults, IConfiguration configuration, ImmutableEntityFileStore files, DataProviderCommitPublisher publisher, IEnumerable<IEntityArchivePolicy> archivePolicies, DataProviderGraphCache graph)
     {
-        _options = options; _codec = codec; _policies = policies.ToDictionary(p => p.EntityType);
+        _options = options; _codec = codec; _graph = graph; _policies = policies.ToDictionary(p => p.EntityType);
         _faults = faults; _files = files; _publisher = publisher; _archivePolicies = archivePolicies.ToDictionary(x => x.EntityType);
         var days = configuration.GetValue("DataProvider:OperationRetentionDays", 7);
         if (days < 1) throw new ArgumentOutOfRangeException(nameof(configuration), "Срок исходов должен быть положительным.");
@@ -45,6 +47,7 @@ internal sealed partial class DataProviderTransactionService
     {
         if (actor.UserId == null && !actor.IsSystem) throw new UnauthorizedAccessException();
         var prepared = Prepare(batch, actor);
+        await _graph.InitializeAsync(cancellationToken);
         var changes = prepared.Supplement;
         await _writer.WaitAsync(cancellationToken);
         var committed = false;
@@ -112,9 +115,13 @@ internal sealed partial class DataProviderTransactionService
             await db.OperationOutcomes.Where(o => o.CommittedAt < now - _outcomeRetention)
                 .ExecuteDeleteAsync(cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
+            var invalidated = result.ChangedEntities.Concat(result.DeletedEntities).ToHashSet();
+            // Кандидат читается до commit; после commit нужны только атомарная публикация и события.
+            var snapshot = await _graph.PrepareAsync(db, invalidated, cancellationToken);
             _faults.Hit(StorageFaultPoint.BeforeCommit);
             await transaction.CommitAsync(cancellationToken);
             committed = true;
+            _graph.Publish(snapshot, invalidated);
             // После этой границы ошибка/таймаут ответа не означает откат: исход уже находится в БД.
             _publisher.Publish(result);
             _faults.Hit(StorageFaultPoint.AfterCommit);
