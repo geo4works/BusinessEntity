@@ -1,3 +1,8 @@
+@if (!string.IsNullOrWhiteSpace(SaveError))
+{
+    <div class="alert alert-danger rich-document-save-error" role="alert">@SaveError</div>
+}
+
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components
 
@@ -36,7 +41,7 @@
 }
 else
 {
-    <RichTextDocumentReadView @key="ReadViewInstanceKey"
+    <RichTextDocumentReadView @key="ReadViewInstanceKey" CanRestoreVersion="@CanRestoreVersion"
                               EntityName="@EntityName"
                               BusinessEntityId="@BusinessEntityId"
                               InitialChunkWindow="@InitialChunkWindow"

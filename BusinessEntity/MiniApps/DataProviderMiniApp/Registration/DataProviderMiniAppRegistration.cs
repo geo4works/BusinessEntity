@@ -1,13 +1,17 @@
+using BusinessEntity.Core.Saving;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 using BusinessEntity.Infrastructure.Bus;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Transactions;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Models;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Conversion;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Repositories.EfPostgres;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
 {
@@ -22,15 +26,13 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
         // Регистрирует все зависимости mini-app в контейнере DI.
         public static IServiceCollection AddDataProviderMiniApp(this IServiceCollection services)
         {
+            services.TryAddSingleton(provider => new DbContextOptionsBuilder<KmsBusinessEntityDbContext>()
+                .UseNpgsql(provider.GetRequiredService<IConfiguration>().GetConnectionString("DockerConnection")
+                    ?? throw new InvalidOperationException("ConnectionStrings:DockerConnection обязателен.")).Options);
+            services.TryAddSingleton<EntityUrlRewriter>();
+            services.TryAddSingleton<GraphArchiveRemapper>();
+            services.AddSingleton<ExportFileLeases>();
             // Подключаем Postgres-репозитории для всех DTO-хранилищ mini-app.
-            services.AddSingleton<IAsyncRepository<BusinessEntityDto>, BusinessEntityDtoEfPostgresRepository>();
-            services.AddSingleton<IAsyncRepository<BusinessEntityDataDto>, BusinessEntityDataDtoEfPostgresRepository>();
-            services.AddSingleton<IAsyncRepository<BusinessEntityDataChunkDto>, BusinessEntityDataChunkDtoEfPostgresRepository>();
-            services.AddSingleton<IAsyncRepository<BusinessEntityPropertyDto>, BusinessEntityPropertyDtoEfPostgresRepository>();
-            services.AddSingleton<IAsyncRepository<BusinessEntityDataPropertyDto>, BusinessEntityDataPropertyDtoEfPostgresRepository>();
-            services.AddSingleton<IAsyncRepository<BusinessEntityDataChunkPropertyDto>, BusinessEntityDataChunkPropertyDtoEfPostgresRepository>();
-            services.AddSingleton<IAsyncRepository<BusinessEntityRelationDto>, BusinessEntityRelationDtoEfPostgresRepository>();
-            services.AddSingleton<IAsyncRepository<BusinessEntityCommentDto>, BusinessEntityCommentDtoEfPostgresRepository>();
             // Регистрируем поэкземплярные payload-конвертеры для всех поддерживаемых typed business-data объектов.
             services.AddSingleton<IEntityDataStorageConverter, DocumentEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, FolderEntityDataStorageConverter>();
@@ -40,15 +42,29 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.AddSingleton<IEntityDataStorageConverter, SysParametersEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverterFactory, EntityDataStorageConverterFactory>();
             services.AddSingleton<EntityDataStorageCodec>();
-            services.AddSingleton<RichTextDocumentFileStorageService>();
-            services.AddSingleton<IDataProviderCrudService, DataProviderService>();
             services.AddSingleton<DataProviderMessageHandler>();
-            services.AddSingleton<IDataProviderMiniApp, Facade.DataProviderMiniApp>();
+            services.AddSingleton<IStorageFaults, NoStorageFaults>();
+            services.AddSingleton<ImmutableEntityFileStore>();
+            services.AddSingleton<DataProviderSchema>();
+            services.AddSingleton<DataProviderReadService>();
+            services.AddSingleton<DataProviderCommitPublisher>();
+            services.AddSingleton<DataProviderTransactionService>();
+            services.AddSingleton<DataProviderTransactionHandler>();
+            services.AddBusEndpoint<DataProviderTransactionHandler>(typeof(ExportSubgraphRequest), typeof(ReleaseExportRequest), typeof(SaveEntityBatchRequest), typeof(GetOperationOutcomeRequest), typeof(GetStoredCommentsRequest), typeof(GetStoredPropertiesRequest), typeof(GetVersionChunkWindowRequest), typeof(GetStoredFileRequest), typeof(GetVersionChunkMembershipRequest));
             services.AddScoped<IDataProviderConnector, DataProviderConnector>();
 
-            services.AddBusEndpoint<DataProviderMessageHandler>(typeof(GetBusinessEntitiesRequest), typeof(GetBusinessEntityByIdRequest), typeof(GetBusinessEntityDataRequest), typeof(GetBusinessEntityDataVersionRequest), typeof(GetBusinessEntityDataVersionsRequest), typeof(UpdateBusinessEntityDataVersionDescriptionRequest), typeof(AddBusinessEntityRequest), typeof(UpdateBusinessEntityRequest), typeof(DeleteBusinessEntityRequest), typeof(ClearDataProviderStorageRequest), typeof(UpdateBusinessEntityDataRequest), typeof(GetAllRelationsRequest), typeof(GetRelationsRequest), typeof(GetRelationByIdRequest), typeof(CreateRelationRequest), typeof(UpdateRelationRequest), typeof(DeleteRelationRequest), typeof(GetRichTextChunksRequest), typeof(GetRichTextTableOfContentsEntriesRequest), typeof(RebuildRichTextTableOfContentsEntriesRequest), typeof(ReplaceRichTextChunksRequest), typeof(SaveRichTextEmbeddedFilesRequest), typeof(GetRichTextEmbeddedFileRequest), typeof(DeleteRichTextStorageRequest));
+            services.AddBusEndpoint<DataProviderMessageHandler>(typeof(GetBusinessEntitiesRequest), typeof(GetBusinessEntityByIdRequest), typeof(GetBusinessEntityDataRequest), typeof(GetBusinessEntityDataVersionRequest), typeof(GetBusinessEntityDataVersionsRequest), typeof(GetAllRelationsRequest), typeof(GetRelationsRequest), typeof(GetRelationByIdRequest), typeof(GetRichTextEmbeddedFileRequest));
 
             return services;
+        }
+        // Композиционный корень вызывает публичную инициализацию, не зная EF и таблиц владельца.
+        public static async Task<bool> InitializeDataProviderStorageAsync(this IServiceProvider services, CancellationToken ct)
+        {
+            var fresh = await services.GetRequiredService<DataProviderSchema>().InitializeAsync(ct);
+            await services.GetRequiredService<ImmutableEntityFileStore>().RecoverAsync(
+                services.GetRequiredService<DbContextOptions<KmsBusinessEntityDbContext>>(), ct);
+            services.GetRequiredService<ExportFileLeases>().RecoverAfterRestart();
+            return fresh;
         }
     }
 }

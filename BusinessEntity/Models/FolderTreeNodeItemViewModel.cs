@@ -46,7 +46,7 @@ namespace BusinessEntity.Models
             };
 
             // Добавляем пункт "Переименовать" только если сущность поддерживает переименование
-            if (Entity != null && Entity.BusinessEntityType == BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Folder)
+            if (Entity != null && Entity.EntityType == BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Folder)
             {
                 menuItems.Add(new ContextMenuItem()
                 {

@@ -30,12 +30,6 @@ public class MediaVideo : BusinessEntityData, IBusinessEntityData
     // Дата загрузки файла.
     public DateTime UploadedDate { get; set; } = DateTime.UtcNow;
 
-    // Относительный путь внутри Storage:RootPath.
-    public string StorageRelativePath { get; set; } = string.Empty;
-
-    // URL для HTML-встраивания и просмотра.
-    public string EmbedUrl { get; set; } = string.Empty;
-
     // Пользовательский комментарий к видео в медиатеке.
     public string Comment { get; set; } = string.Empty;
 }

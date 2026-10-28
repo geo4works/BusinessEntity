@@ -11,6 +11,8 @@ internal sealed class MediaVideoEntityDataStorageConverter : EntityDataStorageCo
 
     public override string SerializePayload(MediaVideo data)
     {
+        if (string.IsNullOrWhiteSpace(data.FileName) || string.IsNullOrWhiteSpace(data.ContentType) || data.OriginalSizeBytes <= 0 || data.UploadedDate == default)
+            throw new InvalidDataException("Не заданы обязательные метаданные видео.");
         return SerializeBody(new MediaVideoPayloadBody
         {
             Tag = data.Tag ?? string.Empty,
@@ -21,8 +23,6 @@ internal sealed class MediaVideoEntityDataStorageConverter : EntityDataStorageCo
             DurationSeconds = data.DurationSeconds,
             UploadedByUserId = data.UploadedByUserId,
             UploadedDate = data.UploadedDate,
-            StorageRelativePath = data.StorageRelativePath ?? string.Empty,
-            EmbedUrl = data.EmbedUrl ?? string.Empty,
             Comment = data.Comment ?? string.Empty
         });
     }
@@ -30,57 +30,60 @@ internal sealed class MediaVideoEntityDataStorageConverter : EntityDataStorageCo
     public override MediaVideo DeserializePayload(string payloadJson)
     {
         var body = DeserializeBody<MediaVideoPayloadBody>(payloadJson);
+        if (string.IsNullOrWhiteSpace(body.FileName) || string.IsNullOrWhiteSpace(body.ContentType) || body.OriginalSizeBytes <= 0 || body.UploadedDate == default)
+            throw new InvalidDataException("Повреждены обязательные метаданные видео.");
         return new MediaVideo
         {
-            Tag = body.Tag ?? string.Empty,
-            FileName = body.FileName ?? string.Empty,
-            DisplayName = body.DisplayName ?? string.Empty,
-            ContentType = string.IsNullOrWhiteSpace(body.ContentType)
-                ? "application/octet-stream"
-                : body.ContentType,
+            Tag = body.Tag,
+            FileName = body.FileName,
+            DisplayName = body.DisplayName,
+            ContentType = body.ContentType,
             OriginalSizeBytes = body.OriginalSizeBytes,
             DurationSeconds = body.DurationSeconds,
             UploadedByUserId = body.UploadedByUserId,
-            UploadedDate = body.UploadedDate == default ? DateTime.UtcNow : body.UploadedDate,
-            StorageRelativePath = body.StorageRelativePath ?? string.Empty,
-            EmbedUrl = body.EmbedUrl ?? string.Empty,
-            Comment = body.Comment ?? string.Empty
+            UploadedDate = body.UploadedDate,
+            Comment = body.Comment
         };
     }
 
     private sealed class MediaVideoPayloadBody
     {
         [JsonPropertyName("tag")]
-        public string? Tag { get; set; }
+        [JsonRequired]
+        public string Tag { get; set; } = string.Empty;
 
         [JsonPropertyName("fileName")]
-        public string? FileName { get; set; }
+        [JsonRequired]
+        public string FileName { get; set; } = string.Empty;
 
         [JsonPropertyName("displayName")]
-        public string? DisplayName { get; set; }
+        [JsonRequired]
+        public string DisplayName { get; set; } = string.Empty;
 
         [JsonPropertyName("contentType")]
-        public string? ContentType { get; set; }
+        [JsonRequired]
+        public string ContentType { get; set; } = string.Empty;
 
         [JsonPropertyName("originalSizeBytes")]
+        [JsonRequired]
         public long OriginalSizeBytes { get; set; }
 
         [JsonPropertyName("durationSeconds")]
+        [JsonRequired]
         public double? DurationSeconds { get; set; }
 
         [JsonPropertyName("uploadedByUserId")]
+        [JsonRequired]
         public Guid? UploadedByUserId { get; set; }
 
         [JsonPropertyName("uploadedDate")]
+        [JsonRequired]
         public DateTime UploadedDate { get; set; }
 
-        [JsonPropertyName("storageRelativePath")]
-        public string? StorageRelativePath { get; set; }
 
-        [JsonPropertyName("embedUrl")]
-        public string? EmbedUrl { get; set; }
 
         [JsonPropertyName("comment")]
-        public string? Comment { get; set; }
+        [JsonRequired]
+        public string Comment { get; set; } = string.Empty;
     }
 }

@@ -110,9 +110,11 @@ namespace BusinessEntity.Components
             }
         }
 
-        public Task<int> SaveAsync()
+        // Передаёт единый снимок редактора с названием и описанием.
+        public Task<RichTextDocumentSaveResult> SaveAsync(string title)
         {
-            return EditorViewport?.SaveAsync() ?? Task.FromResult(0);
+            if (EditorViewport == null) throw new InvalidOperationException("Редактор ещё не загружен.");
+            return EditorViewport.SaveAsync(title, VersionDescription);
         }
 
         public void ClearVersionDescription()

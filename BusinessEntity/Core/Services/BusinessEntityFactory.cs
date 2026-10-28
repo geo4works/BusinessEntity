@@ -64,7 +64,7 @@ namespace BusinessEntity.Core.Services
             entity.LastModifiedByUserId = coreEntity.LastModifiedByUserId;
             entity.IsPublic = coreEntity.IsPublic;
             entity.Name = coreEntity.Name;
-            entity.BusinessEntityType = coreEntity.BusinessEntityType;
+
             entity.EntityType = coreEntity.EntityType;
 
             entity.AttachData(data);
@@ -110,7 +110,7 @@ namespace BusinessEntity.Core.Services
                 CreatedDate = DateTime.UtcNow,
                 LastModifiedDate = DateTime.UtcNow,
                 Name = name ?? string.Empty,
-                BusinessEntityType = type,
+
                 EntityType = type,
                 IsPublic = GetDefaultIsPublic(type)
             };

@@ -70,8 +70,9 @@
             IsReseeding = true;
             ReSeedError = null;
             ReSeedStatus = "Очищаем текущего пользователя, хранилище и запускаем seed заново...";
+            await DataProviderConnector.SaveAsync(new global::BusinessEntity.Core.Saving.EntitySaveBatch(Guid.NewGuid(), "Administration", null)
+                { DeleteEntities = (await DataProviderConnector.GetAllAsync()).Select(entity => entity.Id).ToArray() });
             var userDeleted = await UserConnector.DeleteCurrentUserAsync();
-            await DataProviderConnector.ClearAllAsync();
             await SampleDataMiniApp.ForceReseedAsync();
             ReSeedStatus = userDeleted
                 ? "Re-seed завершен. Текущий локальный пользователь удален."

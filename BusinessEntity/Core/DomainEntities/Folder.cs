@@ -17,12 +17,7 @@ namespace BusinessEntity.Core.DomainEntities
 
         public bool IsPublic { get; set; }
 
-        // Совместимое свойство старого контракта IBusinessEntity
-        BusinessEntityTypeEnum IBusinessEntity.BusinessEntityType
-        {
-            get => EntityType;
-            set => EntityType = value;
-        }
+
         
     }
 }

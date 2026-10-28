@@ -1,5 +1,5 @@
 using BusinessEntity.Core.Classes;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Models;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
 
@@ -16,8 +16,9 @@ internal static class DataProviderMapper
             CreatedByUserId = dto.CreatedByUserId,
             LastModifiedByUserId = dto.LastModifiedByUserId,
             IsPublic = dto.IsPublic,
+            PublishedVersion = dto.PublishedVersion,
             Name = dto.Name,
-            BusinessEntityType = dto.BusinessEntityType,
+
             EntityType = dto.EntityType
         };
     }
@@ -33,8 +34,9 @@ internal static class DataProviderMapper
             CreatedByUserId = entityData.CreatedByUserId,
             LastModifiedByUserId = entityData.LastModifiedByUserId,
             IsPublic = entityData.IsPublic,
+            PublishedVersion = entityData.PublishedVersion,
             Name = entityData.Name,
-            BusinessEntityType = entityData.BusinessEntityType,
+
             EntityType = entityData.EntityType
         };
     }
@@ -69,16 +71,4 @@ internal static class DataProviderMapper
         };
     }
 
-    // Собирает runtime BusinessEntityData из DTO и уже прочитанной строки payload.
-    public static BusinessEntityData ToBusinessEntityData(BusinessEntityDataDto dto, string data)
-    {
-        return new BusinessEntityData
-        {
-            Id = dto.Id,
-            CreatedDate = dto.CreatedDate,
-            LastModifiedDate = dto.LastModifiedDate,
-            Version = dto.Version <= 0 ? 1 : dto.Version,
-            Tag = string.Empty
-        };
-    }
 }

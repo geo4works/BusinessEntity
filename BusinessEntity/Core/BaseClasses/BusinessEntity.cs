@@ -16,12 +16,13 @@ public class BusinessEntity: IBusinessEntity
     public Guid? CreatedByUserId { get; set; }
     // Локальный пользователь, последним изменивший сущность
     public Guid? LastModifiedByUserId { get; set; }
+    // Указатель публикации хранится вне строк истории содержимого.
+    public int PublishedVersion { get; set; }
     // Признак общей видимости документа.
     public bool IsPublic { get; set; }
     // Отображаемое имя сущности
     public string Name { get; set; } = string.Empty;
-    // Совместимое имя типа для старого кода
-    public virtual BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Undefined;
+
     // Основной тип сущности
     public BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Undefined;
 }

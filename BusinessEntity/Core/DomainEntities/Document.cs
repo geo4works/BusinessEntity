@@ -10,13 +10,13 @@ using System.Threading.Tasks;
 namespace BusinessEntity.Core.DomainEntities
 {
     // Хранит текст документа и общие поля data-объекта
-    public class Document : BusinessEntityData, IBusinessEntityData
+    public class Document : BusinessEntityData, IBusinessEntityData, IBusinessEntityPublication
     {
         // Документ всегда имеет тип Document
         public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Document;
-        // Обычный документ не участвует в published/draft версионности.
-        public override bool HasVersions => false;
-        // Номер версии документа, которая считается опубликованной. 0 означает, что публикация не задана.
+        // История документа хранит полное состояние автора; публикация читается из карточки.
+        public override bool HasVersions => true;
+        // Проекция указателя из карточки; в payload истории не сериализуется.
         public int PublishedVersion { get; set; }
         // Основной текст документа
         public string Text { get; set; } = string.Empty;

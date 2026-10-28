@@ -1,12 +1,11 @@
 using BusinessEntity.Contracts;
 using BusinessEntity.Core.BaseClasses.Relations;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Repositories;
 using BusinessEntity.Services;
-using System.Text.Json;
+using Entity = BusinessEntity.Core.Classes.BusinessEntity;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Internal;
 
@@ -16,9 +15,7 @@ internal sealed class UserSpaceContentAccessHelper
     private readonly IUserMiniAppRepository<UserRoleDto> _roleRepository;
     private readonly IUserMiniAppRepository<UserGroupMemberDto> _groupMemberRepository;
     private readonly IUserMiniAppRepository<UserRoleAssignmentDto> _roleAssignmentRepository;
-    private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
-    private readonly IAsyncRepository<BusinessEntityRelationDto> _businessEntityRelationRepository;
-    private readonly IAsyncRepository<BusinessEntityDataDto> _businessEntityDataRepository;
+    private readonly IDataProviderConnector _data;
     private readonly IUserContextService _userContextService;
 
     // Подключает repositories user mini-app и data-provider для расчета прав и обхода дерева пространства.
@@ -26,17 +23,13 @@ internal sealed class UserSpaceContentAccessHelper
         IUserMiniAppRepository<UserRoleDto> roleRepository,
         IUserMiniAppRepository<UserGroupMemberDto> groupMemberRepository,
         IUserMiniAppRepository<UserRoleAssignmentDto> roleAssignmentRepository,
-        IAsyncRepository<BusinessEntityDto> businessEntityRepository,
-        IAsyncRepository<BusinessEntityRelationDto> businessEntityRelationRepository,
-        IAsyncRepository<BusinessEntityDataDto> businessEntityDataRepository,
+        IDataProviderConnector dataProvider,
         IUserContextService userContextService)
     {
         _roleRepository = roleRepository;
         _groupMemberRepository = groupMemberRepository;
         _roleAssignmentRepository = roleAssignmentRepository;
-        _businessEntityRepository = businessEntityRepository;
-        _businessEntityRelationRepository = businessEntityRelationRepository;
-        _businessEntityDataRepository = businessEntityDataRepository;
+        _data = dataProvider;
         _userContextService = userContextService;
     }
 
@@ -109,18 +102,16 @@ internal sealed class UserSpaceContentAccessHelper
         CancellationToken cancellationToken = default)
     {
         var permissions = await GetEffectivePermissionsForSpaceAsync(userId, spaceId, isAnonymous, cancellationToken);
-        var entities = (await _businessEntityRepository.GetAllAsync(null, ct: cancellationToken))
+        var entities = (await _data.GetAllAsync(cancellationToken))
             .ToDictionary(entity => entity.Id);
         if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != BusinessEntityTypeEnum.Space)
         {
             return Array.Empty<UserAccessibleDocumentRecord>();
         }
 
-        var relations = await _businessEntityRelationRepository.GetAllAsync(
-            relation =>
+        var relations = (await _data.GetAllRelationsAsync(cancellationToken)).Where(relation =>
                 relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString() ||
-                relation.RelationType == BusinessEntityRelationTypeEnum.RelatesTo.ToString(),
-            ct: cancellationToken);
+                relation.RelationType == BusinessEntityRelationTypeEnum.RelatesTo.ToString()).ToArray();
         var childrenByParentId = relations
             .Where(relation => relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
             .GroupBy(relation => relation.ObjectAId)
@@ -132,7 +123,7 @@ internal sealed class UserSpaceContentAccessHelper
         var visitedTreeIds = new HashSet<Guid>();
         var addedDocumentIds = new HashSet<Guid>();
 
-        await VisitChildrenAsync(spaceId);
+        VisitChildren(spaceId);
 
         var relatedObjectIds = relations
             .Where(relation => relation.RelationType == BusinessEntityRelationTypeEnum.RelatesTo.ToString() &&
@@ -140,12 +131,12 @@ internal sealed class UserSpaceContentAccessHelper
             .Select(relation => relation.ObjectBId);
         foreach (var relatedObjectId in OrderEntityIds(relatedObjectIds, entities))
         {
-            await TryAddDocumentAsync(relatedObjectId);
+            TryAddDocument(relatedObjectId);
         }
 
         return records;
 
-        async Task VisitChildrenAsync(Guid parentId)
+        void VisitChildren(Guid parentId)
         {
             if (!childrenByParentId.TryGetValue(parentId, out var childIds))
             {
@@ -159,17 +150,17 @@ internal sealed class UserSpaceContentAccessHelper
                     continue;
                 }
 
-                await TryAddDocumentAsync(childId);
-                await VisitChildrenAsync(childId);
+                TryAddDocument(childId);
+                VisitChildren(childId);
             }
         }
 
-        async Task TryAddDocumentAsync(Guid entityId)
+        void TryAddDocument(Guid entityId)
         {
             if (!addedDocumentIds.Add(entityId) ||
                 !entities.TryGetValue(entityId, out var entity) ||
                 !ContentAccessPolicy.IsCommonFlagContentType(entity.EntityType) ||
-                !await IsReadableObjectAsync(entity, permissions, cancellationToken))
+                !IsReadableObject(entity, permissions))
             {
                 return;
             }
@@ -195,9 +186,7 @@ internal sealed class UserSpaceContentAccessHelper
             return Array.Empty<UserSpaceRecord>();
         }
 
-        var spaces = await _businessEntityRepository.GetAllAsync(
-            entity => entity.EntityType == BusinessEntityTypeEnum.Space,
-            ct: cancellationToken);
+        var spaces = (await _data.GetAllAsync(cancellationToken)).Where(entity => entity.EntityType == BusinessEntityTypeEnum.Space).ToArray();
         var records = new List<UserSpaceRecord>();
 
         foreach (var space in spaces
@@ -229,7 +218,7 @@ internal sealed class UserSpaceContentAccessHelper
             return null;
         }
 
-        var entities = (await _businessEntityRepository.GetAllAsync(null, ct: cancellationToken))
+        var entities = (await _data.GetAllAsync(cancellationToken))
             .ToDictionary(entity => entity.Id);
         if (!entities.TryGetValue(entityId, out var entity))
         {
@@ -241,9 +230,7 @@ internal sealed class UserSpaceContentAccessHelper
             return entity.Id;
         }
 
-        var parentByChildId = (await _businessEntityRelationRepository.GetAllAsync(
-                relation => relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString(),
-                ct: cancellationToken))
+        var parentByChildId = ((await _data.GetAllRelationsAsync(cancellationToken)).Where(relation => relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString()).ToArray())
             .GroupBy(relation => relation.ObjectBId)
             .ToDictionary(group => group.Key, group => group.First().ObjectAId);
 
@@ -285,7 +272,7 @@ internal sealed class UserSpaceContentAccessHelper
     // Упорядочивает ids так же стабильно, как дерево: по дате создания, затем по имени.
     private static IReadOnlyList<Guid> OrderEntityIds(
         IEnumerable<Guid> ids,
-        IReadOnlyDictionary<Guid, BusinessEntityDto> entities)
+        IReadOnlyDictionary<Guid, Entity> entities)
     {
         return ids
             .OrderBy(id => entities.TryGetValue(id, out var entity) ? entity.CreatedDate : DateTime.MaxValue)
@@ -324,18 +311,16 @@ internal sealed class UserSpaceContentAccessHelper
         UserEffectivePermissions permissions,
         CancellationToken cancellationToken)
     {
-        var entities = (await _businessEntityRepository.GetAllAsync(null, ct: cancellationToken))
+        var entities = (await _data.GetAllAsync(cancellationToken))
             .ToDictionary(entity => entity.Id);
         if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != BusinessEntityTypeEnum.Space)
         {
             return false;
         }
 
-        var relations = await _businessEntityRelationRepository.GetAllAsync(
-            relation =>
+        var relations = (await _data.GetAllRelationsAsync(cancellationToken)).Where(relation =>
                 relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString() ||
-                relation.RelationType == BusinessEntityRelationTypeEnum.RelatesTo.ToString(),
-            ct: cancellationToken);
+                relation.RelationType == BusinessEntityRelationTypeEnum.RelatesTo.ToString()).ToArray();
         var childrenByParentId = relations
             .Where(relation => relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
             .GroupBy(relation => relation.ObjectAId)
@@ -348,7 +333,7 @@ internal sealed class UserSpaceContentAccessHelper
         foreach (var relatedObjectId in relatedObjectIds)
         {
             if (entities.TryGetValue(relatedObjectId, out var relatedObject) &&
-                await IsReadableObjectAsync(relatedObject, permissions, cancellationToken))
+                IsReadableObject(relatedObject, permissions))
             {
                 return true;
             }
@@ -373,7 +358,7 @@ internal sealed class UserSpaceContentAccessHelper
             }
 
             if (entities.TryGetValue(entityId, out var entity) &&
-                await IsReadableObjectAsync(entity, permissions, cancellationToken))
+                IsReadableObject(entity, permissions))
             {
                 return true;
             }
@@ -390,70 +375,12 @@ internal sealed class UserSpaceContentAccessHelper
         return false;
     }
 
-    // Проверяет, может ли объект быть показан пользователю в рамках прав пространства.
-    private async Task<bool> IsReadableObjectAsync(
-        BusinessEntityDto entity,
-        UserEffectivePermissions permissions,
-        CancellationToken cancellationToken)
+    // Вычисляет доступ по карточке и неисторическому указателю публикации, не читая payload.
+    private static bool IsReadableObject(Entity entity, UserEffectivePermissions permissions)
     {
-        if (!ContentAccessPolicy.IsCommonFlagContentType(entity.EntityType))
-        {
-            return false;
-        }
-
-        var publishedVersion = await GetPublishedVersionAsync(entity, cancellationToken);
-        return ContentAccessPolicy.CanReadContent(
-            entity.EntityType,
-            entity.IsPublic,
-            entity.CreatedByUserId,
-            permissions.UserId,
-            isAccessAdmin: false,
-            permissions,
-            publishedVersion);
-    }
-
-    // Возвращает publishedVersion из последнего payload документа.
-    private async Task<int> GetPublishedVersionAsync(BusinessEntityDto entity, CancellationToken cancellationToken)
-    {
-        if (ContentAccessPolicy.IsAlwaysPublishedWhenCommon(entity.EntityType))
-        {
-            return 0;
-        }
-
-        var dataItems = await _businessEntityDataRepository.GetAllAsync(
-            data => data.BusinessEntityId == entity.Id,
-            ct: cancellationToken);
-        var latestData = dataItems
-            .OrderByDescending(data => data.Version <= 0 ? 1 : data.Version)
-            .ThenByDescending(data => data.LastModifiedDate)
-            .FirstOrDefault();
-        return TryReadPublishedVersion(latestData?.Data);
-    }
-
-    // Извлекает указатель публикации из обязательного storage-envelope до переноса в отдельную таблицу на этапе 2.
-    private static int TryReadPublishedVersion(string? dataJson)
-    {
-        if (string.IsNullOrWhiteSpace(dataJson))
-        {
-            return 0;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(dataJson);
-            var root = document.RootElement;
-            if (!root.TryGetProperty("payload", out var payload))
-                throw new InvalidDataException("Отсутствует payload manifest статьи.");
-
-            return payload.TryGetProperty("publishedVersion", out var versionElement) &&
-                   versionElement.TryGetInt32(out var version)
-                ? version
-                : 0;
-        }
-        catch (JsonException exception)
-        {
-            throw new InvalidDataException("Повреждён manifest публикации статьи.", exception);
-        }
+        if (!ContentAccessPolicy.IsCommonFlagContentType(entity.EntityType)) return false;
+        return ContentAccessPolicy.CanReadContent(entity.EntityType, entity.IsPublic, entity.CreatedByUserId,
+            permissions.UserId, false, permissions, entity.PublishedVersion);
     }
 
     // Разбирает строку прав роли в набор числовых кодов.

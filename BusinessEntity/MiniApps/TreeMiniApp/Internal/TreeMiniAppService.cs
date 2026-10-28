@@ -65,7 +65,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             return entityType switch
             {
                 BusinessEntityTypeEnum.Folder => await _businessEntityHelper.CreateSubFolderAsync(parent, cancellationToken),
-                BusinessEntityTypeEnum.Document => await _businessEntityHelper.CreateDocumentAsync(parent, cancellationToken),
+                BusinessEntityTypeEnum.Document => await _businessEntityHelper.CreateDocumentAsync(parent, ct: cancellationToken),
                 BusinessEntityTypeEnum.RichTextDocument => await _richTextDocumentHelper.CreateRichTextDocumentAsync(parent, cancellationToken),
                 _ => throw new InvalidOperationException($"Tree create is not supported for entity type '{entityType}'.")
             };

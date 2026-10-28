@@ -3,6 +3,9 @@ namespace BusinessEntity.Core.RichText
     // Window of rich-text chunks loaded for virtualized document viewing.
     public class RichTextDocumentChunkWindow
     {
+        // Фактически выбранная версия фиксирует базу редактора и последующих окон чтения.
+        public int DocumentVersion { get; set; }
+
         public Guid BusinessEntityId { get; set; }
 
         public long StartSortOrder { get; set; }

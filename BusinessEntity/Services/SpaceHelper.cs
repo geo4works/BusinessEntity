@@ -1,8 +1,10 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.Services;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions;
+using BusinessEntity.Core.Saving;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Properties;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -28,15 +30,15 @@ namespace BusinessEntity.Services
 
         // Основной helper бизнес-сущностей.
         private readonly BusinessEntityHelper _businessEntityHelper;
-        private readonly IAsyncRepository<BusinessEntityPropertyDto> _businessEntityPropertyRepository;
+        private readonly IDataProviderConnector _data;
 
         // Подключает helper бизнес-сущностей для CRUD операций с пространствами.
         public SpaceHelper(
             BusinessEntityHelper businessEntityHelper,
-            IAsyncRepository<BusinessEntityPropertyDto> businessEntityPropertyRepository)
+            IDataProviderConnector dataProvider)
         {
             _businessEntityHelper = businessEntityHelper;
-            _businessEntityPropertyRepository = businessEntityPropertyRepository;
+            _data = dataProvider;
         }
 
         /// <summary>
@@ -65,7 +67,7 @@ namespace BusinessEntity.Services
         /// </summary>
         public async Task<GenericSpaceProperties> GetGenericSpacePropertiesAsync(Guid spaceId, CancellationToken ct = default)
         {
-            var property = await GetGenericSpacePropertyDtoAsync(spaceId, ct);
+            var property = await GetGenericSpacePropertyAsync(spaceId, ct);
             return DeserializeGenericSpaceProperties(property);
         }
 
@@ -84,9 +86,8 @@ namespace BusinessEntity.Services
 
             var idList = ids.ToList();
             var propertyType = (int)BusinessEntityPropertyTypeEnum.GenericSpaceProperties;
-            var properties = await _businessEntityPropertyRepository.GetAllAsync(
-                x => idList.Contains(x.ParentEntityId) && x.PropertyType == propertyType,
-                ct: ct);
+            var properties = (await _data.GetStoredPropertiesAsync(EntityPropertyOwner.Entity, cancellationToken: ct))
+                .Where(x => idList.Contains(x.ParentEntityId) && x.PropertyType == propertyType).ToArray();
 
             return ids.ToDictionary(
                 x => x,
@@ -106,7 +107,7 @@ namespace BusinessEntity.Services
         /// </summary>
         public async Task<GenericSpaceProperties> SetDoBackupAsync(Guid spaceId, bool doBackup, CancellationToken ct = default)
         {
-            var property = await GetGenericSpacePropertyDtoAsync(spaceId, ct);
+            var property = await GetGenericSpacePropertyAsync(spaceId, ct);
             var settings = DeserializeGenericSpaceProperties(property);
             settings.DoBackup = doBackup;
             return await SaveGenericSpacePropertiesAsync(spaceId, settings, ct);
@@ -122,30 +123,15 @@ namespace BusinessEntity.Services
         {
             await GetRequiredSpaceAsync(spaceId, ct);
 
-            var property = await GetGenericSpacePropertyDtoAsync(spaceId, ct);
+            var property = await GetGenericSpacePropertyAsync(spaceId, ct);
             var normalizedSettings = NormalizeGenericSpaceProperties(settings);
             var now = DateTime.UtcNow;
             var serialized = JsonSerializer.Serialize(normalizedSettings, PropertyJsonOptions);
-            if (property == null)
+            await _data.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "SpacesMiniApp", null)
             {
-                await _businessEntityPropertyRepository.AddAsync(new BusinessEntityPropertyDto
-                {
-                    Id = Guid.NewGuid(),
-                    CreatedDate = now,
-                    LastModifiedDate = now,
-                    ParentEntityId = spaceId,
-                    PropertyType = (int)BusinessEntityPropertyTypeEnum.GenericSpaceProperties,
-                    Data = serialized,
-                    Metadata = nameof(GenericSpaceProperties)
-                }, ct);
-            }
-            else
-            {
-                property.LastModifiedDate = now;
-                property.Data = serialized;
-                property.Metadata = nameof(GenericSpaceProperties);
-                await _businessEntityPropertyRepository.UpdateAsync(property, ct);
-            }
+                Properties = [new(property?.Id ?? Guid.NewGuid(), spaceId, EntityPropertyOwner.Entity,
+                    (int)BusinessEntityPropertyTypeEnum.GenericSpaceProperties, serialized, nameof(GenericSpaceProperties))]
+            }, ct);
 
             return normalizedSettings;
         }
@@ -220,12 +206,11 @@ namespace BusinessEntity.Services
             return space;
         }
 
-        private async Task<BusinessEntityPropertyDto?> GetGenericSpacePropertyDtoAsync(Guid spaceId, CancellationToken ct)
+        private async Task<StoredEntityProperty?> GetGenericSpacePropertyAsync(Guid spaceId, CancellationToken ct)
         {
             var propertyType = (int)BusinessEntityPropertyTypeEnum.GenericSpaceProperties;
-            var properties = await _businessEntityPropertyRepository.GetAllAsync(
-                x => x.ParentEntityId == spaceId && x.PropertyType == propertyType,
-                ct: ct);
+            var properties = (await _data.GetStoredPropertiesAsync(EntityPropertyOwner.Entity, spaceId, ct))
+                .Where(x => x.PropertyType == propertyType).ToArray();
 
             return properties
                 .OrderByDescending(x => x.LastModifiedDate)
@@ -234,7 +219,7 @@ namespace BusinessEntity.Services
         }
 
         // Новое пространство без свойства получает настройки по умолчанию; повреждённое свойство даёт отказ.
-        private static GenericSpaceProperties DeserializeGenericSpaceProperties(BusinessEntityPropertyDto? property)
+        private static GenericSpaceProperties DeserializeGenericSpaceProperties(StoredEntityProperty? property)
         {
             if (property == null) return new GenericSpaceProperties();
             var settings = JsonSerializer.Deserialize<GenericSpaceProperties>(property.Data, PropertyJsonOptions);

@@ -17,8 +17,12 @@ public sealed class UserMiniAppDbContext : DbContext
     public DbSet<UserGroupMemberDto> UserGroupMembers => Set<UserGroupMemberDto>();
     public DbSet<UserRoleAssignmentDto> UserRoleAssignments => Set<UserRoleAssignmentDto>();
 
+    internal DbSet<UserStorageVersionRow> SchemaMetadata => Set<UserStorageVersionRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<UserStorageVersionRow>().ToTable("UserMiniAppSchema");
+        modelBuilder.Entity<UserStorageVersionRow>().HasKey(x => x.Id);
         modelBuilder.Entity<UserDto>().ToTable("Users");
         modelBuilder.Entity<UserDto>().HasKey(x => x.Id);
         modelBuilder.Entity<UserDto>().Property(x => x.ExternalId).HasColumnType("text");

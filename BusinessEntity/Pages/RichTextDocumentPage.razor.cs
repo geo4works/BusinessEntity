@@ -1,3 +1,5 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
+using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
@@ -48,6 +50,7 @@ namespace BusinessEntity.Pages
         private CancellationTokenSource? LoadCancellationTokenSource { get; set; }
         private long LoadVersion { get; set; }
         private int VersionsRefreshToken { get; set; }
+        private string ViewedTitle { get; set; } = string.Empty;
         private int ViewedVersion { get; set; } = 1;
         private int LatestVersion { get; set; } = 1;
         private bool IsDocumentOwner { get; set; }
@@ -65,6 +68,24 @@ namespace BusinessEntity.Pages
         private Guid _messagesForDocumentId;
         private Guid _loadedDocumentId;
         private const int OutlineChunkBatchSize = 5;
+
+        private RichTextDocumentView? DocumentView;
+        private IDisposable? _dataSubscription;
+        private bool _disposed;
+        protected override void OnInitialized()
+        {
+            _dataSubscription = MessageBus.Listen<EntityBatchCommitted>().Subscribe(message =>
+            {
+                if (message.ChangedEntities.Contains(Id) || message.DeletedEntities.Contains(Id))
+                    _ = InvokeAsync(async () =>
+                    {
+                        if (_disposed || IsLoading || IsImporting || IsRebuildingTableOfContents || DocumentView?.IsEditingNow == true) return;
+                        if (ViewedVersion == LatestVersion) ViewedVersion = 0;
+                        VersionsRefreshToken++;
+                        await LoadAsync(); StateHasChanged();
+                    });
+            });
+        }
 
         protected override async Task OnParametersSetAsync()
         {
@@ -130,6 +151,7 @@ namespace BusinessEntity.Pages
                     ViewedVersion = Math.Min(Manifest.PublishedVersion, LatestVersion);
                 }
 
+                await LoadViewedTitleAsync(cancellationToken);
                 IsInitialContentLoading = true;
                 IsOutlineLoading = true;
                 _ = LoadInitialChunkWindowAsync(Id, version, ViewedVersion, cancellationToken);
@@ -369,18 +391,10 @@ namespace BusinessEntity.Pages
 
             try
             {
-                var titleResult = await RichTextDocumentHelper.SaveRichTextDocumentTitleAsync(Id, request.Title);
-                Entity = titleResult.Entity;
-                if (Manifest != null)
-                {
-                    Manifest.Name = titleResult.Title;
-                    Manifest.LastModifiedDate = Entity.LastModifiedDate;
-                }
-
-                if (titleResult.TitleChanged)
-                {
-                    MessageBus.SendMessage(new EntityUpdatedMessage(Entity));
-                }
+                var shell = await RichTextDocumentHelper.GetRichTextDocumentShellAsync(Id)
+                    ?? throw new KeyNotFoundException("Статья после сохранения не найдена.");
+                Entity = shell.Entity;
+                Manifest = shell.Manifest;
 
                 var statusParts = new List<string>();
                 if (request.SavedChunkCount > 0)
@@ -388,7 +402,7 @@ namespace BusinessEntity.Pages
                     statusParts.Add($"Сохранено чанков: {request.SavedChunkCount}");
                 }
 
-                if (titleResult.TitleChanged)
+                if (request.TitleChanged)
                 {
                     statusParts.Add("название сохранено");
                 }
@@ -405,14 +419,8 @@ namespace BusinessEntity.Pages
                 VersionsRefreshToken++;
                 await RefreshVersionsAsync();
 
-                if (!string.IsNullOrWhiteSpace(versionDescription))
-                {
-                    await DataProviderConnector.UpdateDataVersionDescriptionAsync(Id, LatestVersion, versionDescription);
-                    VersionsRefreshToken++;
-                    await RefreshVersionsAsync();
-                }
-
-                ViewedVersion = LatestVersion;
+                ViewedVersion = request.SavedVersion;
+                ViewedTitle = request.Title;
                 if (request.RefreshReadWindow)
                 {
                     await RefreshInitialChunkWindowForReadModeAsync(request.ViewportPosition);
@@ -475,30 +483,23 @@ namespace BusinessEntity.Pages
                 return;
             }
 
-            LoadCancellationTokenSource?.Cancel();
-            LoadCancellationTokenSource?.Dispose();
-            LoadCancellationTokenSource = new CancellationTokenSource();
-            var cancellationToken = LoadCancellationTokenSource.Token;
-            var loadVersion = ++LoadVersion;
+            // Общий loader отменяет прежнюю загрузку и завершает IsLoading для последнего выбора.
+            ViewedVersion = version;
+            await LoadAsync();
+        }
 
-            ViewedVersion = Math.Min(version, LatestVersion);
-            InitialChunkWindow = null;
-            OutlineNodes = Array.Empty<RichTextDocumentOutlineNode>();
-            IsInitialContentLoading = true;
-            IsOutlineLoading = true;
-            Error = null;
-            await InvokeAsync(StateHasChanged);
-
-            _ = LoadInitialChunkWindowAsync(Id, loadVersion, ViewedVersion, cancellationToken);
-            _ = LoadOutlineAsync(Id, loadVersion, ViewedVersion, cancellationToken);
+        private async Task LoadViewedTitleAsync(CancellationToken ct)
+        {
+            var selected = await DataProviderConnector.GetDataVersionAsync<RichTextDocument>(Id, ViewedVersion, ct)
+                ?? throw new InvalidDataException("Отсутствует выбранная версия статьи.");
+            ViewedTitle = selected.Name;
         }
 
         private async Task RefreshVersionsAsync(CancellationToken cancellationToken = default)
         {
             var versions = await DataProviderConnector.GetDataVersionsAsync(Id, cancellationToken);
-            LatestVersion = versions.Count == 0
-                ? Math.Max(Manifest?.Version ?? 1, 1)
-                : versions.Max(x => x.Version <= 0 ? 1 : x.Version);
+            if (versions.Count == 0 || versions.Any(x => x.Version < 1)) throw new InvalidDataException("История статьи отсутствует или повреждена.");
+            LatestVersion = versions.Max(x => x.Version);
 
             if (ViewedVersion <= 0 || ViewedVersion > LatestVersion)
             {
@@ -517,14 +518,11 @@ namespace BusinessEntity.Pages
 
             try
             {
-                var versionToPublish = ViewedVersion <= 0 ? LatestVersion : ViewedVersion;
-                Manifest.PublishedVersion = Math.Max(versionToPublish, 1);
-                Manifest.Name = Entity.Name;
-                Manifest.Tag = string.IsNullOrWhiteSpace(Manifest.Tag)
-                    ? BusinessEntityTypeEnum.RichTextDocument.ToString()
-                    : Manifest.Tag;
-
-                await DataProviderConnector.UpdateDataInPlaceAsync(Id, Manifest);
+                if (ViewedVersion < 1) throw new InvalidOperationException("Не выбрана версия для публикации.");
+                await DataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "RichTextDocumentMiniApp", null)
+                    { Publications = [new(Id, ViewedVersion)] });
+                Manifest.PublishedVersion = ViewedVersion;
+                Entity.PublishedVersion = ViewedVersion;
                 SetStatusMessage($"Опубликована версия {Manifest.PublishedVersion}.");
                 VersionsRefreshToken++;
                 await RefreshVersionsAsync();
@@ -557,7 +555,7 @@ namespace BusinessEntity.Pages
             {
                 LoadCancellationTokenSource?.Cancel();
                 await TreeMiniAppService.DeleteEntitiesAsync(new[] { entityId });
-                MessageBus.SendMessage(new EntityDeletedMessage(entityId));
+
                 TreeSelectionService.RequestEntitySelection(null);
                 NavigationManager.NavigateTo("/", replace: true);
             }
@@ -581,8 +579,8 @@ namespace BusinessEntity.Pages
             {
                 Entity.IsPublic = value;
                 Entity.LastModifiedDate = DateTime.UtcNow;
-                await DataProviderConnector.UpdateAsync(Entity);
-                MessageBus.SendMessage(new EntityUpdatedMessage(Entity));
+                await DataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "RichTextDocumentMiniApp", null) { Entities = [Entity] });
+
                 SetStatusMessage(value ? "Документ сделан общим." : "Документ больше не общий.");
             }
             catch (Exception ex)
@@ -666,6 +664,7 @@ namespace BusinessEntity.Pages
 
         public void Dispose()
         {
+            _disposed = true; _dataSubscription?.Dispose();
             LoadCancellationTokenSource?.Cancel();
             LoadCancellationTokenSource?.Dispose();
         }

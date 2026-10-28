@@ -32,12 +32,15 @@ namespace BusinessEntity.Components
         [Parameter] public bool CanDelete { get; set; }
         [Parameter] public bool CanChangePublicFlag { get; set; }
         [Parameter] public bool IsPublic { get; set; }
+        [Parameter] public bool CanRestoreVersion { get; set; }
         [Parameter] public bool CanBrowseVersions { get; set; } = true;
         [Parameter] public bool StartInEditMode { get; set; }
 
         private RichTextDocumentEditView? EditView { get; set; }
+        public bool IsEditingNow => IsEditMode;
         private bool IsEditMode { get; set; }
         private bool IsSaving { get; set; }
+        private string? SaveError { get; set; }
         private string EditableEntityName { get; set; } = string.Empty;
         private string? TitleValidationMessage { get; set; }
         private RichTextDocumentViewportPosition? EditInitialPosition { get; set; }
@@ -157,6 +160,7 @@ namespace BusinessEntity.Components
             try
             {
                 IsSaving = true;
+                SaveError = null;
                 TitleValidationMessage = null;
 
                 try
@@ -170,10 +174,12 @@ namespace BusinessEntity.Components
                 }
 
                 var versionDescription = EditView.VersionDescription;
-                var savedCount = await EditView.SaveAsync();
+                var saved = await EditView.SaveAsync(EditableEntityName);
                 await OnEditorSaved.InvokeAsync(new RichTextDocumentEditorSaveRequest
                 {
-                    SavedChunkCount = savedCount,
+                    SavedVersion = saved.Version,
+                    TitleChanged = saved.TitleChanged,
+                    SavedChunkCount = saved.SavedChunkCount,
                     Title = EditableEntityName,
                     VersionDescription = versionDescription,
                     RefreshReadWindow = refreshReadWindow,
@@ -182,6 +188,11 @@ namespace BusinessEntity.Components
                 EditView.ClearVersionDescription();
 
                 return true;
+            }
+            catch (Exception exception)
+            {
+                SaveError = BusinessEntity.Infrastructure.Bus.BusError.FromException(exception).Message;
+                return false;
             }
             finally
             {

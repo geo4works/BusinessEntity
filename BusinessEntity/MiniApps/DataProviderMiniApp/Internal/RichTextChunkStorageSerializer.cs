@@ -17,10 +17,11 @@ internal static class RichTextChunkStorageSerializer
     // Сериализует набор блоков чанка в versioned envelope.
     public static string SerializeChunkData(IReadOnlyList<RichTextBlock> blocks)
     {
+        ValidateBlocks(blocks);
         var payloadJson = JsonSerializer.Serialize(
             new RichTextChunkPayloadBody
             {
-                Blocks = blocks?.ToList() ?? new List<RichTextBlock>()
+                Blocks = blocks.ToList()
             },
             StorageJsonOptions.Default);
 
@@ -37,9 +38,17 @@ internal static class RichTextChunkStorageSerializer
         }
 
         var body = JsonSerializer.Deserialize<RichTextChunkPayloadBody>(envelope.PayloadJson, StorageJsonOptions.Default)
-            ?? new RichTextChunkPayloadBody();
+            ?? throw new InvalidDataException("Пустое содержимое чанка.");
 
-        return body.Blocks ?? new List<RichTextBlock>();
+        ValidateBlocks(body.Blocks);
+        return body.Blocks;
+    }
+
+    // Один формат принимается при записи и чтении; неизвестный блок не превращается в пустой текст.
+    private static void ValidateBlocks(IReadOnlyList<RichTextBlock> blocks)
+    {
+        if (blocks == null || blocks.Any(block => block == null || block.Kind is not ("paragraph" or "heading" or "code" or "list" or "image" or "video" or "table")))
+            throw new InvalidDataException("Неизвестный или пустой блок чанка.");
     }
 
     // Извлекает plain-text содержимое чанка для будущего поиска.
@@ -1120,7 +1129,8 @@ internal static class RichTextChunkStorageSerializer
     private sealed class RichTextChunkPayloadBody
     {
         [JsonPropertyName("blocks")]
-        public List<RichTextBlock>? Blocks { get; set; }
+        [JsonRequired]
+        public List<RichTextBlock> Blocks { get; set; } = new();
     }
 
     // Техническое описание inline-картинки внутри paragraph/heading HTML.

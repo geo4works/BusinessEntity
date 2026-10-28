@@ -29,7 +29,7 @@ internal sealed class EntityDataStorageConverterFactory : IEntityDataStorageConv
             return converter;
         }
 
-        throw new InvalidOperationException($"No entity data storage converter is registered for entity type '{entityType}'.");
+        throw new NotSupportedException($"No entity data storage converter is registered for entity type '{entityType}'.");
     }
 
     // Возвращает обязательный конвертер по строковому kind из envelope.
@@ -40,6 +40,6 @@ internal sealed class EntityDataStorageConverterFactory : IEntityDataStorageConv
             return converter;
         }
 
-        throw new InvalidOperationException($"No entity data storage converter is registered for storage kind '{storageKind}'.");
+        throw new NotSupportedException($"No entity data storage converter is registered for storage kind '{storageKind}'.");
     }
 }

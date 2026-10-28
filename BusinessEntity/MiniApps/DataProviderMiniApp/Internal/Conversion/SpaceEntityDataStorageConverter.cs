@@ -25,7 +25,7 @@ internal sealed class SpaceEntityDataStorageConverter : EntityDataStorageConvert
         var body = DeserializeBody<SimpleTaggedPayloadBody>(payloadJson);
         return new Space
         {
-            Tag = body.Tag ?? string.Empty
+            Tag = body.Tag
         };
     }
 
@@ -33,6 +33,7 @@ internal sealed class SpaceEntityDataStorageConverter : EntityDataStorageConvert
     private sealed class SimpleTaggedPayloadBody
     {
         [JsonPropertyName("tag")]
-        public string? Tag { get; set; }
+        [JsonRequired]
+        public string Tag { get; set; } = string.Empty;
     }
 }

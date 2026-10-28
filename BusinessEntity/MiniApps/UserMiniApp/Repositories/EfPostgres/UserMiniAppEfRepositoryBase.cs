@@ -50,16 +50,10 @@ public abstract class UserMiniAppEfRepositoryBase<T> : IUserMiniAppRepository<T>
         await context.SaveChangesAsync(ct);
     }
 
+    // Атомарное удаление допускает повтор из другого окна без гонки между Find и Delete.
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         await using var context = new UserMiniAppDbContext(_options);
-        var entity = await context.Set<T>().FindAsync(new object?[] { id }, ct);
-        if (entity == null)
-        {
-            return;
-        }
-
-        context.Set<T>().Remove(entity);
-        await context.SaveChangesAsync(ct);
+        await context.Set<T>().Where(entity => EF.Property<Guid>(entity, "Id") == id).ExecuteDeleteAsync(ct);
     }
 }

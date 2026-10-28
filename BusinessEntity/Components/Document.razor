@@ -9,7 +9,7 @@
             @if (!IsEditing)
             {
                 <div class="py-2">
-                    <h4 class="mb-3">@Entity?.Name</h4>
+                    <h4 class="mb-3">@ViewTitle</h4>
                     @if (string.IsNullOrWhiteSpace(ViewText))
                     {
                         <div class="alert alert-secondary mb-0">Нет содержимого.</div>
@@ -111,4 +111,10 @@
 {
     <BusinessEntityCommentsSection BusinessEntityId="@Entity.Id"
                                    CanWrite="true" />
+}
+
+@if (Entity != null && CanBrowseVersions && !IsEditing)
+{
+    <EntityVersionHistory EntityId="@Entity.Id" EntityType="@Entity.EntityType" CanRestore="@CanEdit"
+                          RefreshToken="@HistoryRefreshToken" OnSelected="SelectVersionAsync" />
 }

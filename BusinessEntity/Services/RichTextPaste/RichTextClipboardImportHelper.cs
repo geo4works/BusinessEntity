@@ -1,3 +1,4 @@
+using BusinessEntity.Core.Saving;
 using System.Net;
 using System.Text;
 using BusinessEntity.Core.RichText;
@@ -48,11 +49,11 @@ namespace BusinessEntity.Services.RichTextPaste
 
             if (converted.Files.Count > 0)
             {
-                await _dataProviderConnector.SaveRichTextEmbeddedFilesAsync(
-                    businessEntityId,
-                    converted.Files,
-                    replaceExistingFiles: false,
-                    cancellationToken);
+                await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "RichTextDocumentMiniApp", null)
+                {
+                    Files = converted.Files.Select(file => new EntityFileChange(businessEntityId, file.ImageId,
+                        file.Variant, file.FileName, file.ContentType, file.Content)).ToArray()
+                }, cancellationToken);
             }
 
             return new RichTextClipboardPasteResult

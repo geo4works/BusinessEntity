@@ -1,6 +1,7 @@
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions;
+using BusinessEntity.Core.Saving;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using System.Text.Json;
@@ -15,15 +16,15 @@ internal sealed class ActivityCommentService
     private const int MaxCommentTextLength = 5000;
     private const int MaxDisplayDepth = 3;
     private static readonly Guid RootParentKey = Guid.Empty;
-    private readonly IAsyncRepository<BusinessEntityCommentDto> _commentRepository;
+    private readonly IDataProviderConnector _data;
     private readonly IUserConnector _userConnector;
 
     // Сохраняет зависимости storage и user mini-app для операций с комментариями.
     public ActivityCommentService(
-        IAsyncRepository<BusinessEntityCommentDto> commentRepository,
+        IDataProviderConnector dataProvider,
         IUserConnector userConnector)
     {
-        _commentRepository = commentRepository;
+        _data = dataProvider;
         _userConnector = userConnector;
     }
 
@@ -37,9 +38,7 @@ internal sealed class ActivityCommentService
             return Array.Empty<BusinessEntityCommentRecord>();
         }
 
-        var comments = await _commentRepository.GetAllAsync(
-            comment => comment.BusinessEntityId == businessEntityId,
-            ct: cancellationToken);
+        var comments = await _data.GetStoredCommentsAsync(businessEntityId, cancellationToken);
 
         var records = comments
             .OrderBy(comment => comment.CreatedDate)
@@ -85,18 +84,13 @@ internal sealed class ActivityCommentService
             AuthorUserId = currentUser.Id,
             AuthorDisplayName = ResolveAuthorDisplayName(currentUser)
         };
-        var dto = new BusinessEntityCommentDto
+        var stored = new StoredEntityComment(Guid.NewGuid(), request.BusinessEntityId, normalizedParentId,
+            JsonSerializer.Serialize(payload, ActivityJsonOptions.Default), now, now);
+        await _data.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "ActivityMiniApp", null)
         {
-            Id = Guid.NewGuid(),
-            CreatedDate = now,
-            LastModifiedDate = now,
-            BusinessEntityId = request.BusinessEntityId,
-            ParentId = normalizedParentId,
-            Data = JsonSerializer.Serialize(payload, ActivityJsonOptions.Default)
-        };
-
-        var saved = await _commentRepository.AddAsync(dto, cancellationToken);
-        return MapToRecord(saved);
+            Comments = [new(stored.Id, stored.EntityId, stored.ParentId, stored.Data, now)]
+        }, cancellationToken);
+        return MapToRecord(stored);
     }
 
     // Нормализует родителя так, чтобы новый комментарий не уходил глубже третьего уровня.
@@ -110,15 +104,11 @@ internal sealed class ActivityCommentService
             return null;
         }
 
-        var comments = await _commentRepository.GetAllAsync(
-            comment => comment.BusinessEntityId == businessEntityId,
-            ct: cancellationToken);
+        var comments = await _data.GetStoredCommentsAsync(businessEntityId, cancellationToken);
         var byId = comments.ToDictionary(comment => comment.Id);
 
         if (!byId.TryGetValue(requestedParentId.Value, out var parent))
-        {
-            return null;
-        }
+            throw new KeyNotFoundException("Родительский комментарий не найден.");
 
         while (GetDepth(parent, byId) >= MaxDisplayDepth && parent.ParentId.HasValue)
         {
@@ -135,8 +125,8 @@ internal sealed class ActivityCommentService
 
     // Считает глубину комментария по цепочке родителей с защитой от циклов.
     private static int GetDepth(
-        BusinessEntityCommentDto comment,
-        IReadOnlyDictionary<Guid, BusinessEntityCommentDto> byId)
+        StoredEntityComment comment,
+        IReadOnlyDictionary<Guid, StoredEntityComment> byId)
     {
         var depth = 0;
         var current = comment;
@@ -154,13 +144,13 @@ internal sealed class ActivityCommentService
     }
 
     // Преобразует DTO в UI-запись с безопасным чтением JSON payload.
-    private static BusinessEntityCommentRecord MapToRecord(BusinessEntityCommentDto dto)
+    private static BusinessEntityCommentRecord MapToRecord(StoredEntityComment dto)
     {
         var payload = ReadPayload(dto.Data);
         return new BusinessEntityCommentRecord
         {
             Id = dto.Id,
-            BusinessEntityId = dto.BusinessEntityId,
+            BusinessEntityId = dto.EntityId,
             ParentId = dto.ParentId,
             Text = payload.Text,
             AuthorUserId = payload.AuthorUserId,

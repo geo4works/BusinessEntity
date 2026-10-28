@@ -21,15 +21,90 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
         private readonly IUserConnector _userConnector;
         private readonly BusRequestScope _scope;
 
-        /// <summary>
-        /// Инициализирует connector и гарантирует материализацию mini-app перед первым запросом.
-        /// </summary>
         // Получает общий клиент и доверенный серверный контекст записи.
         public DataProviderConnector(BusRequestClient client, IUserConnector userConnector, BusRequestScope scope)
         {
             _client = client;
             _scope = scope;
             _userConnector = userConnector;
+        }
+
+        // Большой архив формируется с явным длительным ожиданием; обычные запросы сохраняют короткий timeout.
+        public async Task<Contracts.Archives.SubgraphExportResult> ExportSubgraphAsync(Contracts.Archives.SubgraphExportScope scope,
+            CancellationToken cancellationToken = default)
+        {
+            await ResolveCurrentUserIdAsync(cancellationToken);
+            var response = await _client.SendAsync<ExportSubgraphRequest, ExportSubgraphResponse>(new(Guid.NewGuid(), scope), cancellationToken, TimeSpan.FromMinutes(30));
+            return response.Result ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получен экспорт."));
+        }
+
+        // Владелец storage проверяет адрес автора перед очисткой lease.
+        public async Task ReleaseExportAsync(Guid exportId, CancellationToken cancellationToken = default)
+        {
+            await ResolveCurrentUserIdAsync(cancellationToken);
+            await _client.SendAsync<ReleaseExportRequest, ReleaseExportResponse>(new(Guid.NewGuid(), exportId), cancellationToken);
+        }
+
+        // Получает лёгкий полный порядок конкретного снимка.
+        public async Task<IReadOnlyList<Contracts.Transactions.VersionChunkMembership>> GetVersionChunkMembershipAsync(Guid entityId, int version,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _client.SendAsync<GetVersionChunkMembershipRequest, GetVersionChunkMembershipResponse>(
+                new(Guid.NewGuid(), entityId, version), cancellationToken);
+            return response.Records ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получен состав версии."));
+        }
+
+        // Запрашивает read-проекцию отдельной activity-таблицы.
+        public async Task<IReadOnlyList<Contracts.Transactions.StoredEntityComment>> GetStoredCommentsAsync(Guid entityId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _client.SendAsync<GetStoredCommentsRequest, GetStoredCommentsResponse>(new(Guid.NewGuid(), entityId), cancellationToken);
+            return response.Records ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получен список комментариев."));
+        }
+
+        // Запрашивает свойства нужного уровня, сохраняя законное отсутствие коллекции как пустой список.
+        public async Task<IReadOnlyList<Contracts.Transactions.StoredEntityProperty>> GetStoredPropertiesAsync(Core.Saving.EntityPropertyOwner owner,
+            Guid? parentId = null, CancellationToken cancellationToken = default)
+        {
+            var response = await _client.SendAsync<GetStoredPropertiesRequest, GetStoredPropertiesResponse>(new(Guid.NewGuid(), owner, parentId), cancellationToken);
+            return response.Records ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получен список свойств."));
+        }
+
+        // Получает состав и порядок из references именно выбранной версии.
+        public async Task<RichTextDocumentChunkWindow> GetVersionChunkWindowAsync(Guid entityId, int version, long start, int count,
+            IReadOnlyList<Guid>? chunkIds = null, string? searchText = null, CancellationToken cancellationToken = default)
+        {
+            var response = await _client.SendAsync<GetVersionChunkWindowRequest, GetVersionChunkWindowResponse>(
+                new(Guid.NewGuid(), entityId, version, start, count, chunkIds, searchText), cancellationToken);
+            return response.Window ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получено окно содержимого."));
+        }
+
+        // Передаёт безопасно вычисленный DataProvider путь тонкому HTTP-адаптеру.
+        public async Task<Contracts.Transactions.StoredEntityFile?> GetStoredFileAsync(Guid entityId, string fileId, string variant,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _client.SendAsync<GetStoredFileRequest, GetStoredFileResponse>(new(Guid.NewGuid(), entityId, fileId, variant), cancellationToken);
+            return response.File;
+        }
+
+        // Передаёт весь набор через единый типизированный маршрут транзакций.
+        public async Task<Contracts.Transactions.SaveBatchResult> SaveAsync(Core.Saving.EntitySaveBatch batch,
+            CancellationToken cancellationToken = default)
+        {
+            await ResolveCurrentUserIdAsync(cancellationToken);
+            var response = await _client.SendAsync<SaveEntityBatchRequest, SaveEntityBatchResponse>(
+                new(Guid.NewGuid(), batch), cancellationToken, batch.Files.Count > 0 || batch.ImportSnapshot != null ? TimeSpan.FromMinutes(30) : null);
+            return response.Result ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получен результат сохранения."));
+        }
+
+        // Выясняет исход уже отправленного пакета, не создавая новый OperationId.
+        public async Task<Contracts.Transactions.StoredOperationOutcome?> GetOperationOutcomeAsync(Guid operationId,
+            CancellationToken cancellationToken = default)
+        {
+            await ResolveCurrentUserIdAsync(cancellationToken);
+            var response = await _client.SendAsync<GetOperationOutcomeRequest, GetOperationOutcomeResponse>(
+                new(Guid.NewGuid(), operationId), cancellationToken);
+            return response.Outcome;
         }
 
         // Запрашивает полный список бизнес-сущностей через bus.
@@ -90,106 +165,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return response.Records;
         }
 
-        // Обновляет человекочитаемое описание конкретной версии payload.
-        public async Task UpdateDataVersionDescriptionAsync(
-            Guid id,
-            int version,
-            string? versionDescription,
-            CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<UpdateBusinessEntityDataVersionDescriptionRequest, UpdateBusinessEntityDataVersionDescriptionResponse>(
-                new UpdateBusinessEntityDataVersionDescriptionRequest(requestId, id, version, versionDescription), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to update version description for business entityData '{id}' version '{version}'.");
-            }
-        }
-
-        // Сериализует payload в raw JSON и отправляет команду на сохранение envelope.
-        public async Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
-            where TData : class, IBusinessEntityData
-        {
-            var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
-            if (currentUserId.HasValue && data is BusinessEntityData businessEntityData)
-            {
-                var entity = await GetByIdAsync(id, cancellationToken);
-                businessEntityData.CreatedByUserId ??= entity?.CreatedByUserId ?? currentUserId;
-                businessEntityData.LastModifiedByUserId = currentUserId;
-            }
-
-            var requestId = Guid.NewGuid();
-
-            var response = await _client.SendAsync<UpdateBusinessEntityDataRequest, UpdateBusinessEntityDataResponse>(
-                new UpdateBusinessEntityDataRequest(requestId, id, data, data.HasVersions, currentUserId), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to update data for business entityData '{id}'.");
-            }
-        }
-
-        // Сохраняет payload в текущую storage-запись без создания новой версии.
-        public async Task UpdateDataInPlaceAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
-            where TData : class, IBusinessEntityData
-        {
-            var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
-            if (currentUserId.HasValue && data is BusinessEntityData businessEntityData)
-            {
-                var entity = await GetByIdAsync(id, cancellationToken);
-                businessEntityData.CreatedByUserId ??= entity?.CreatedByUserId ?? currentUserId;
-                businessEntityData.LastModifiedByUserId = currentUserId;
-            }
-
-            var requestId = Guid.NewGuid();
-
-            var response = await _client.SendAsync<UpdateBusinessEntityDataRequest, UpdateBusinessEntityDataResponse>(
-                new UpdateBusinessEntityDataRequest(requestId, id, data, HasVersions: false, LastModifiedByUserId: currentUserId), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to update data in-place for business entityData '{id}'.");
-            }
-        }
-
-        // Отправляет команду на создание бизнес-сущности.
-        public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
-        {
-            var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
-            if (currentUserId.HasValue)
-            {
-                entityData.CreatedByUserId ??= currentUserId;
-                entityData.LastModifiedByUserId = currentUserId;
-            }
-
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<AddBusinessEntityRequest, AddBusinessEntityResponse>(
-                new AddBusinessEntityRequest(requestId, entityData), cancellationToken);
-
-            return response.Record ?? throw new InvalidOperationException("DataProvider returned null business entityData after AddAsync.");
-        }
-
-        // Отправляет команду на обновление бизнес-сущности.
-        public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
-        {
-            var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
-            if (currentUserId.HasValue)
-            {
-                entityData.LastModifiedByUserId = currentUserId;
-            }
-
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<UpdateBusinessEntityRequest, UpdateBusinessEntityResponse>(
-                new UpdateBusinessEntityRequest(requestId, entityData), cancellationToken);
-
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to update business entityData '{entityData.Id}'.");
-            }
-        }
 
         private async Task<Guid?> ResolveCurrentUserIdAsync(CancellationToken cancellationToken)
         {
@@ -199,37 +174,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return user?.Id ?? throw new UnauthorizedAccessException("Для изменения данных нужно войти.");
         }
 
-
-
-
-        // Отправляет команду на удаление бизнес-сущности.
-        public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<DeleteBusinessEntityRequest, DeleteBusinessEntityResponse>(
-                new DeleteBusinessEntityRequest(requestId, id), cancellationToken);
-
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to delete business entityData '{id}'.");
-            }
-        }
-
-        // Отправляет debug-команду на полную очистку DTO-хранилища mini-app.
-        public async Task ClearAllAsync(CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<ClearDataProviderStorageRequest, ClearDataProviderStorageResponse>(
-                new ClearDataProviderStorageRequest(requestId), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException("DataProvider failed to clear storage.");
-            }
-        }
 
         // Запрашивает полный список связей между сущностями.
         public async Task<IReadOnlyList<BusinessEntityRelation>> GetAllRelationsAsync(CancellationToken cancellationToken = default)
@@ -261,107 +205,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return response.Record;
         }
 
-        // Отправляет команду на создание связи.
-        public async Task<BusinessEntityRelation> CreateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<CreateRelationRequest, CreateRelationResponse>(
-                new CreateRelationRequest(requestId, relation), cancellationToken);
-
-            return response.Record ?? throw new InvalidOperationException("DataProvider returned null relation after CreateRelationAsync.");
-        }
-
-        // Отправляет команду на обновление связи.
-        public async Task UpdateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<UpdateRelationRequest, UpdateRelationResponse>(
-                new UpdateRelationRequest(requestId, relation), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to update relation '{relation.Id}'.");
-            }
-        }
-
-        // Отправляет команду на удаление связи.
-        public async Task DeleteRelationAsync(Guid id, CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<DeleteRelationRequest, DeleteRelationResponse>(
-                new DeleteRelationRequest(requestId, id), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to delete relation '{id}'.");
-            }
-        }
-
-        // Возвращает весь chunk-набор rich-text документа.
-        public async Task<IReadOnlyList<RichTextDocumentChunk>> GetRichTextChunksAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
-        {
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<GetRichTextChunksRequest, GetRichTextChunksResponse>(
-                new GetRichTextChunksRequest(requestId, businessEntityId), cancellationToken);
-
-            return response.Records;
-        }
-
-        // Запрашивает сохранённые entries оглавления rich-text документа.
-        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
-        {
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<GetRichTextTableOfContentsEntriesRequest, GetRichTextTableOfContentsEntriesResponse>(
-                new GetRichTextTableOfContentsEntriesRequest(requestId, businessEntityId), cancellationToken);
-
-            return response.Records;
-        }
-
-        // Пересоздаёт сохранённые entries оглавления rich-text документа и возвращает свежий набор.
-        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<RebuildRichTextTableOfContentsEntriesRequest, RebuildRichTextTableOfContentsEntriesResponse>(
-                new RebuildRichTextTableOfContentsEntriesRequest(requestId, businessEntityId), cancellationToken);
-
-            return response.Records;
-        }
-
-        // Полностью заменяет chunk-набор rich-text документа.
-        public async Task ReplaceRichTextChunksAsync(Guid businessEntityId, IReadOnlyList<RichTextDocumentChunk> chunks, CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<ReplaceRichTextChunksRequest, ReplaceRichTextChunksResponse>(
-                new ReplaceRichTextChunksRequest(requestId, businessEntityId, chunks), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to replace rich-text chunks for business entity '{businessEntityId}'.");
-            }
-        }
-
-        // Сохраняет embedded-файлы rich-text документа.
-        public async Task SaveRichTextEmbeddedFilesAsync(
-            Guid businessEntityId,
-            IReadOnlyList<RichTextEmbeddedFile> files,
-            bool replaceExistingFiles,
-            CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<SaveRichTextEmbeddedFilesRequest, SaveRichTextEmbeddedFilesResponse>(
-                new SaveRichTextEmbeddedFilesRequest(requestId, businessEntityId, files, replaceExistingFiles), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to save rich-text embedded files for business entity '{businessEntityId}'.");
-            }
-        }
 
         // Читает embedded-файл rich-text документа.
         public async Task<RichTextEmbeddedFileContent?> GetRichTextEmbeddedFileAsync(
@@ -377,19 +220,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return response.Record;
         }
 
-        // Полностью удаляет техническое rich-text storage документа.
-        public async Task DeleteRichTextStorageAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
-        {
-            await ResolveCurrentUserIdAsync(cancellationToken);
-            var requestId = Guid.NewGuid();
-            var response = await _client.SendAsync<DeleteRichTextStorageRequest, DeleteRichTextStorageResponse>(
-                new DeleteRichTextStorageRequest(requestId, businessEntityId), cancellationToken);
-
-            if (!response.Success)
-            {
-                throw new InvalidOperationException($"DataProvider failed to delete rich-text storage for business entity '{businessEntityId}'.");
-            }
-        }
 
         // Выполняет общий request/response цикл поверх IMessageBus.
 

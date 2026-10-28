@@ -1,3 +1,5 @@
+using BusinessEntity.Core.Saving;
+using BusinessEntity.Core.Classes;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.TreeMiniApp.Connectors;
@@ -19,6 +21,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Registration
             services.AddScoped<ITreeConnector, TreeConnector>();
 
             services.AddBusEndpoint<TreeMiniAppMessageHandler>(typeof(GetTreeForSpaceRequest));
+            services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.Folder, "TreeMiniApp"));
+            services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.Folder, false));
             return services;
         }
     }

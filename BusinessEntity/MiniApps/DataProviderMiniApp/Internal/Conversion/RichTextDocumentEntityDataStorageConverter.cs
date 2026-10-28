@@ -14,6 +14,7 @@ internal sealed class RichTextDocumentEntityDataStorageConverter : EntityDataSto
     // Формирует компактное body manifest-а rich-text документа.
     public override string SerializePayload(RichTextDocument data)
     {
+        Validate(data.ContentStorage, data.EditorFormat, data.ChunkPolicy, data.EmbeddedFileStorage);
         return SerializeBody(new RichTextDocumentPayloadBody
         {
             Tag = data.Tag ?? string.Empty,
@@ -21,8 +22,7 @@ internal sealed class RichTextDocumentEntityDataStorageConverter : EntityDataSto
             EditorFormat = data.EditorFormat ?? "BlockJsonWithInlineHtml",
             ChunkPolicy = data.ChunkPolicy ?? "RichTextMvpV1",
             EmbeddedFileStorage = data.EmbeddedFileStorage ?? "LocalDocumentFiles",
-            SupportsImages = data.SupportsImages,
-            PublishedVersion = data.PublishedVersion
+            SupportsImages = data.SupportsImages
         });
     }
 
@@ -30,40 +30,49 @@ internal sealed class RichTextDocumentEntityDataStorageConverter : EntityDataSto
     public override RichTextDocument DeserializePayload(string payloadJson)
     {
         var body = DeserializeBody<RichTextDocumentPayloadBody>(payloadJson);
+        Validate(body.ContentStorage, body.EditorFormat, body.ChunkPolicy, body.EmbeddedFileStorage);
         return new RichTextDocument
         {
-            Tag = body.Tag ?? string.Empty,
-            ContentStorage = body.ContentStorage ?? "ChunkedBlocks",
-            EditorFormat = body.EditorFormat ?? "BlockJsonWithInlineHtml",
-            ChunkPolicy = body.ChunkPolicy ?? "RichTextMvpV1",
-            EmbeddedFileStorage = body.EmbeddedFileStorage ?? "LocalDocumentFiles",
-            SupportsImages = body.SupportsImages,
-            PublishedVersion = body.PublishedVersion
+            Tag = body.Tag,
+            ContentStorage = body.ContentStorage,
+            EditorFormat = body.EditorFormat,
+            ChunkPolicy = body.ChunkPolicy,
+            EmbeddedFileStorage = body.EmbeddedFileStorage,
+            SupportsImages = body.SupportsImages
         };
+    }
+
+    private static void Validate(string storage, string editor, string chunk, string files)
+    {
+        if (storage != "ChunkedBlocks" || editor != "BlockJsonWithInlineHtml" || chunk != "RichTextMvpV1" || files != "LocalDocumentFiles")
+            throw new NotSupportedException("Неизвестный формат статьи.");
     }
 
     // Внутренний JSON-контракт manifest-а rich-text документа.
     private sealed class RichTextDocumentPayloadBody
     {
         [JsonPropertyName("tag")]
-        public string? Tag { get; set; }
+        [JsonRequired]
+        public string Tag { get; set; } = string.Empty;
 
         [JsonPropertyName("contentStorage")]
-        public string? ContentStorage { get; set; }
+        [JsonRequired]
+        public string ContentStorage { get; set; } = string.Empty;
 
         [JsonPropertyName("editorFormat")]
-        public string? EditorFormat { get; set; }
+        [JsonRequired]
+        public string EditorFormat { get; set; } = string.Empty;
 
         [JsonPropertyName("chunkPolicy")]
-        public string? ChunkPolicy { get; set; }
+        [JsonRequired]
+        public string ChunkPolicy { get; set; } = string.Empty;
 
         [JsonPropertyName("embeddedFileStorage")]
-        public string? EmbeddedFileStorage { get; set; }
+        [JsonRequired]
+        public string EmbeddedFileStorage { get; set; } = string.Empty;
 
         [JsonPropertyName("supportsImages")]
+        [JsonRequired]
         public bool SupportsImages { get; set; }
-
-        [JsonPropertyName("publishedVersion")]
-        public int PublishedVersion { get; set; }
     }
 }

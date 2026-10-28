@@ -17,10 +17,11 @@ else if (Entity == null)
 else
 {
     <div class="py-2 px-2">
-        <Document Entity="Entity"
+        <Document @ref="DocumentView" Entity="Entity"
                   DataList="DataList"
                   StartInEditMode="StartInEditMode"
                   CanEdit="CanEditDocument"
+                  CanBrowseVersions="HasFullDocumentAccess"
                   CanDelete="CanDeleteDocument"
                   CanChangePublicFlag="CanChangePublicFlag"
                   IsPublic="@(Entity?.IsPublic == true)"

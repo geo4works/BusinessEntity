@@ -4,6 +4,8 @@
 
 .rich-text-document-editor__toolbar {
     display: flex;
+    flex-wrap: wrap;
+    max-width: 100%;
     align-items: center;
     gap: 0.35rem;
     padding: 0.25rem 0 0.6rem 0;
@@ -54,6 +56,8 @@
 }
 
 .rich-text-document-editor__dirty {
+    flex-basis: 100%;
+    overflow-wrap: anywhere;
     color: #7a4d00;
     font-size: 0.9rem;
     margin-left: 0.5rem;

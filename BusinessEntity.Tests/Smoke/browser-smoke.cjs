@@ -124,6 +124,7 @@ async function run() {
     assert.equal(loggerResponse.status(), 200);
     passed("web-logger-http");
     console.log(JSON.stringify({ result }));
+    if (process.env.BE_SMOKE_RESULT_FILE) fs.writeFileSync(process.env.BE_SMOKE_RESULT_FILE, JSON.stringify(result));
   } catch (error) {
     const output = process.env.BE_SMOKE_OUTPUT;
     if (output) {

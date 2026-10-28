@@ -16,6 +16,7 @@ namespace BusinessEntity.Components
         [Parameter] public IReadOnlyList<global::BusinessEntity.Core.Classes.BusinessEntityData>? DataList { get; set; }
         [Parameter] public bool StartInEditMode { get; set; }
         [Parameter] public bool CanEdit { get; set; } = true;
+        [Parameter] public bool CanBrowseVersions { get; set; }
         [Parameter] public bool CanDelete { get; set; }
         [Parameter] public bool CanChangePublicFlag { get; set; }
         [Parameter] public bool IsPublic { get; set; }
@@ -23,9 +24,13 @@ namespace BusinessEntity.Components
         [Parameter] public EventCallback OnDeleteRequested { get; set; }
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
+        [Inject] public global::BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors.IDataProviderConnector DataProvider { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
         [Inject] public IWebLoggerService? WebLogger { get; set; }
 
+        private int HistoryRefreshToken;
+        private string ViewTitle => LocalData.FirstOrDefault()?.Name ?? Entity?.Name ?? string.Empty;
+        public bool IsEditingNow => IsEditing;
         private bool IsEditing;
         private bool IsSaving;
         private string? SaveError;
@@ -84,6 +89,7 @@ namespace BusinessEntity.Components
                     ? new global::BusinessEntity.Core.DomainEntities.Document
                     {
                         Id = LocalData[0].Id,
+                        Version = LocalData[0].Version,
                         CreatedDate = LocalData[0].CreatedDate,
                         LastModifiedDate = DateTime.UtcNow,
                         Name = Entity.Name,
@@ -117,25 +123,7 @@ namespace BusinessEntity.Components
                     LocalData.Add(data);
                 }
 
-                // Publish update for other components (tree, breadcrumbs, etc.)
-                if (MessageBus == null)
-                {
-                    WebLogger?.Warning("[Doc] MessageBus is null, cannot publish EntityUpdatedMessage");
-                }
-                else
-                {
-                    try
-                    {
-                        var busHash = MessageBus.GetHashCode();
-                        WebLogger?.Information($"[Doc] Publishing EntityUpdatedMessage: busHash={busHash}, entityId={Entity.Id}, name='{Entity.Name}'");
-                        MessageBus.SendMessage(new BusinessEntity.Services.EntityUpdatedMessage(Entity));
-                        WebLogger?.Information("[Doc] Published EntityUpdatedMessage successfully");
-                    }
-                    catch (Exception ex)
-                    {
-                        WebLogger?.Error(ex);
-                    }
-                }
+                HistoryRefreshToken++;
                 IsEditing = false;
             }
             catch (Exception exception)
@@ -148,6 +136,18 @@ namespace BusinessEntity.Components
             {
                 IsSaving = false;
             }
+        }
+
+        private async Task SelectVersionAsync(int version)
+        {
+            if (Entity == null || IsEditing || !CanBrowseVersions) return;
+            try
+            {
+                var selected = await DataProvider.GetDataVersionAsync<global::BusinessEntity.Core.DomainEntities.Document>(Entity.Id, version)
+                    ?? throw new InvalidDataException("Выбранная версия отсутствует.");
+                LocalData = [selected]; EditTitle = selected.Name; EditBody = selected.Text;
+            }
+            catch (Exception exception) { SaveError = exception.Message; }
         }
 
         private Task HandlePublicChangedAsync(ChangeEventArgs args)

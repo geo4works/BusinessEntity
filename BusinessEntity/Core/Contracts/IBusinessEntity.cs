@@ -21,8 +21,7 @@ namespace BusinessEntity.Core.Contracts
         bool IsPublic { get; set; }
         // Отображаемое имя сущности
         string Name { get; set; }
-        // Совместимое имя типа для старого кода
-        BusinessEntityTypeEnum BusinessEntityType { get; set; }
+
         // Основной тип сущности
         BusinessEntityTypeEnum EntityType { get; set; }
     }

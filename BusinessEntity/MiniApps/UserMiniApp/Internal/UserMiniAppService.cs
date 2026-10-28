@@ -5,8 +5,7 @@ using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.Contracts;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using System.Text.Json;
 
@@ -36,7 +35,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         private readonly IUserMiniAppRepository<UserGroupDto> _groupRepository;
         private readonly IUserMiniAppRepository<UserGroupMemberDto> _groupMemberRepository;
         private readonly IUserMiniAppRepository<UserRoleAssignmentDto> _roleAssignmentRepository;
-        private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
+        private readonly IDataProviderConnector _data;
         private readonly IUserContextService _userContextService;
         private readonly UserSpaceContentAccessHelper _spaceContentAccessHelper;
 
@@ -52,7 +51,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             IUserMiniAppRepository<UserGroupDto> groupRepository,
             IUserMiniAppRepository<UserGroupMemberDto> groupMemberRepository,
             IUserMiniAppRepository<UserRoleAssignmentDto> roleAssignmentRepository,
-            IAsyncRepository<BusinessEntityDto> businessEntityRepository,
+            IDataProviderConnector dataProvider,
             IUserContextService userContextService,
             UserSpaceContentAccessHelper spaceContentAccessHelper)
         {
@@ -66,7 +65,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             _groupRepository = groupRepository;
             _groupMemberRepository = groupMemberRepository;
             _roleAssignmentRepository = roleAssignmentRepository;
-            _businessEntityRepository = businessEntityRepository;
+            _data = dataProvider;
             _userContextService = userContextService;
             _spaceContentAccessHelper = spaceContentAccessHelper;
         }
@@ -744,9 +743,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         public async Task<IReadOnlyList<UserSpaceRecord>> GetRoleAssignmentSpacesAsync(CancellationToken cancellationToken = default)
         {
             var currentSpaceId = _userContextService.CurrentSpaceId;
-            var spaces = await _businessEntityRepository.GetAllAsync(
-                entity => entity.EntityType == BusinessEntityTypeEnum.Space,
-                ct: cancellationToken);
+            var spaces = (await _data.GetAllAsync(cancellationToken)).Where(entity => entity.EntityType == BusinessEntityTypeEnum.Space).ToArray();
             var records = new List<UserSpaceRecord>
             {
                 new()
@@ -2200,7 +2197,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 throw new ArgumentException("Пространство не выбрано.", nameof(spaceId));
             }
 
-            var space = await _businessEntityRepository.GetByIdAsync(spaceId, cancellationToken);
+            var space = await _data.GetByIdAsync(spaceId, cancellationToken);
             if (space == null || space.EntityType != BusinessEntityTypeEnum.Space)
             {
                 throw new KeyNotFoundException("Пространство не найдено.");

@@ -204,3 +204,16 @@ docker compose ps
 - Ручной smoke (§13 deployment-policy): вход под `admin`, выбор пространства, открыть
   документ, создать и сохранить тестовый документ, открыть администрирование, проверить
   запись в веб-логгере.
+
+### Уточнение раскатки TASK_ARCH_001, этап 2
+
+После `compose up --build` проверить, что `.Image` контейнера совпадает с ID
+только что собранного образа. На этой машине stopped-контейнер однажды запустился
+с прежним image ID. Надёжная последовательность: `docker compose build
+business-entity web_logger`, дождаться завершения, затем `docker compose up -d
+--no-build --no-deps --force-recreate business-entity web_logger`.
+
+DataProvider теперь использует схему 2, UserMiniApp — собственную схему 1.
+Запуск на прежней БД отклоняется, миграций и backfill нет. Пользователь разрешил
+сброс business_entity и BusinessEntityStorage для этапа 2; он выполнен. Authentik,
+web_logger и volumes не удалялись. Новые storage-пути и backup описаны в политиках.

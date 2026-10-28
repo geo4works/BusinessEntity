@@ -734,13 +734,34 @@ Payload сохраняется через `DataProviderMiniApp`.
 - иметь `BusinessEntity` без `BusinessEntityData`
 - хранить payload как minified JSON string
 - расширять payload новыми typed-наследниками `BusinessEntityData`
-- повышать `schemaVersion` и вводить адаптеры старых версий
+- менять формат только вместе с пустым storage текущей схемы; старые данные не интерпретируются
 - хранить технические свойства storage-строк в property DTO
 - хранить крупный или структурированный технический data-body в `BusinessEntityDataChunkDto`
 
 ---
 
-## 17. Практический итог
+## 17. Транзакционное хранение этапа 2
+
+EntitySaveBatch — единственный путь изменений графа. Пакет связанных карточек,
+payload, точных references чанков, связей, свойств, комментариев и файлов проходит
+через одну шину, один DbContext и одну SQL-транзакцию. DataProviderOperations
+содержит хэш и результат того же коммита; повтор OperationId не дублирует версию.
+Пакеты принимаются последовательно. Репозиторные CRUD API удалены.
+
+DbContext, EF DTO, SQL и файловое хранилище находятся в DataProvider.Internal.
+UserMiniApp владеет своими отдельными служебными таблицами. Внешние потребители
+получают только runtime-модели и read-контракты через connector.
+
+Публикация хранится в BusinessEntities.PublishedVersion. Payload ID равен
+EntityId; Version >= 1. BusinessEntityChunkReferences содержит EntityId,
+DocumentVersion, Position, ChunkId и конкретную ChunkRowVersion. Выбор последней
+строки чанка «не новее версии» не используется. Полные правила:
+[история](business-entity-versioning-policy.md), [файлы](file-object-storage-policy.md).
+
+Схема DataProvider версии 2 и UserMiniApp версии 1 создаётся только с нуля;
+несовместимая существующая схема даёт явный отказ. Догоняющих DDL и backfill нет.
+
+## 18. Практический итог
 
 На текущий момент система хранения устроена так:
 

@@ -40,7 +40,6 @@ namespace BusinessEntity.Components
 
         [Parameter] public string ViewportElementId { get; set; } = string.Empty;
         [Parameter] public Guid BusinessEntityId { get; set; }
-        [Parameter] public int? DocumentVersion { get; set; }
         [Parameter] public RichTextDocumentChunkWindow? InitialWindow { get; set; }
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode> OutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         [Parameter] public bool IsInitialContentLoading { get; set; }
@@ -60,6 +59,8 @@ namespace BusinessEntity.Components
         private double EstimatedChunkHeight { get; set; } = DefaultEstimatedChunkHeight;
         private double TopSpacerPx { get; set; }
         private double BottomSpacerPx { get; set; }
+        private int _baseDocumentVersion;
+        private Guid _baseEntityId;
         private bool HasDirtyDrafts => _dirtyDrafts.Count > 0 || _dirtySortOrders.Count > 0;
         private bool IsEmbedPickerOpen { get; set; }
         private string TopSpacerStyle => $"height: {Math.Max(TopSpacerPx, 0):0.##}px;";
@@ -78,6 +79,12 @@ namespace BusinessEntity.Components
 
         protected override void OnParametersSet()
         {
+            if (_baseEntityId != BusinessEntityId) { _baseDocumentVersion = 0; _baseEntityId = BusinessEntityId; }
+            if (_baseDocumentVersion == 0 && InitialWindow != null)
+            {
+                if (InitialWindow.DocumentVersion < 1) throw new InvalidDataException("Не задана база редактора.");
+                _baseDocumentVersion = InitialWindow.DocumentVersion;
+            }
             if (ReferenceEquals(InitialWindow, _appliedInitialWindow))
             {
                 return;
@@ -161,36 +168,20 @@ namespace BusinessEntity.Components
             _pendingViewportPosition = null;
         }
 
-        public async Task<int> SaveAsync()
+        // Сохраняет заголовок и чанки одним пакетом от фиксированной базы окна редактора.
+        public async Task<RichTextDocumentSaveResult> SaveAsync(string title, string description)
         {
             await CaptureCurrentEditorsAsync();
-            if (_dirtyDrafts.Count == 0)
-            {
-                return 0;
-            }
-
-            var drafts = _dirtyDrafts.Values
-                .OrderBy(x => x.SortOrder)
-                .Select(x => new RichTextDocumentChunkEditDraft
-                {
-                    ChunkId = x.ChunkId,
-                    SortOrder = x.SortOrder,
-                    Html = x.CurrentHtml
-                })
-                .ToList();
-
-            var savedCount = await RichTextDocumentHelper.SaveEditedChunksAsync(BusinessEntityId, drafts);
+            var drafts = _dirtyDrafts.Values.OrderBy(x => x.SortOrder).Select(x => new RichTextDocumentChunkEditDraft
+                { ChunkId = x.ChunkId, SortOrder = x.SortOrder, Html = x.CurrentHtml }).ToArray();
+            var saved = await RichTextDocumentHelper.SaveEditedDocumentAsync(BusinessEntityId, _baseDocumentVersion,
+                title, description, drafts);
+            _baseDocumentVersion = saved.Version;
             var savedSortOrders = drafts.Select(x => x.SortOrder).ToArray();
-            _dirtyDrafts.Clear();
-            _dirtySortOrders.Clear();
-
-            if (_viewportRegistered)
-            {
-                await JS.InvokeVoidAsync("richTextEditor.markClean", ViewportElementId, savedSortOrders);
-            }
-
+            _dirtyDrafts.Clear(); _dirtySortOrders.Clear();
+            if (_viewportRegistered) await JS.InvokeVoidAsync("richTextEditor.markClean", ViewportElementId, savedSortOrders);
             await InvokeAsync(StateHasChanged);
-            return savedCount;
+            return saved;
         }
 
         public async Task ScrollToHeadingAsync(string headingId, long chunkSortOrder)
@@ -663,7 +654,7 @@ namespace BusinessEntity.Components
                     BusinessEntityId,
                     startSortOrder,
                     take,
-                    DocumentVersion);
+                    _baseDocumentVersion);
             }
 
             var normalizedTake = Math.Max(take, 0);
@@ -756,7 +747,7 @@ namespace BusinessEntity.Components
                 BusinessEntityId,
                 startSortOrder,
                 take,
-                DocumentVersion);
+                _baseDocumentVersion);
 
             foreach (var chunk in window.Chunks)
             {

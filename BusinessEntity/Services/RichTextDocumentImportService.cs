@@ -15,12 +15,10 @@ namespace BusinessEntity.Services
     // 4. Формирует manifest результата для последующего сохранения.
     public class RichTextDocumentImportService
     {
-        // Дефолтный лимит символов используется, если системные параметры еще не заполнены.
-        private const int DefaultRichTextChunkCharLimit = 12000;
-
         private readonly BusinessEntityHelper _businessEntityHelper;
         private readonly IRichDocFormatConverterFactory _converterFactory;
 
+        // Получает настройки движка и владельцев преобразования входных форматов.
         public RichTextDocumentImportService(
             BusinessEntityHelper businessEntityHelper,
             IRichDocFormatConverterFactory converterFactory)
@@ -54,8 +52,7 @@ namespace BusinessEntity.Services
             {
                 Manifest = new RichTextDocument
                 {
-                    Tag = "RichTextDocument",
-                    ChunkPolicy = $"RichTextMvpV1(chars={richTextChunkCharLimit})"
+                    Tag = "RichTextDocument"
                 },
                 Chunks = chunks,
                 Files = convertedContent.Files
@@ -123,9 +120,8 @@ namespace BusinessEntity.Services
                 cancellationToken);
 
             var configuredLimit = sysParametersEntity.Data.RichTextChunkCharLimit;
-            return configuredLimit < 1000
-                ? DefaultRichTextChunkCharLimit
-                : configuredLimit;
+            if (configuredLimit < 1000) throw new InvalidDataException("Некорректный лимит символов чанка.");
+            return configuredLimit;
         }
 
     }

@@ -333,3 +333,16 @@
 .rich-text-document-statistics__hint {
     font-size: 0.78rem;
 }
+
+/* Metadata автора и команда остаются внутри узкой панели истории. */
+.rich-text-document-versions__author {
+    display: block;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    font-size: 0.72rem;
+}
+
+.rich-text-document-versions__table td .btn {
+    max-width: 100%;
+    white-space: normal;
+}

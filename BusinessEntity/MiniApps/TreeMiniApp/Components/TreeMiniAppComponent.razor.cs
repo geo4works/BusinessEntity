@@ -45,8 +45,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         // Быстрый индекс узлов по Id сущности для O(1) обновления
         private readonly Dictionary<Guid, TreeNodeItemViewModelBase> _nodeById = new();
         // Подписка на сообщения об обновлении сущностей
-        private IDisposable? _entityUpdatedSub;
-        private IDisposable? _entityDeletedSub;
+        private IDisposable? _graphChangedSubscription;
         
         // Состояние мульти-селекта
         private List<TreeNodeItemViewModelBase> SelectedNodes { get; set; } = new List<TreeNodeItemViewModelBase>();
@@ -80,79 +79,12 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 UserContextService.SelectedSpaceChanged += OnSelectedSpaceChanged;
                 TreeSelectionService.EntitySelectionRequested += OnEntitySelectionRequested;
                 
-                // Подписка на сообщения об изменении сущностей через ReactiveUI MessageBus (до построения дерева)
-                try
-                {
-                    var busHash = MessageBus?.GetHashCode();
-                    var compHash = this.GetHashCode();
-                    WebLogger?.Information($"[Tree] Subscribing to MessageBus.Listen<EntityUpdatedMessage>(), busHash={busHash}, compHash={compHash}");
-
-                    _entityUpdatedSub = MessageBus
-                        .Listen<BusinessEntity.Services.EntityUpdatedMessage>()
-                        .Subscribe(msg =>
-                        {
-                            try
-                            {
-                                var updatedEntity = msg?.EntityData;
-                                WebLogger?.Information($"[Tree] EntityUpdatedMessage received: entityData is {(updatedEntity == null ? "null" : updatedEntity.Id.ToString())}, name='{updatedEntity?.Name}'");
-                                if (updatedEntity == null)
-                                {
-                                    WebLogger?.Warning("[Tree] Received EntityUpdatedMessage with null EntityData");
-                                    return;
-                                }
-
-                                var indexContains = _nodeById.ContainsKey(updatedEntity.Id);
-                                WebLogger?.Information($"[Tree] Index contains entityId={updatedEntity.Id}: {indexContains}; indexCount={_nodeById.Count}");
-
-                                if (_nodeById.TryGetValue(updatedEntity.Id, out var node))
-                                {
-                                    var beforeTitle = node.Title;
-                                    WebLogger?.Information($"[Tree] Before update: node.Title='{beforeTitle}' for entityId={updatedEntity.Id}");
-
-                                    node.Title = updatedEntity.Name;
-                                    node.Entity = updatedEntity;
-
-                                    WebLogger?.Information($"[Tree] After update: node.Title='{node.Title}' for entityId={updatedEntity.Id}");
-
-                                    _ = InvokeAsync(async () =>
-                                    {
-                                        WebLogger?.Information("[Tree] Invoking StateHasChanged() after EntityUpdatedMessage");
-                                        StateHasChanged();
-                                        await Task.CompletedTask;
-                                    });
-                                }
-                                else
-                                {
-                                    WebLogger?.Warning($"[Tree] Node not found in index for entityId={updatedEntity.Id}");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                WebLogger?.Error(ex);
-                            }
-                        });
-                    _entityDeletedSub = MessageBus
-                        .Listen<BusinessEntity.Services.EntityDeletedMessage>()
-                        .Subscribe(msg =>
-                        {
-                            _ = InvokeAsync(async () =>
-                            {
-                                try
-                                {
-                                    await RemoveDeletedEntityFromTreeAsync(msg.EntityId);
-                                }
-                                catch (Exception ex)
-                                {
-                                    WebLogger?.Error(ex);
-                                }
-                            });
-                        });
-                    WebLogger?.Information("[Tree] Subscribed to MessageBus.Listen<EntityUpdatedMessage>()");
-                }
-                catch (Exception ex)
-                {
-                    WebLogger?.Error(ex);
-                }
+                // Общее событие хранит только ID; проекция заново проверяет права текущего окна.
+                _graphChangedSubscription = MessageBus.Listen<BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages.EntityBatchCommitted>()
+                    .Subscribe(message =>
+                    {
+                        if (!_isCreatingEntity) _ = InvokeAsync(DrawTreeForCurrentSpace);
+                    });
 
                 // Проверяем текущее состояние пространства
                 await DrawTreeForCurrentSpace();
@@ -200,7 +132,17 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             }
         }
 
+        private readonly SemaphoreSlim _treeRefreshGate = new(1, 1);
+        // Событие коммита и завершение UI-команды могут прийти одновременно: публикуется одна полная проекция.
         private async Task DrawTreeForCurrentSpace()
+        {
+            await _treeRefreshGate.WaitAsync();
+            try { await DrawTreeCoreAsync(); await InvokeAsync(StateHasChanged); }
+            catch (Exception exception) { WebLogger?.Error(exception); }
+            finally { _treeRefreshGate.Release(); }
+        }
+
+        private async Task DrawTreeCoreAsync()
         {
             var currentSpaceId = UserContextService.CurrentSpaceId;
             if (currentSpaceId == null)
@@ -227,7 +169,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             IsLoading = true;
             
             // Очищаем выбранные узлы при смене пространства
-            await ClearAllSelections();
+            await ClearAllSelectionsCoreAsync(refreshUi: false);
             // Очищаем индекс перед построением дерева
             _nodeById.Clear();
 
@@ -1029,8 +971,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             {
                 TreeSelectionService.EntitySelectionRequested -= OnEntitySelectionRequested;
             }
-            _entityUpdatedSub?.Dispose();
-            _entityDeletedSub?.Dispose();
+            _graphChangedSubscription?.Dispose();
        }
 
         private Task OnEntityOpenRequestedAsync(TreeNodeItemViewModelBase node)
@@ -1064,119 +1005,30 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         /// <summary>
         /// Обработчик запроса на создание новой сущности
         /// </summary>
+        private bool _isCreatingEntity;
         private async Task OnEntityCreateRequestedAsync(TreeNodeItemViewModelBase parentNode, string entityType)
         {
             try
             {
-                if (parentNode?.Entity == null)
+                if (parentNode?.Entity == null) throw new InvalidOperationException("Не выбран родитель.");
+                if (!Enum.TryParse<BusinessEntityTypeEnum>(entityType, out var type)) throw new ArgumentException("Неизвестный тип узла.");
+                _isCreatingEntity = true;
+                ContextMenu.Close();
+                var created = await TreeMiniAppService.CreateEntityAsync(parentNode.Entity.Id, type);
+                await SetFolderExpandedAsync(parentNode, true);
+                await DrawTreeForCurrentSpace();
+                if (type == BusinessEntityTypeEnum.RichTextDocument)
                 {
-                    WebLogger?.Warning("Cannot create entityData - parent node or entityData is null");
-                    return;
+                    await SelectNodeAfterTreeRefresh(created.Id);
+                    CancelPendingOpenEntityOpen();
+                    OpenEntityPage(created.Id, type, editMode: true);
                 }
-
-                WebLogger?.Information($"Creating new {entityType} in parent {parentNode.Entity.Name}");
-
-                switch (entityType)
-                {
-                    case "Folder":
-                        var newEntity = await TreeMiniAppService.CreateEntityAsync(
-                            parentNode.Entity.Id,
-                            BusinessEntityTypeEnum.Folder);
-                        
-                        // Создаем view model для новой папки используя новый конструктор
-                        var childNode = new FolderTreeNodeItemViewModel(newEntity, WebLogger)
-                        {
-                            Icon = GetEntityIcon(newEntity.EntityType),
-                            Expanded = true,
-                            Parent = parentNode,
-                            OnEntityCreateRequested = OnEntityCreateRequestedAsync, // Устанавливаем колбэк для новой папки
-                            OnEntityDeleteRequested = OnEntityDeleteRequestedAsync, // Устанавливаем колбэк для удаления новой папки
-                            OnEntityRenameRequested = OnEntityRenameRequestedAsync // Устанавливаем колбэк для переименования новой папки
-                        };
-                        
-                        // Добавляем новую ноду в дерево с учетом общего порядка отображения.
-                        InsertTreeChildSorted(parentNode, childNode);
-                        await SetFolderExpandedAsync(parentNode, true);
-                        // Индексируем новую ноду
-                        _nodeById[newEntity.Id] = childNode;
-                        
-                        WebLogger?.Information($"Successfully created folder '{newEntity.Name}' under '{parentNode.Entity.Name}'");
-                        break;
-                        
-                    case "Document":
-                        {
-                            var newDoc = await TreeMiniAppService.CreateEntityAsync(
-                                parentNode.Entity.Id,
-                                BusinessEntityTypeEnum.Document);
-
-                            // Создаем view model для документа
-                            var docNode = new DocumentTreeNodeItemViewModel(WebLogger)
-                            {
-                                Title = newDoc.Name,
-                                Icon = GetEntityIcon(newDoc.EntityType),
-                                Entity = newDoc,
-                                EntityType = newDoc.EntityType.ToString(),
-                                Parent = parentNode,
-                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
-                                OnEntityOpenRequested = OnEntityOpenRequestedAsync,
-                                OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync
-                            };
-
-                            // Добавляем в дерево и разворачиваем родителя
-                            InsertTreeChildSorted(parentNode, docNode);
-                            await SetFolderExpandedAsync(parentNode, true);
-                            // Индексируем новую ноду
-                            _nodeById[newDoc.Id] = docNode;
-
-                            WebLogger?.Information($"Successfully created document '{newDoc.Name}' under '{parentNode.Entity.Name}'");
-                        }
-                        break;
-                    case "RichTextDocument":
-                        {
-                            var newRichDocument = await TreeMiniAppService.CreateEntityAsync(
-                                parentNode.Entity.Id,
-                                BusinessEntityTypeEnum.RichTextDocument);
-
-                            var richDocNode = new RichTextDocumentTreeNodeItemViewModel(WebLogger)
-                            {
-                                Title = newRichDocument.Name,
-                                Icon = GetEntityIcon(newRichDocument.EntityType),
-                                Entity = newRichDocument,
-                                EntityType = newRichDocument.EntityType.ToString(),
-                                Parent = parentNode,
-                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
-                                OnEntityOpenRequested = OnEntityOpenRequestedAsync,
-                                OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync
-                            };
-
-                            InsertTreeChildSorted(parentNode, richDocNode);
-                            await SetFolderExpandedAsync(parentNode, true);
-                            _nodeById[newRichDocument.Id] = richDocNode;
-
-                            WebLogger?.Information($"Successfully created rich-text document '{newRichDocument.Name}' under '{parentNode.Entity.Name}'");
-                            await SelectSingleNodeAsync(richDocNode);
-                            CancelPendingOpenEntityOpen();
-                            OpenEntityPage(newRichDocument.Id, newRichDocument.EntityType, editMode: true);
-                        }
-                        break;
-                        
-                    default:
-                        WebLogger?.Information($"TODO: Create {entityType} entityData under {parentNode.Entity.Name}");
-                        break;
-                }
-
-                // Обновляем UI
-                await InvokeAsync(StateHasChanged);
             }
-            catch (Exception ex)
-            {
-                WebLogger?.Error(ex);
-            }
+            catch (Exception exception) { WebLogger?.Error(exception); }
+            finally { _isCreatingEntity = false; }
+            await InvokeAsync(StateHasChanged);
         }
 
-        /// <summary>
-        /// Обработчик запроса на удаление сущности или нескольких сущностей
-        /// </summary>
         private async Task OnEntityDeleteRequestedAsync(TreeNodeItemViewModelBase nodeToDelete)
         {
             try

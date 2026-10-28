@@ -1,3 +1,5 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
+using BusinessEntity.Core.Saving;
 using System;
 using System.Linq;
 using System.Collections.Generic;
@@ -17,7 +19,7 @@ using ReactiveUI;
 
 namespace BusinessEntity.Pages
 {
-    public partial class DocumentPage
+    public partial class DocumentPage : IDisposable
     {
         [Parameter]
         public Guid Id { get; set; }
@@ -49,6 +51,24 @@ namespace BusinessEntity.Pages
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] public NavigationManager NavigationManager { get; set; } = default!;
+
+        private global::BusinessEntity.Components.Document? DocumentView;
+        private IDisposable? _dataSubscription;
+        private bool _disposed;
+        protected override void OnInitialized()
+        {
+            _dataSubscription = MessageBus.Listen<EntityBatchCommitted>().Subscribe(message =>
+            {
+                if (message.ChangedEntities.Contains(Id) || message.DeletedEntities.Contains(Id))
+                    _ = InvokeAsync(async () =>
+                    {
+                        if (_disposed || IsLoading || DocumentView?.IsEditingNow == true) return;
+                        await OnParametersSetAsync();
+                        StateHasChanged();
+                    });
+            });
+        }
+        public void Dispose() { _disposed = true; _dataSubscription?.Dispose(); }
 
         protected override async Task OnParametersSetAsync()
         {
@@ -85,9 +105,9 @@ namespace BusinessEntity.Pages
                 }
                 else
                 {
-                    list = latestDocument == null
-                        ? Array.Empty<global::BusinessEntity.Core.Classes.BusinessEntityData>()
-                        : new global::BusinessEntity.Core.Classes.BusinessEntityData[] { latestDocument };
+                    var published = await DataProviderConnector.GetDataVersionAsync<global::BusinessEntity.Core.DomainEntities.Document>(Id, Entity.PublishedVersion);
+                    list = published == null ? throw new InvalidDataException("Отсутствует опубликованная версия.")
+                        : new global::BusinessEntity.Core.Classes.BusinessEntityData[] { published };
                 }
 
                 DataList = list;
@@ -167,7 +187,7 @@ namespace BusinessEntity.Pages
 
             Entity.IsPublic = value;
             Entity.LastModifiedDate = DateTime.UtcNow;
-            await DataProviderConnector.UpdateAsync(Entity);
+            await DataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "DocumentsMiniApp", null) { Entities = [Entity] });
         }
 
         private async Task HandleDeleteRequestedAsync()
@@ -188,7 +208,7 @@ namespace BusinessEntity.Pages
             try
             {
                 await TreeMiniAppService.DeleteEntitiesAsync(new[] { entityId });
-                MessageBus.SendMessage(new EntityDeletedMessage(entityId));
+
                 TreeSelectionService.RequestEntitySelection(null);
                 NavigationManager.NavigateTo("/", replace: true);
             }

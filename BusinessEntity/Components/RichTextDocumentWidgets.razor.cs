@@ -1,4 +1,5 @@
 using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
@@ -18,6 +19,7 @@ namespace BusinessEntity.Components
         [Parameter] public int LatestVersion { get; set; } = 1;
         [Parameter] public int PublishedVersion { get; set; }
         [Parameter] public bool CanBrowseVersions { get; set; } = true;
+        [Parameter] public bool CanRestoreVersion { get; set; }
         [Parameter] public bool CanEditVersionDescription { get; set; }
         [Parameter] public string VersionDescription { get; set; } = string.Empty;
         [Parameter] public EventCallback<string> OnSearchNext { get; set; }
@@ -28,6 +30,7 @@ namespace BusinessEntity.Components
         [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
         [Parameter] public EventCallback<string> OnVersionDescriptionChanged { get; set; }
 
+        [Inject] public EntitySaveBatchFactory Batches { get; set; } = default!;
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
         [Inject] public IActivityConnector ActivityConnector { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
@@ -191,6 +194,22 @@ namespace BusinessEntity.Components
                 : "rich-text-document-tabs__tab";
         }
 
+        // Restore создаёт новую полную версию; просмотр и указатель публикации остаются явными.
+        private async Task RestoreVersionAsync(int version)
+        {
+            if (!CanRestoreVersion || IsVersionsLoading) return;
+            IsVersionsLoading = true; VersionsError = null;
+            try
+            {
+                var result = await DataProviderConnector.SaveAsync(Batches.Create(BusinessEntityTypeEnum.RichTextDocument) with
+                    { Restores = [new(BusinessEntityId, version)] });
+                await LoadVersionsAsync();
+                await OnVersionSelected.InvokeAsync(result.Versions.Single().Version);
+            }
+            catch (Exception exception) { VersionsError = exception.Message; }
+            finally { IsVersionsLoading = false; }
+        }
+
         private async Task LoadVersionsAsync()
         {
             IsVersionsLoading = true;
@@ -201,7 +220,7 @@ namespace BusinessEntity.Components
                 var versions = await DataProviderConnector.GetDataVersionsAsync(BusinessEntityId);
                 Versions = CanBrowseVersions
                     ? versions
-                    : versions.Where(version => (version.Version <= 0 ? 1 : version.Version) == ViewedVersion).ToList();
+                    : versions.Where(version => version.Version == ViewedVersion).ToList();
                 _versionsLoadedForEntityId = BusinessEntityId;
                 _versionsLoadedForRefreshToken = VersionsRefreshToken;
             }
@@ -393,7 +412,7 @@ namespace BusinessEntity.Components
 
         private string GetVersionRowClass(BusinessEntityDataVersionInfo version)
         {
-            var normalizedVersion = version.Version <= 0 ? 1 : version.Version;
+            var normalizedVersion = version.Version;
             var classes = new List<string> { "rich-text-document-versions__row" };
 
             if (normalizedVersion == ViewedVersion)

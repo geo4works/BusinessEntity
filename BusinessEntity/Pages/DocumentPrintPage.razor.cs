@@ -168,7 +168,7 @@ namespace BusinessEntity.Pages
             }
             else
             {
-                var latestDocument = await DataProviderConnector.GetDataAsync<BusinessEntity.Core.DomainEntities.Document>(Id, cancellationToken);
+                var latestDocument = await DataProviderConnector.GetDataVersionAsync<BusinessEntity.Core.DomainEntities.Document>(Id, entity.PublishedVersion, cancellationToken);
                 dataItems = latestDocument == null
                     ? Array.Empty<BusinessEntityData>()
                     : new BusinessEntityData[] { latestDocument };
@@ -332,9 +332,8 @@ namespace BusinessEntity.Pages
         private async Task RefreshVersionsAsync(CancellationToken cancellationToken)
         {
             var versions = await DataProviderConnector.GetDataVersionsAsync(Id, cancellationToken);
-            LatestVersion = versions.Count == 0
-                ? Math.Max(Manifest?.Version ?? 1, 1)
-                : versions.Max(x => x.Version <= 0 ? 1 : x.Version);
+            if (versions.Count == 0 || versions.Any(x => x.Version < 1)) throw new InvalidDataException("История статьи отсутствует или повреждена.");
+            LatestVersion = versions.Max(x => x.Version);
 
             if (ViewedVersion <= 0 || ViewedVersion > LatestVersion)
             {

@@ -1,3 +1,4 @@
+using BusinessEntity.Core.Saving;
 using BusinessEntity.Infrastructure.Bus;
 using System.Buffers;
 using System.Text.Json;
@@ -18,44 +19,20 @@ namespace BusinessEntity.MiniApps.MediaServerMiniApp.Internal;
 public sealed class MediaServerService : IMediaServerService
 {
     private const long MaxVideoBytes = 2L * 1024L * 1024L * 1024L;
-    private const string MetadataFileName = "metadata.json";
 
     private readonly IDataProviderConnector _dataProviderConnector;
     private readonly IBusinessEntityFactory _businessEntityFactory;
     private readonly IMessageBus _messageBus;
-    private readonly IUserConnector? _userConnector;
+    private readonly IUserConnector _userConnector;
     private readonly BusRequestScope _scope;
-    private readonly string _storageRoot;
+    private readonly ILogger<MediaServerService> _logger;
 
-    public MediaServerService(
-        IDataProviderConnector dataProviderConnector,
-        IBusinessEntityFactory businessEntityFactory,
-        IMessageBus messageBus,
-        IWebHostEnvironment environment,
-        IConfiguration configuration,
-        BusRequestScope scope, IUserConnector? userConnector = null)
+    // Владеет предметной моделью видео; постоянные файлы и метаданные записывает DataProvider.
+    public MediaServerService(IDataProviderConnector dataProviderConnector, IBusinessEntityFactory businessEntityFactory,
+        IMessageBus messageBus, BusRequestScope scope, IUserConnector userConnector, ILogger<MediaServerService> logger)
     {
-        _dataProviderConnector = dataProviderConnector;
-        _businessEntityFactory = businessEntityFactory;
-        _messageBus = messageBus;
-        _userConnector = userConnector;
-        _scope = scope;
-
-        var contentRoot = environment.ContentRootPath ?? AppContext.BaseDirectory;
-        var configuredRoot = configuration["Storage:RootPath"];
-        var storageRoot = string.IsNullOrWhiteSpace(configuredRoot)
-            ? Path.Combine(contentRoot, "App_Data", "RichDocumentData")
-            : configuredRoot.Trim();
-
-        _storageRoot = Path.GetFullPath(
-            Path.IsPathRooted(storageRoot)
-                ? storageRoot
-                : Path.Combine(contentRoot, storageRoot));
-    }
-
-    public void EnsureStorageInitialized()
-    {
-        Directory.CreateDirectory(_storageRoot);
+        _dataProviderConnector = dataProviderConnector; _businessEntityFactory = businessEntityFactory;
+        _messageBus = messageBus; _scope = scope; _userConnector = userConnector; _logger = logger;
     }
 
     public async Task<IReadOnlyList<MediaVideoInfo>> GetVideosAsync(
@@ -108,104 +85,56 @@ public sealed class MediaServerService : IMediaServerService
         return data == null ? null : ToInfo(videoId, data);
     }
 
-    public async Task<MediaVideoInfo> UploadVideoAsync(
-        Stream content,
-        string fileName,
-        string? contentType,
-        long? length,
-        CancellationToken cancellationToken = default,
-        IProgress<long>? progress = null,
-        Guid? spaceId = null,
-        string? clientUploadToken = null)
+    // Использует лишь временную подготовку потока; карточка, payload, файл и связь коммитятся вместе.
+    public async Task<MediaVideoInfo> UploadVideoAsync(Stream content, string fileName, string? contentType,
+        long? length, CancellationToken cancellationToken = default, IProgress<long>? progress = null,
+        Guid? spaceId = null, string? clientUploadToken = null)
     {
-        if (content == null)
+        ArgumentNullException.ThrowIfNull(content);
+        var safeName = SanitizeFileName(Path.GetFileName(fileName));
+        if (string.IsNullOrWhiteSpace(safeName)) throw new ArgumentException("Имя видео обязательно.", nameof(fileName));
+        var mime = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType.Trim();
+        if (!IsSupportedVideo(safeName, mime)) throw new InvalidOperationException("Файл не является поддерживаемым видео.");
+        if (length > MaxVideoBytes) throw new InvalidOperationException("Видео слишком большое для загрузки.");
+        var actor = await ResolveCurrentUserIdAsync(cancellationToken)
+            ?? throw new UnauthorizedAccessException("Для загрузки нужно войти.");
+        var reusable = content is FileStream stream && stream.Position == 0;
+        string temporary;
+        if (reusable) temporary = ((FileStream)content).Name;
+        else
         {
-            throw new ArgumentNullException(nameof(content));
+            var directory = Path.Combine(Path.GetTempPath(), "be-media-preparation");
+            Directory.CreateDirectory(directory); temporary = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".upload");
         }
-
-        var safeFileName = SanitizeFileName(Path.GetFileName(fileName));
-        if (string.IsNullOrWhiteSpace(safeFileName))
-        {
-            safeFileName = "video";
-        }
-
-        var normalizedContentType = string.IsNullOrWhiteSpace(contentType)
-            ? "application/octet-stream"
-            : contentType.Trim();
-
-        if (!IsSupportedVideo(safeFileName, normalizedContentType))
-        {
-            throw new InvalidOperationException("Переданный файл не похож на поддерживаемое видео.");
-        }
-
-        if (length.HasValue && length.Value > MaxVideoBytes)
-        {
-            throw new InvalidOperationException("Видео слишком большое для загрузки.");
-        }
-
-        var displayName = Path.GetFileNameWithoutExtension(safeFileName);
-        if (string.IsNullOrWhiteSpace(displayName))
-        {
-            displayName = safeFileName;
-        }
-
-        var typedEntity = _businessEntityFactory.Create<MediaVideo>(
-            BusinessEntityTypeEnum.MediaVideo,
-            displayName);
-        typedEntity.Name = displayName;
-        typedEntity.BusinessEntityType = BusinessEntityTypeEnum.MediaVideo;
-        typedEntity.EntityType = BusinessEntityTypeEnum.MediaVideo;
-
-        var extension = ResolveVideoExtension(safeFileName, normalizedContentType);
-        var relativePath = BuildStorageRelativePath(typedEntity.Id, extension);
-        var physicalPath = ResolvePhysicalPath(relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(physicalPath)!);
-
-        var savedEntity = await _dataProviderConnector.AddAsync(typedEntity, cancellationToken);
         try
         {
-            await using (var output = new FileStream(
-                             physicalPath,
-                             FileMode.Create,
-                             FileAccess.Write,
-                             FileShare.None,
-                             bufferSize: 1024 * 128,
-                             useAsync: true))
+            if (!reusable)
+                await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, true))
+                    await CopyWithProgressAsync(content, output, progress, cancellationToken);
+            var actualLength = new FileInfo(temporary).Length;
+            if (actualLength > MaxVideoBytes) throw new InvalidOperationException("Видео слишком большое для загрузки.");
+            var name = Path.GetFileNameWithoutExtension(safeName);
+            var entity = _businessEntityFactory.Create<MediaVideo>(BusinessEntityTypeEnum.MediaVideo, name);
+            var data = new MediaVideo { Id = entity.Id, Name = name, Tag = BusinessEntityTypeEnum.MediaVideo.ToString(),
+                FileName = safeName, DisplayName = name, ContentType = mime, OriginalSizeBytes = actualLength,
+                UploadedByUserId = actor, UploadedDate = DateTime.UtcNow };
+            var relations = spaceId.HasValue && spaceId.Value != Guid.Empty
+                ? new[] { new BusinessEntityRelation { ObjectAId = spaceId.Value, ObjectBId = entity.Id,
+                    RelationType = BusinessEntityRelationTypeEnum.RelatesTo.ToString(), RelationParams = "media-video-space" } } : [];
+            await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "MediaServerMiniApp", null)
             {
-                await CopyWithProgressAsync(content, output, progress, cancellationToken);
-            }
-
-            var fileInfo = new FileInfo(physicalPath);
-            var userId = await ResolveCurrentUserIdAsync(cancellationToken);
-            var data = new MediaVideo
-            {
-                Id = savedEntity.Id,
-                Name = displayName,
-                Tag = BusinessEntityTypeEnum.MediaVideo.ToString(),
-                FileName = safeFileName,
-                DisplayName = displayName,
-                ContentType = normalizedContentType,
-                OriginalSizeBytes = fileInfo.Length,
-                DurationSeconds = null,
-                UploadedByUserId = userId,
-                UploadedDate = DateTime.UtcNow,
-                StorageRelativePath = NormalizeRelativePath(relativePath),
-                EmbedUrl = BuildEmbedUrl(savedEntity.Id),
-                Comment = string.Empty
-            };
-
-            await _dataProviderConnector.UpdateDataAsync(savedEntity.Id, data, cancellationToken);
-            await EnsureVideoSpaceRelationAsync(spaceId, savedEntity.Id, cancellationToken);
-            await WriteMetadataAsync(physicalPath, data, cancellationToken);
-            var result = ToInfo(savedEntity.Id, data);
+                Entities = [entity], Payloads = [new(entity.Id, 0, data)], Relations = relations,
+                Files = [new(entity.Id, "video", "original", safeName, mime, [], temporary)]
+            }, cancellationToken);
+            var result = ToInfo(entity.Id, data);
             _messageBus.SendMessage(new MediaVideoUploadedMessage(clientUploadToken, result, spaceId));
             return result;
         }
-        catch
+        finally
         {
-            DeleteEntityStorageFolder(savedEntity.Id);
-            await _dataProviderConnector.DeleteAsync(savedEntity.Id, cancellationToken);
-            throw;
+            if (!reusable)
+                try { File.Delete(temporary); }
+                catch (Exception exception) { _logger.LogWarning(exception, "Temporary media preparation cleanup failed"); }
         }
     }
 
@@ -227,9 +156,8 @@ public sealed class MediaServerService : IMediaServerService
         data.Name = trimmed;
         data.DisplayName = trimmed;
 
-        await _dataProviderConnector.UpdateAsync(entity, cancellationToken);
-        await _dataProviderConnector.UpdateDataAsync(videoId, data, cancellationToken);
-        await WriteMetadataAsync(ResolvePhysicalPath(data.StorageRelativePath), data, cancellationToken);
+        await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "MediaServerMiniApp", null)
+            { Entities = [entity], Payloads = [new(videoId, data.Version, data)] }, cancellationToken);
         return ToInfo(videoId, data);
     }
 
@@ -239,82 +167,31 @@ public sealed class MediaServerService : IMediaServerService
             ?? throw new KeyNotFoundException($"Payload видео '{videoId}' не найден.");
 
         data.Comment = comment ?? string.Empty;
-        await _dataProviderConnector.UpdateDataAsync(videoId, data, cancellationToken);
-        await WriteMetadataAsync(ResolvePhysicalPath(data.StorageRelativePath), data, cancellationToken);
+        await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "MediaServerMiniApp", null)
+            { Payloads = [new(videoId, data.Version, data)] }, cancellationToken);
         return ToInfo(videoId, data);
     }
 
+    // Удаляет связанные SQL-записи пакетом; уборка постоянного файла происходит после commit у DataProvider.
     public async Task DeleteVideoAsync(Guid videoId, CancellationToken cancellationToken = default)
-    {
-        var relations = (await _dataProviderConnector.GetAllRelationsAsync(cancellationToken))
-            .Where(x => x.ObjectAId == videoId || x.ObjectBId == videoId)
-            .ToList();
-        foreach (var relation in relations)
-        {
-            await _dataProviderConnector.DeleteRelationAsync(relation.Id, cancellationToken);
-        }
+        => await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "MediaServerMiniApp", null)
+            { DeleteEntities = [videoId] }, cancellationToken);
 
-        DeleteEntityStorageFolder(videoId);
-        await _dataProviderConnector.DeleteAsync(videoId, cancellationToken);
-    }
-
+    // Получает проверенный серверный FileResult из владельца хранения без обхода его метаданных.
     public async Task<MediaVideoFileContent?> GetVideoFileAsync(Guid videoId, CancellationToken cancellationToken = default)
     {
         var data = await _dataProviderConnector.GetDataAsync<MediaVideo>(videoId, cancellationToken);
-        if (data == null || string.IsNullOrWhiteSpace(data.StorageRelativePath))
-        {
-            return null;
-        }
-
-        var physicalPath = ResolvePhysicalPath(data.StorageRelativePath);
-        if (!File.Exists(physicalPath))
-        {
-            return null;
-        }
-
-        return new MediaVideoFileContent
-        {
-            PhysicalPath = physicalPath,
-            FileName = string.IsNullOrWhiteSpace(data.FileName) ? Path.GetFileName(physicalPath) : data.FileName,
-            ContentType = string.IsNullOrWhiteSpace(data.ContentType) ? "application/octet-stream" : data.ContentType
-        };
+        if (data == null) return null;
+        var file = await _dataProviderConnector.GetStoredFileAsync(videoId, "video", "original", cancellationToken)
+            ?? throw new InvalidDataException("Отсутствует обязательный оригинал видео.");
+        return new MediaVideoFileContent { PhysicalPath = file.PhysicalPath, FileName = file.FileName, ContentType = file.ContentType };
     }
 
     private async Task<Guid?> ResolveCurrentUserIdAsync(CancellationToken cancellationToken)
     {
-        if (_userConnector == null)
-        {
-            return null;
-        }
-
         if (_scope.UserId.HasValue) return _scope.UserId;
         var user = await _userConnector.EnsureCurrentUserAsync(cancellationToken);
         return user?.Id;
-    }
-
-    private async Task EnsureVideoSpaceRelationAsync(Guid? spaceId, Guid videoId, CancellationToken cancellationToken)
-    {
-        if (!spaceId.HasValue || spaceId.Value == Guid.Empty)
-        {
-            return;
-        }
-
-        var relationType = BusinessEntityRelationTypeEnum.RelatesTo.ToString();
-        var existing = await _dataProviderConnector.GetRelationsAsync(spaceId.Value, videoId, cancellationToken);
-        if (existing.Any(x => x.RelationType == relationType))
-        {
-            return;
-        }
-
-        await _dataProviderConnector.CreateRelationAsync(
-            new BusinessEntityRelation
-            {
-                ObjectAId = spaceId.Value,
-                ObjectBId = videoId,
-                RelationType = relationType,
-                RelationParams = "media-video-space"
-            },
-            cancellationToken);
     }
 
     private static async Task CopyWithProgressAsync(
@@ -337,6 +214,7 @@ public sealed class MediaServerService : IMediaServerService
 
                 await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
                 totalBytes += bytesRead;
+                if (totalBytes > MaxVideoBytes) throw new InvalidOperationException("Видео слишком большое для загрузки.");
                 progress?.Report(totalBytes);
             }
         }
@@ -360,7 +238,7 @@ public sealed class MediaServerService : IMediaServerService
             DurationSeconds = data.DurationSeconds,
             UploadedByUserId = data.UploadedByUserId,
             UploadedDate = data.UploadedDate,
-            EmbedUrl = string.IsNullOrWhiteSpace(data.EmbedUrl) ? BuildEmbedUrl(id) : data.EmbedUrl,
+            EmbedUrl = BuildEmbedUrl(id),
             Comment = data.Comment ?? string.Empty
         };
     }
@@ -388,62 +266,6 @@ public sealed class MediaServerService : IMediaServerService
         return $"/media-server-files/videos/{videoId:D}/original";
     }
 
-    private static string BuildStorageRelativePath(Guid videoId, string extension)
-    {
-        return Path.Combine("business-entities", videoId.ToString("D"), "videos", $"original{extension}");
-    }
-
-    private string ResolvePhysicalPath(string relativePath)
-    {
-        var normalized = NormalizeRelativePath(relativePath);
-        var fullPath = Path.GetFullPath(Path.Combine(_storageRoot, normalized));
-        var storageRootWithSeparator = _storageRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            + Path.DirectorySeparatorChar;
-        if (!string.Equals(fullPath, _storageRoot, StringComparison.OrdinalIgnoreCase) &&
-            !fullPath.StartsWith(storageRootWithSeparator, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Storage path is outside configured root.");
-        }
-
-        return fullPath;
-    }
-
-    private void DeleteEntityStorageFolder(Guid videoId)
-    {
-        var folder = Path.Combine(_storageRoot, "business-entities", videoId.ToString("D"));
-        if (Directory.Exists(folder))
-        {
-            Directory.Delete(folder, recursive: true);
-        }
-    }
-
-    private static async Task WriteMetadataAsync(string physicalPath, MediaVideo data, CancellationToken cancellationToken)
-    {
-        var directory = Path.GetDirectoryName(physicalPath);
-        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
-        {
-            return;
-        }
-
-        var json = JsonSerializer.Serialize(
-            new
-            {
-                data.FileName,
-                data.DisplayName,
-                data.ContentType,
-                data.OriginalSizeBytes,
-                data.DurationSeconds,
-                data.UploadedByUserId,
-                data.UploadedDate,
-                data.StorageRelativePath,
-                data.EmbedUrl,
-                data.Comment
-            },
-            new JsonSerializerOptions { WriteIndented = true });
-
-        await File.WriteAllTextAsync(Path.Combine(directory, MetadataFileName), json, cancellationToken);
-    }
-
     private static bool IsSupportedVideo(string fileName, string contentType)
     {
         if ((contentType ?? string.Empty).StartsWith("video/", StringComparison.OrdinalIgnoreCase))
@@ -455,25 +277,6 @@ public sealed class MediaServerService : IMediaServerService
         {
             ".mp4" or ".webm" or ".ogv" or ".ogg" or ".mov" or ".m4v" => true,
             _ => false
-        };
-    }
-
-    private static string ResolveVideoExtension(string fileName, string contentType)
-    {
-        var extension = Path.GetExtension(fileName);
-        if (!string.IsNullOrWhiteSpace(extension))
-        {
-            return extension.ToLowerInvariant();
-        }
-
-        return (contentType ?? string.Empty).Trim().ToLowerInvariant() switch
-        {
-            "video/mp4" => ".mp4",
-            "video/webm" => ".webm",
-            "video/ogg" => ".ogv",
-            "video/quicktime" => ".mov",
-            "video/x-m4v" => ".m4v",
-            _ => ".video"
         };
     }
 
@@ -490,11 +293,4 @@ public sealed class MediaServerService : IMediaServerService
         return sanitized.Trim();
     }
 
-    private static string NormalizeRelativePath(string relativePath)
-    {
-        return (relativePath ?? string.Empty)
-            .Replace('\\', Path.DirectorySeparatorChar)
-            .Replace('/', Path.DirectorySeparatorChar)
-            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-    }
 }

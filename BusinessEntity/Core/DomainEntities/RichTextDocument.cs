@@ -6,7 +6,7 @@ namespace BusinessEntity.Core.DomainEntities
 {
     // Хранит manifest rich-text документа.
     // Сам текст документа лежит не здесь, а в технических чанках storage-слоя.
-    public class RichTextDocument : BusinessEntityData, IBusinessEntityData
+    public class RichTextDocument : BusinessEntityData, IBusinessEntityData, IBusinessEntityPublication
     {
         // Тип business-объекта rich-text документа.
         public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.RichTextDocument;
@@ -32,7 +32,7 @@ namespace BusinessEntity.Core.DomainEntities
         // Поддержка картинок в текущем manifest-е.
         public bool SupportsImages { get; set; } = true;
 
-        // Номер версии rich-text документа, которая считается опубликованной. 0 означает, что публикация не задана.
+        // Проекция указателя из карточки; в manifest истории не сериализуется.
         public int PublishedVersion { get; set; }
     }
 }

@@ -10,6 +10,25 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
     /// </summary>
     public interface IDataProviderConnector
     {
+        // Экспорт полного снимка подграфа с временными потоковыми источниками файлов.
+        Task<Archives.SubgraphExportResult> ExportSubgraphAsync(Archives.SubgraphExportScope scope, CancellationToken cancellationToken = default);
+        // Освобождает только свой временный экспорт.
+        Task ReleaseExportAsync(Guid exportId, CancellationToken cancellationToken = default);
+        // Возвращает только состав версии без тяжёлого содержимого всех чанков.
+        Task<IReadOnlyList<Transactions.VersionChunkMembership>> GetVersionChunkMembershipAsync(Guid entityId, int version, CancellationToken cancellationToken = default);
+        // Читает комментарии через владельца storage.
+        Task<IReadOnlyList<Transactions.StoredEntityComment>> GetStoredCommentsAsync(Guid entityId, CancellationToken cancellationToken = default);
+        // Читает свойства объявленного уровня без доступа к generic repositories.
+        Task<IReadOnlyList<Transactions.StoredEntityProperty>> GetStoredPropertiesAsync(Core.Saving.EntityPropertyOwner owner, Guid? parentId = null, CancellationToken cancellationToken = default);
+        // Читает точное окно выбранной версии либо её конкретные чанки.
+        Task<RichTextDocumentChunkWindow> GetVersionChunkWindowAsync(Guid entityId, int version, long start, int count,
+            IReadOnlyList<Guid>? chunkIds = null, string? searchText = null, CancellationToken cancellationToken = default);
+        // Получает серверный file-result; отсутствие файла является отдельным результатом.
+        Task<Transactions.StoredEntityFile?> GetStoredFileAsync(Guid entityId, string fileId, string variant, CancellationToken cancellationToken = default);
+        // Атомарно сохраняет весь снимок правок с устойчивым OperationId.
+        Task<Transactions.SaveBatchResult> SaveAsync(Core.Saving.EntitySaveBatch batch, CancellationToken cancellationToken = default);
+        // Получает подтверждённый исход после таймаута или потери ответа.
+        Task<Transactions.StoredOperationOutcome?> GetOperationOutcomeAsync(Guid operationId, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity>> GetAllAsync(CancellationToken cancellationToken = default);
         Task<BusinessEntity.Core.Classes.BusinessEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task<TData?> GetDataAsync<TData>(Guid id, CancellationToken cancellationToken = default)
@@ -17,27 +36,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
         Task<TData?> GetDataVersionAsync<TData>(Guid id, int version, CancellationToken cancellationToken = default)
             where TData : class, IBusinessEntityData;
         Task<IReadOnlyList<BusinessEntityDataVersionInfo>> GetDataVersionsAsync(Guid id, CancellationToken cancellationToken = default);
-        Task UpdateDataVersionDescriptionAsync(Guid id, int version, string? versionDescription, CancellationToken cancellationToken = default);
-        Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
-            where TData : class, IBusinessEntityData;
-        Task UpdateDataInPlaceAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
-            where TData : class, IBusinessEntityData;
-        Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default);
-        Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default);
-        Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
-        Task ClearAllAsync(CancellationToken cancellationToken = default);
         Task<IReadOnlyList<BusinessEntityRelation>> GetAllRelationsAsync(CancellationToken cancellationToken = default);
         Task<IReadOnlyList<BusinessEntityRelation>> GetRelationsAsync(Guid objectAId, Guid objectBId, CancellationToken cancellationToken = default);
         Task<BusinessEntityRelation?> GetRelationByIdAsync(Guid id, CancellationToken cancellationToken = default);
-        Task<BusinessEntityRelation> CreateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default);
-        Task UpdateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default);
-        Task DeleteRelationAsync(Guid id, CancellationToken cancellationToken = default);
-        Task<IReadOnlyList<RichTextDocumentChunk>> GetRichTextChunksAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
-        Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
-        Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
-        Task ReplaceRichTextChunksAsync(Guid businessEntityId, IReadOnlyList<RichTextDocumentChunk> chunks, CancellationToken cancellationToken = default);
-        Task SaveRichTextEmbeddedFilesAsync(Guid businessEntityId, IReadOnlyList<RichTextEmbeddedFile> files, bool replaceExistingFiles, CancellationToken cancellationToken = default);
         Task<RichTextEmbeddedFileContent?> GetRichTextEmbeddedFileAsync(Guid businessEntityId, string imageId, string variant, CancellationToken cancellationToken = default);
-        Task DeleteRichTextStorageAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
     }
 }

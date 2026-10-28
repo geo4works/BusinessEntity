@@ -1,6 +1,6 @@
 # Каталог сообщений общей шины
 
-Фактическое состояние этапа 1 TASK_ARCH_001, 2026-10-28.
+Фактическое состояние этапа 2 TASK_ARCH_001, 2026-10-28.
 Один singleton ReactiveUI.IMessageBus; регистрации маршрутов находятся в Registration владельцев.
 
 Все предметные Request/Response наследуют BusRequest/BusResponse.
@@ -12,7 +12,8 @@ Scoped User/Tree/Activity фильтруют scope и окно до исполн
 при disposal. DataProvider — один общий singleton-владелец запросов хранения.
 
 Ошибки: BusError(Code, Message), BusRequestFailedException; timeout 30 секунд
-и отмена завершают ожидание, не доказывая откат сохранения.
+и отмена завершают ожидание, не доказывая откат сохранения. Для export/import
+и пакетов файлов явно используется 30 минут.
 UserMessages: адрес пользователя и окна, CorrelationId для однократной доставки.
 Login передаёт уведомление новому circuit одноразовым ключом со сроком 2 минуты.
 
@@ -22,54 +23,6 @@ Login передаёт уведомление новому circuit однора�
 | ActivityMiniApp | GetCommentsResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntityCommentRecord>? Result, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/ActivityMiniApp/Contracts/Messages/ActivityMiniAppMessages.cs) |
 | ActivityMiniApp | CreateCommentRequest | Request | `Guid RequestId, BusinessEntityCommentCreateRequest Request` | [код](../../BusinessEntity/MiniApps/ActivityMiniApp/Contracts/Messages/ActivityMiniAppMessages.cs) |
 | ActivityMiniApp | CreateCommentResponse | Response | `Guid RequestId, BusinessEntityCommentRecord? Result, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/ActivityMiniApp/Contracts/Messages/ActivityMiniAppMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntitiesRequest | Request | `Guid RequestId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntitiesResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntityByIdRequest | Request | `Guid RequestId, Guid Id` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntityByIdResponse | Response | `Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntityDataRequest | Request | `Guid RequestId, Guid BusinessEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntityDataResponse | Response | `Guid RequestId, IBusinessEntityData? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntityDataVersionRequest | Request | `Guid RequestId, Guid BusinessEntityId, int Version` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntityDataVersionResponse | Response | `Guid RequestId, IBusinessEntityData? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntityDataVersionsRequest | Request | `Guid RequestId, Guid BusinessEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetBusinessEntityDataVersionsResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntityDataVersionInfo> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | UpdateBusinessEntityDataVersionDescriptionRequest | Request | `Guid RequestId, Guid BusinessEntityId, int Version, string? VersionDescription` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | UpdateBusinessEntityDataVersionDescriptionResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | AddBusinessEntityRequest | Request | `Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity Record` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | AddBusinessEntityResponse | Response | `Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | UpdateBusinessEntityRequest | Request | `Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity Record` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | UpdateBusinessEntityResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | DeleteBusinessEntityRequest | Request | `Guid RequestId, Guid Id` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | DeleteBusinessEntityResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | ClearDataProviderStorageRequest | Request | `Guid RequestId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | ClearDataProviderStorageResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | UpdateBusinessEntityDataRequest | Request | `Guid RequestId, Guid BusinessEntityId, IBusinessEntityData Data, bool HasVersions = false, Guid? LastModifiedByUserId = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | UpdateBusinessEntityDataResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetAllRelationsRequest | Request | `Guid RequestId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetAllRelationsResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntityRelation> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRelationsRequest | Request | `Guid RequestId, Guid ObjectAId, Guid ObjectBId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRelationsResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntityRelation> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRelationByIdRequest | Request | `Guid RequestId, Guid Id` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRelationByIdResponse | Response | `Guid RequestId, BusinessEntityRelation? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | CreateRelationRequest | Request | `Guid RequestId, BusinessEntityRelation Record` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | CreateRelationResponse | Response | `Guid RequestId, BusinessEntityRelation? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | UpdateRelationRequest | Request | `Guid RequestId, BusinessEntityRelation Record` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | UpdateRelationResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | DeleteRelationRequest | Request | `Guid RequestId, Guid Id` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | DeleteRelationResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRichTextChunksRequest | Request | `Guid RequestId, Guid BusinessEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRichTextChunksResponse | Response | `Guid RequestId, IReadOnlyList<RichTextDocumentChunk> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRichTextTableOfContentsEntriesRequest | Request | `Guid RequestId, Guid BusinessEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRichTextTableOfContentsEntriesResponse | Response | `Guid RequestId, IReadOnlyList<RichTextDocumentTableOfContentsEntry> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | RebuildRichTextTableOfContentsEntriesRequest | Request | `Guid RequestId, Guid BusinessEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | RebuildRichTextTableOfContentsEntriesResponse | Response | `Guid RequestId, IReadOnlyList<RichTextDocumentTableOfContentsEntry> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | ReplaceRichTextChunksRequest | Request | `Guid RequestId, Guid BusinessEntityId, IReadOnlyList<RichTextDocumentChunk> Records` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | ReplaceRichTextChunksResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | SaveRichTextEmbeddedFilesRequest | Request | `Guid RequestId, Guid BusinessEntityId, IReadOnlyList<RichTextEmbeddedFile> Files, bool ReplaceExistingFiles` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | SaveRichTextEmbeddedFilesResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRichTextEmbeddedFileRequest | Request | `Guid RequestId, Guid BusinessEntityId, string ImageId, string Variant` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | GetRichTextEmbeddedFileResponse | Response | `Guid RequestId, RichTextEmbeddedFileContent? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | DeleteRichTextStorageRequest | Request | `Guid RequestId, Guid BusinessEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
-| DataProviderMiniApp | DeleteRichTextStorageResponse | Response | `Guid RequestId, bool Success, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
 | TreeMiniApp | TreeNodeSnapshot | Event | `BusinessEntity.Core.Classes.BusinessEntity Entity, IReadOnlyList<TreeNodeSnapshot> Children` | [код](../../BusinessEntity/MiniApps/TreeMiniApp/Contracts/Messages/TreeMiniAppMessages.cs) |
 | TreeMiniApp | TreeSpaceSnapshot | Event | `BusinessEntity.Core.Classes.BusinessEntity Space, IReadOnlyList<TreeNodeSnapshot> Children` | [код](../../BusinessEntity/MiniApps/TreeMiniApp/Contracts/Messages/TreeMiniAppMessages.cs) |
 | TreeMiniApp | GetTreeForSpaceRequest | Request | `Guid RequestId, Guid SpaceId` | [код](../../BusinessEntity/MiniApps/TreeMiniApp/Contracts/Messages/TreeMiniAppMessages.cs) |
@@ -166,9 +119,49 @@ Login передаёт уведомление новому circuit однора�
 | Services (удаляется на этапе 2) | EntityCreatedMessage | Event | `BusinessEntity.Core.Classes.BusinessEntity EntityData` | [код](../../BusinessEntity/Services/EntityMessages.cs) |
 | Services (удаляется на этапе 2) | EntityDeletedMessage | Event | `Guid EntityId` | [код](../../BusinessEntity/Services/EntityMessages.cs) |
 
+| DataProviderMiniApp | BusinessEntityChanged | Event | `Guid OperationId, Guid EntityId, bool Deleted` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderChangeEvents.cs) |
+| DataProviderMiniApp | BusinessEntityRelationChanged | Event | `Guid OperationId, Guid RelationId, bool Deleted` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderChangeEvents.cs) |
+| DataProviderMiniApp | EntityBatchCommitted | Event | `Guid OperationId, IReadOnlyList<Guid> ChangedEntities, IReadOnlyList<Guid> DeletedEntities, IReadOnlyList<Guid> ChangedRelations, IReadOnlyList<Guid> DeletedRelations` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderChangeEvents.cs) |
+| DataProviderMiniApp | ExportSubgraphRequest | Request | `Guid RequestId, BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Archives.SubgraphExportScope Scope` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
+| DataProviderMiniApp | ExportSubgraphResponse | Response | `Guid RequestId, BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Archives.SubgraphExportResult? Result, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
+| DataProviderMiniApp | GetAllRelationsRequest | Request | `Guid RequestId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetAllRelationsResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntityRelation> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntitiesRequest | Request | `Guid RequestId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntitiesResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntityByIdRequest | Request | `Guid RequestId, Guid Id` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntityByIdResponse | Response | `Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntityDataRequest | Request | `Guid RequestId, Guid BusinessEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntityDataResponse | Response | `Guid RequestId, IBusinessEntityData? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntityDataVersionRequest | Request | `Guid RequestId, Guid BusinessEntityId, int Version` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntityDataVersionResponse | Response | `Guid RequestId, IBusinessEntityData? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntityDataVersionsRequest | Request | `Guid RequestId, Guid BusinessEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetBusinessEntityDataVersionsResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntityDataVersionInfo> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetOperationOutcomeRequest | Request | `Guid RequestId, Guid OperationId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
+| DataProviderMiniApp | GetOperationOutcomeResponse | Response | `Guid RequestId, StoredOperationOutcome? Outcome, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
+| DataProviderMiniApp | GetRelationByIdRequest | Request | `Guid RequestId, Guid Id` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetRelationByIdResponse | Response | `Guid RequestId, BusinessEntityRelation? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetRelationsRequest | Request | `Guid RequestId, Guid ObjectAId, Guid ObjectBId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetRelationsResponse | Response | `Guid RequestId, IReadOnlyList<BusinessEntityRelation> Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetRichTextEmbeddedFileRequest | Request | `Guid RequestId, Guid BusinessEntityId, string ImageId, string Variant` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetRichTextEmbeddedFileResponse | Response | `Guid RequestId, RichTextEmbeddedFileContent? Record, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderMessages.cs) |
+| DataProviderMiniApp | GetStoredCommentsRequest | Request | `Guid RequestId, Guid EntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetStoredCommentsResponse | Response | `Guid RequestId, IReadOnlyList<StoredEntityComment>? Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetStoredFileRequest | Request | `Guid RequestId, Guid EntityId, string FileId, string Variant` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetStoredFileResponse | Response | `Guid RequestId, StoredEntityFile? File, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetStoredPropertiesRequest | Request | `Guid RequestId, EntityPropertyOwner Owner, Guid? ParentEntityId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetStoredPropertiesResponse | Response | `Guid RequestId, IReadOnlyList<StoredEntityProperty>? Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetVersionChunkMembershipRequest | Request | `Guid RequestId, Guid EntityId, int Version` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetVersionChunkMembershipResponse | Response | `Guid RequestId, IReadOnlyList<VersionChunkMembership>? Records, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetVersionChunkWindowRequest | Request | `Guid RequestId, Guid EntityId, int Version, long Start, int Count, IReadOnlyList<Guid>? ChunkIds = null, string? SearchText = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | GetVersionChunkWindowResponse | Response | `Guid RequestId, RichTextDocumentChunkWindow? Window, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderReadMessages.cs) |
+| DataProviderMiniApp | ReleaseExportRequest | Request | `Guid RequestId, Guid ExportId` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
+| DataProviderMiniApp | ReleaseExportResponse | Response | `Guid RequestId, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
+| DataProviderMiniApp | SaveEntityBatchRequest | Request | `Guid RequestId, EntitySaveBatch Batch` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
+| DataProviderMiniApp | SaveEntityBatchResponse | Response | `Guid RequestId, SaveBatchResult? Result, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
+
 ## Следующие этапы
 
-Этап 2: транзакции, исход OperationId, события только от DataProvider;
-Services/EntityMessages удаляется. Этапы 4–8: декларации, жизненный цикл,
+Транзакции, исход OperationId и события DataProvider реализованы на этапе 2;
+Services/EntityMessages удалён. Этапы 4–8: декларации, жизненный цикл,
 контексты сохранения, команды и выделение. Запланированные сообщения здесь
 не выдаются за реализованные.

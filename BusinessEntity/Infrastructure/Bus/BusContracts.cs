@@ -12,6 +12,7 @@ public sealed record BusError(string Code, string Message)
         UnauthorizedAccessException => new("access.denied", "Недостаточно прав для операции."),
         ArgumentException => new("validation.failed", exception.Message),
         KeyNotFoundException => new("record.not_found", "Запрошенный объект не найден."),
+        NotSupportedException => new("payload.unsupported", "Формат данных не поддерживается."),
         System.Text.Json.JsonException or InvalidDataException => new("payload.invalid", "Данные повреждены или имеют неизвестный формат."),
         _ when HasDatabaseFailure(exception) => new("storage.unavailable", "Хранилище недоступно. Повторите операцию позже."),
         OperationCanceledException => new("operation.cancelled", "Операция отменена."),

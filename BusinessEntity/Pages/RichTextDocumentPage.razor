@@ -17,9 +17,9 @@ else if (Entity == null)
 else
 {
     <div class="py-2 px-2">
-        <RichTextDocumentView
+        <RichTextDocumentView @ref="DocumentView"
             BusinessEntityId="@Id"
-            EntityName="@(Entity.Name)"
+            EntityName="@(ViewedTitle)"
             InitialChunkWindow="@InitialChunkWindow"
             OutlineNodes="@OutlineNodes"
             IsInitialContentLoading="@IsInitialContentLoading"
@@ -32,6 +32,7 @@ else
             LatestVersion="@LatestVersion"
             PublishedVersion="@(Manifest?.PublishedVersion ?? 0)"
             CanEditViewedVersion="@CanEditViewedVersion"
+            CanRestoreVersion="@CanEditDocument"
             CanDelete="@CanDeleteDocument"
             CanPublish="@CanPublishDocument"
             CanChangePublicFlag="@CanChangePublicFlag"

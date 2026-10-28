@@ -1,5 +1,5 @@
 using BusinessEntity.Core.Classes;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -69,6 +69,8 @@ internal static class DataPayloadEnvelopeSerializer
             throw new InvalidOperationException("Stored payload envelope does not contain kind.");
         }
 
+        if (envelope.Payload.ValueKind != JsonValueKind.Object) throw new InvalidDataException("Payload должен быть объектом.");
+
         return new ParsedEnvelope(
             envelope.Kind,
             envelope.Payload.GetRawText(),
@@ -91,9 +93,11 @@ internal static class DataPayloadEnvelopeSerializer
     // Нормализует raw payload JSON и превращает его в detached JsonElement для envelope.
     private static JsonElement CreateEnvelopePayload(string payloadJson)
     {
-        var normalizedPayloadJson = string.IsNullOrWhiteSpace(payloadJson) ? "null" : payloadJson;
+        if (string.IsNullOrWhiteSpace(payloadJson)) throw new InvalidDataException("Пустое тело payload.");
+        var normalizedPayloadJson = payloadJson;
 
         using var payloadDocument = JsonDocument.Parse(normalizedPayloadJson);
+        if (payloadDocument.RootElement.ValueKind != JsonValueKind.Object) throw new InvalidDataException("Payload должен быть объектом.");
         return payloadDocument.RootElement.Clone();
     }
 
@@ -108,18 +112,23 @@ internal static class DataPayloadEnvelopeSerializer
     private sealed class DataPayloadEnvelopeRaw
     {
         [JsonPropertyName("schemaVersion")]
+        [JsonRequired]
         public int SchemaVersion { get; set; }
 
         [JsonPropertyName("kind")]
+        [JsonRequired]
         public string Kind { get; set; } = string.Empty;
 
         [JsonPropertyName("createdByUserId")]
+        [JsonRequired]
         public Guid? CreatedByUserId { get; set; }
 
         [JsonPropertyName("lastModifiedByUserId")]
+        [JsonRequired]
         public Guid? LastModifiedByUserId { get; set; }
 
         [JsonPropertyName("payload")]
+        [JsonRequired]
         public JsonElement Payload { get; set; }
     }
 }

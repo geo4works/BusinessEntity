@@ -1,3 +1,5 @@
+using BusinessEntity.Core.Saving;
+using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Internal;
 
@@ -15,8 +17,10 @@ public static class MediaServerMiniAppRegistration
         services.AddHostedService(provider => provider.GetRequiredService<MediaServerUploadManager>());
         services.AddScoped<MediaServerService>();
         services.AddScoped<IMediaServerService>(provider => provider.GetRequiredService<MediaServerService>());
-        services.AddScoped<IMediaServerMiniApp, Facade.MediaServerMiniApp>();
 
+        services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.MediaVideo, "MediaServerMiniApp"));
+        services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.MediaVideo, true));
+        services.AddSingleton(new EntityUrlPattern("/media-server-files/videos/"));
         return services;
     }
 }

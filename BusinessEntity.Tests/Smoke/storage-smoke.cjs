@@ -1,0 +1,132 @@
+// Расширение browser-smoke для этапа 2. Требует успешный файл результата базового прогона.
+const { chromium } = require(process.env.BE_PLAYWRIGHT_MODULE || "playwright");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+async function run() {
+  const fixtures = JSON.parse(fs.readFileSync(process.env.BE_SMOKE_RESULT_FILE, "utf8"));
+  const base = process.env.BE_SMOKE_URL || "http://localhost:7000";
+  const browser = await chromium.launch({ channel: "msedge", headless: true });
+  const context = await browser.newContext({ viewport: { width: 1500, height: 1050 } });
+  const page = await context.newPage(); page.setDefaultTimeout(30000);
+  const result = { steps: [], fixtures: fixtures.documents };
+  const passed = name => { result.steps.push(name); console.log(JSON.stringify({ passed: name })); };
+  const article = fixtures.documents.article;
+  const articleId = article.split("/").pop();
+  const articleRow = (p, version) => p.locator(".rich-text-document-versions__table tbody tr").filter({ has: p.locator("td:first-child", { hasText: new RegExp("^\\s*" + version + "(?!\\d)") }) });
+  try {
+    await page.goto(base + "/login", { waitUntil: "networkidle" });
+    await page.locator("#auth-login").fill(process.env.BE_SMOKE_USER || "admin");
+    await page.locator("#auth-password").fill(process.env.BE_SMOKE_PASSWORD || "admin");
+    await Promise.all([page.waitForNavigation({ waitUntil: "networkidle" }), page.getByRole("button", { name: "Логин", exact: true }).click()]);
+    await page.goto(base + "/space-selection", { waitUntil: "networkidle" });
+    await page.locator("li.list-group-item").filter({ hasText: "Документы" }).getByRole("button", { name: "Выбрать", exact: true }).click();
+    await page.waitForURL(base + "/");
+    await page.goto(fixtures.documents.document, { waitUntil: "networkidle" });
+    const originalBody = await page.locator(".document-layout__content pre").innerText();
+    const other = await context.newPage(); other.setDefaultTimeout(30000);
+    await other.goto(fixtures.documents.document, { waitUntil: "networkidle" });
+    const changedBody = "Second window propagation " + Date.now();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByPlaceholder("Текст документа", { exact: true }).fill(changedBody);
+    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await other.getByText(changedBody, { exact: true }).waitFor();
+    await page.locator(".entity-version-history summary").click();
+    const oldRow = page.locator(".entity-version-history tbody tr").filter({ has: page.getByRole("button", { name: "v2", exact: true }) });
+    await oldRow.getByRole("button", { name: "Восстановить версию", exact: true }).click();
+    await page.locator(".document-layout__content pre").filter({ hasText: originalBody }).waitFor();
+    await other.locator(".document-layout__content pre").filter({ hasText: originalBody }).waitFor();
+    await other.close();
+    passed("document-history-restore-and-second-window-refresh");
+
+    await page.goto(article + "?edit=1", { waitUntil: "networkidle" });
+    const articleTitle = await page.getByRole("textbox", { name: "Название rich-text документа", exact: true }).inputValue();
+    const authorB = await context.newPage(); authorB.setDefaultTimeout(30000);
+    await authorB.goto(article + "?edit=1", { waitUntil: "networkidle" });
+    await authorB.locator('[contenteditable="true"]').first().waitFor();
+    const bodyA = "Author A snapshot " + Date.now(); const bodyB = "Author B snapshot " + Date.now();
+    await page.locator('[contenteditable="true"]').first().fill(bodyA);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByText(/Сохранено чанков:/).first().waitFor();
+    await authorB.locator('[contenteditable="true"]').first().fill(bodyB);
+    await authorB.getByRole("button", { name: "Save", exact: true }).click();
+    await authorB.getByText(/Сохранено чанков:/).first().waitFor();
+    await authorB.close();
+    await page.goto(article, { waitUntil: "networkidle" });
+    await page.getByText(bodyB, { exact: true }).first().waitFor();
+    assert.equal(await page.getByText(bodyA, { exact: true }).count(), 0);
+    passed("article-two-authors-full-snapshots");
+    await page.getByRole("tab", { name: /Верс\./ }).click();
+    await articleRow(page, 2).click();
+    await page.getByText(/^Проверка сохранения статьи /).first().waitFor();
+    await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
+    await page.getByText("Опубликована версия 2.", { exact: true }).first().waitFor();
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByRole("tab", { name: /Верс\./ }).click();
+    await articleRow(page, 3).getByRole("button", { name: "Восстановить версию", exact: true }).click();
+    await page.getByText(bodyA, { exact: true }).first().waitFor();
+    await page.getByRole("tab", { name: /Верс\./ }).click();
+    await articleRow(page, 5).waitFor();
+    assert((await articleRow(page, 2).innerText()).includes("опубликовано"));
+    passed("article-publication-pointer-and-restore-v3-to-v5");
+
+    const imageBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aDogAAAAASUVORK5CYII=", "base64");
+    const imageResponse = await context.request.post(base + "/rich-document-files/" + articleId + "/images", { multipart: { file: { name: "smoke.png", mimeType: "image/png", buffer: imageBytes } } });
+    assert.equal(imageResponse.status(), 200, await imageResponse.text());
+    const image = await imageResponse.json();
+    const imageGet = await context.request.get(base + image.url);
+    assert.equal(imageGet.status(), 200); assert.deepEqual(await imageGet.body(), imageBytes);
+    const videoBytes = Buffer.from("00000018667479706d703432000000006d70343269736f6d", "hex");
+    const videoResponse = await context.request.post(base + "/media-server-files/videos", { multipart: { file: { name: "smoke.mp4", mimeType: "video/mp4", buffer: videoBytes } } });
+    assert.equal(videoResponse.status(), 200, await videoResponse.text());
+    const video = await videoResponse.json(); result.videoId = video.id;
+    const videoGet = await context.request.get(base + "/media-server-files/videos/" + video.id + "/original", { headers: { Range: "bytes=0-3" } });
+    assert.equal(videoGet.status(), 206); assert.deepEqual(await videoGet.body(), videoBytes.subarray(0, 4));
+    passed("image-upload-read-and-video-upload-range-read");
+
+    await page.goto(article, { waitUntil: "networkidle" });
+    const imported = "Imported archive content " + Date.now();
+    await page.locator('input[type="file"][accept*=".txt"]').setInputFiles({ name: "smoke.md", mimeType: "text/markdown", buffer: Buffer.from("# Import\n\n" + imported) });
+    await page.getByText(imported, { exact: true }).first().waitFor();
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByText(imported, { exact: true }).first().waitFor();
+    passed("markdown-import-reload");
+
+    await page.goto(base + "/administration", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Пространства", exact: true }).click();
+    const spaceRow = page.locator("tbody > tr").filter({ has: page.getByText("Документы", { exact: true }) });
+    await spaceRow.getByRole("button", { name: "Настройки пространства", exact: true }).click();
+    const backupPanel = page.locator("fieldset").filter({ has: page.getByText("Бэкап", { exact: true }) });
+    const backupInput = backupPanel.locator('input[type="text"], input:not([type])').first();
+    const backupPath = await backupInput.getAttribute("placeholder"); assert(backupPath);
+    await backupPanel.getByRole("button", { name: "Backup", exact: true }).click();
+    await page.getByText(/Backup пространства 'Документы' выполнен/).waitFor();
+    const restoreName = "RestoredSmoke_" + Date.now(); result.restoredSpace = restoreName;
+    await page.getByPlaceholder("Путь к папке backup пространства", { exact: true }).fill(backupPath);
+    await page.getByPlaceholder("Можно оставить пустым", { exact: true }).fill(restoreName);
+    await page.getByRole("button", { name: "Импорт", exact: true }).click();
+    await page.getByText(new RegExp("Backup импортирован в пространство '" + restoreName)).waitFor();
+    await page.goto(base + "/space-selection", { waitUntil: "networkidle" });
+    await page.locator("li.list-group-item").filter({ hasText: restoreName }).getByRole("button", { name: "Выбрать", exact: true }).click();
+    await page.waitForURL(base + "/");
+    await page.locator("#main-tree-container").getByText(restoreName, { exact: true }).waitFor();
+    const restoredArticleLink = page.locator("#main-tree-container").getByText(articleTitle, { exact: true });
+    await restoredArticleLink.click(); await page.waitForURL(/\/rich-document\/[a-f0-9-]+/);
+    assert.notEqual(page.url().split("?")[0], article);
+    await page.getByText(imported, { exact: true }).first().waitFor();
+    const restoredArticleId = page.url().split("/").pop().split("?")[0];
+    const restoredImage = await context.request.get(base + "/rich-document-files/" + restoredArticleId + "/images/" + image.imageId + "/original");
+    assert.equal(restoredImage.status(), 200); assert.deepEqual(await restoredImage.body(), imageBytes);
+    await page.getByRole("tab", { name: /Верс\./ }).click();
+    await articleRow(page, 3).click(); await page.getByText(bodyA, { exact: true }).first().waitFor();
+    passed("space-backup-atomic-restore-new-identities-and-full-history");
+    console.log(JSON.stringify({ result }));
+  } catch (error) {
+    if (process.env.BE_SMOKE_OUTPUT) {
+      fs.mkdirSync(process.env.BE_SMOKE_OUTPUT, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.BE_SMOKE_OUTPUT, "stage2-storage-failure.png"), fullPage: true });
+    }
+    console.error(JSON.stringify({ failedAt: page.url(), completed: result.steps, error: error.message })); process.exitCode = 1;
+  } finally { await browser.close(); }
+}
+run().catch(error => { console.error(error.message); process.exitCode = 1; });

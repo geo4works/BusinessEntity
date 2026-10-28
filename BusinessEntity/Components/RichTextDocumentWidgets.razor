@@ -160,14 +160,14 @@
                             <thead>
                                 <tr>
                                     <th>Версия</th>
-                                    <th>Дата</th>
+                                    <th>Дата / автор</th>
                                     <th>Описание</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var version in Versions)
                                 {
-                                    var normalizedVersion = version.Version <= 0 ? 1 : version.Version;
+                                    var normalizedVersion = version.Version;
                                     var isDraftVersion = IsVersionDraft(normalizedVersion);
                                     var isPublishedVersion = IsVersionPublished(normalizedVersion);
                                     <tr class="@GetVersionRowClass(version)"
@@ -188,8 +188,18 @@
                                                 </span>
                                             }
                                         </td>
-                                        <td>@FormatVersionDate(version.CreatedDate)</td>
-                                        <td>@version.VersionDescription</td>
+                                        <td>
+                                            <div>@FormatVersionDate(version.CreatedDate)</div>
+                                            <small class="rich-text-document-versions__author">@(version.SavedByUserId?.ToString("D") ?? "Система")</small>
+                                        </td>
+                                        <td>
+                                            <div>@version.VersionDescription</div>
+                                            @if (CanRestoreVersion)
+                                            {
+                                                <button class="btn btn-sm btn-outline-secondary mt-1" @onclick:stopPropagation="true"
+                                                    @onclick="@(() => RestoreVersionAsync(version.Version))">Восстановить версию</button>
+                                            }
+                                        </td>
                                     </tr>
                                 }
                             </tbody>

@@ -30,6 +30,7 @@ namespace BusinessEntity.Components
         [Parameter] public bool CanPublish { get; set; }
         [Parameter] public bool CanChangePublicFlag { get; set; }
         [Parameter] public bool IsPublic { get; set; }
+        [Parameter] public bool CanRestoreVersion { get; set; }
         [Parameter] public bool CanBrowseVersions { get; set; } = true;
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
         [Parameter] public EventCallback<InputFileChangeEventArgs> OnImportSelected { get; set; }

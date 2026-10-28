@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using BusinessEntity.MiniApps.UserMiniApp.Storage;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.UserMiniApp.Connectors;
@@ -17,6 +20,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
         // Подключает user mini-app, его connector, state, factory и message handler.
         public static IServiceCollection AddUserMiniApp(this IServiceCollection services)
         {
+            services.TryAddSingleton(provider => new DbContextOptionsBuilder<UserMiniAppDbContext>()
+                .UseNpgsql(provider.GetRequiredService<IConfiguration>().GetConnectionString("DockerConnection")
+                    ?? throw new InvalidOperationException("ConnectionStrings:DockerConnection обязателен.")).Options);
             services.AddScoped<UserMiniAppState>();
             services.AddScoped<BusinessEntityUserFactory>();
             services.AddScoped<UserIdentitySession>();
@@ -41,6 +47,12 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.AddBusEndpoint<UserSessionMessageHandler>(typeof(GetCurrentUserRequest), typeof(EnsureCurrentUserRequest), typeof(GetGroupsRequest), typeof(IsInGroupRequest));
 
             return services;
+        }
+        // Создаёт собственную схему User после нового DataProvider и проверяет её на последующих стартах.
+        public static async Task InitializeUserStorageAsync(this IServiceProvider services, bool freshDatabase, CancellationToken ct)
+        {
+            await using var context = new UserMiniAppDbContext(services.GetRequiredService<DbContextOptions<UserMiniAppDbContext>>());
+            await UserMiniAppStorageSchema.InitializeAsync(context, freshDatabase, ct);
         }
     }
 }
