@@ -11,5 +11,5 @@ public interface IEntityVersionPolicy
     // Выделяет только содержимое, изменение которого создаёт версию; название добавляет движок.
     string GetContent(IBusinessEntityData data);
     // Объявляет обязательные файловые ссылки всего авторского снимка.
-    IReadOnlyList<EntityFileReference> GetFileReferences(Guid entityId, IReadOnlyList<Core.RichText.RichTextDocumentChunk> chunks);
+    IReadOnlyList<EntityFileReference> GetFileReferences(Guid entityId, IReadOnlyList<Core.Chunks.BusinessEntityDataChunk> chunks);
 }

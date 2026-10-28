@@ -1,7 +1,8 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.Core.Saving;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Chunks;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Archives;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Models;
@@ -77,7 +78,7 @@ internal sealed partial class DataProviderTransactionService
             foreach (var chunk in entity.Chunks)
             {
                 var blocks = RichTextChunkStorageSerializer.DeserializeChunkData(chunk.EnvelopeJson);
-                var row = PrepareChunk(new RichTextDocumentChunk { Id = chunk.Id, BusinessEntityId = card.Id,
+                var row = PrepareChunk(new BusinessEntityDataChunk { Id = chunk.Id, BusinessEntityId = card.Id,
                     SortOrder = chunk.SortOrder, Blocks = blocks });
                 row.Version = chunk.RowVersion; row.CreatedDate = chunk.CreatedDate; row.LastModifiedDate = chunk.LastModifiedDate;
                 rows.Add((row.Id, row.Version), row); db.BusinessEntityDataChunks.Add(row);
@@ -100,7 +101,7 @@ internal sealed partial class DataProviderTransactionService
                     db.ChunkReferences.Add(new ChunkReferenceRow { BusinessEntityId = card.Id, Version = payload.Version,
                         Position = reference.Position, ChunkId = reference.ChunkId, ChunkRowVersion = reference.ChunkRowVersion });
                 if (policy != null)
-                    foreach (var file in policy.GetFileReferences(card.Id, refs.Select(x => new RichTextDocumentChunk { Id = x.ChunkId,
+                    foreach (var file in policy.GetFileReferences(card.Id, refs.Select(x => new BusinessEntityDataChunk { Id = x.ChunkId,
                         BusinessEntityId = card.Id, Blocks = RichTextChunkStorageSerializer.DeserializeChunkData(rows[(x.ChunkId, x.ChunkRowVersion)].Data) }).ToArray()))
                         db.VersionFileReferences.Add(new VersionFileReferenceRow { SourceEntityId = card.Id, Version = payload.Version,
                             FileEntityId = file.EntityId, FileId = file.FileId, Variant = file.Variant });

@@ -1,11 +1,13 @@
+@using BusinessEntity.MiniApps.SpacesMiniApp.Contracts
+@using BusinessEntity.MiniApps.SpacesMiniApp.Internal
 @namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
 @inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
 @using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @attribute [AllowAnonymous]
-@inject BusinessEntity.Contracts.IUserContextService UserContext
-@inject global::BusinessEntity.Services.SpaceHelper SpaceHelper
+@inject BusinessEntity.MiniApps.SpacesMiniApp.Contracts.IUserContextService UserContext
+@inject global::BusinessEntity.MiniApps.SpacesMiniApp.Internal.SpaceHelper SpaceHelper
 @inject IUserConnector UserConnector
 @inject NavigationManager NavManager
 @inject BusinessEntity.WebLogger.Services.IWebLoggerService? WebLogger

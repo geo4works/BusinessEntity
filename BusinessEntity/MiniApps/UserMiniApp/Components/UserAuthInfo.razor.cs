@@ -1,6 +1,7 @@
+using BusinessEntity.MiniApps.UserMiniApp.Internal;
+using BusinessEntity.Services;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
-using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Components
@@ -8,8 +9,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
     // Показывает сведения текущей identity-сессии.
     public partial class UserAuthInfo
     {
+        [Inject] private UserIdentityService UserIdentityService { get; set; } = default!;
         [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
-        [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<UserAuthInfo> Logger { get; set; } = default!;
 
@@ -28,7 +29,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         {
             try
             {
-                CurrentUserModel = await UserConnector.GetCurrentUserAsync();
+                CurrentUserModel = await UserIdentityService.GetCurrentUserAsync();
 
                 if (CurrentUserModel?.IsAuthenticated == true)
                 {

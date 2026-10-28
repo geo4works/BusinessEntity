@@ -13,6 +13,7 @@ public sealed class MiniAppSaveContext
     private IMiniAppSaveParticipant? _participant;
     private EntitySaveBatch? _pending;
     private SaveBatchResult? _committed;
+    private bool _prepared;
     private long _sentRevision, _revision, _acknowledged;
     public Guid EditSessionId { get; } = Guid.NewGuid();
     public Guid LogicalWindowId { get; }
@@ -35,6 +36,12 @@ public sealed class MiniAppSaveContext
             throw new InvalidOperationException("У контекста сохранения уже есть владелец черновика.");
         _participant = participant;
     }
+    // Рабочий экземпляр переживает пересоздание UI и принадлежит самому save context.
+    public TParticipant GetOrCreateParticipant<TParticipant>(Func<TParticipant> create) where TParticipant : class, IMiniAppSaveParticipant
+    {
+        if (_participant is TParticipant participant) return participant;
+        var result = create(); RegisterParticipant(result); return result;
+    }
     // UI отмечает новую ревизию, не меняя подтверждение предыдущей операции.
     public void MarkChanged() { Interlocked.Increment(ref _revision); Changed?.Invoke(); }
     // Не запускает два параллельных применения; повтор Unknown использует прежний frozen package.
@@ -50,7 +57,7 @@ public sealed class MiniAppSaveContext
             {
                 try
                 {
-                    _sentRevision = _revision;
+                    _sentRevision = _revision; _prepared = false;
                     _pending = _participant.Capture(Guid.NewGuid(), EditSessionId, _sentRevision);
                     if (_pending.EditSessionId != EditSessionId || _pending.MiniAppId != MiniAppId)
                         throw new InvalidOperationException("Пакет не принадлежит контексту сохранения.");
@@ -58,6 +65,19 @@ public sealed class MiniAppSaveContext
                 catch (Exception exception) { _pending = null; return Fail(exception.Message); }
             }
             Status = MiniAppSaveStatus.Saving; Error = null; Changed?.Invoke();
+            if (!_prepared)
+            {
+                try
+                {
+                    // Снимок уже зафиксирован Capture: конвертация HTML не читает живой черновик.
+                    var capturedOperation = _pending.OperationId;
+                    _pending = await _participant.PrepareAsync(_pending, ct);
+                    if (_pending.OperationId != capturedOperation || _pending.EditSessionId != EditSessionId || _pending.MiniAppId != MiniAppId)
+                        throw new InvalidOperationException("Подготовлен чужой пакет.");
+                    _prepared = true;
+                }
+                catch (Exception exception) { _pending = null; return Fail(exception.Message); }
+            }
             try
             {
                 if (_committed == null)

@@ -1,3 +1,9 @@
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextImport;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextPaste;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts;
+using BusinessEntity.Core.Types;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.Serialization;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Saving;
@@ -12,7 +18,30 @@ public static class RichTextDocumentMiniAppRegistration
     // Передаёт DataProvider объявление истории от владельца статьи.
     public static IServiceCollection AddRichTextDocumentMiniApp(this IServiceCollection services)
     {
-        services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.RichTextDocument, "RichTextDocumentMiniApp"));
+        // Владелец объявляет тип; общий Core не перечисляет предметные классы.
+        services.AddSingleton<IEntityTypeDescriptor>(new EntityTypeDescriptor<global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities.RichTextDocument>(
+            global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id, "RichTextDocumentMiniApp", global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Key, true, true, "NewRichTextDocument",
+            (id, name, text) =>
+            {
+                var chunk = new BusinessEntity.Core.Chunks.BusinessEntityDataChunk { BusinessEntityId = id };
+                return new EntityInitialContent(new global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities.RichTextDocument { Id = id, Name = name, Tag = global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Key }, [chunk], [chunk.Id]);
+            }, allowedParents: [global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id, global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id], pageRoute: "/rich-document/{id}"));
+        services.AddSingleton<IEntityDataStorageConverter, RichTextDocumentEntityDataStorageConverter>();
+        services.AddScoped<RichTextDocumentReader>();
+        services.AddScoped<RichTextOutlineService>();
+        services.AddScoped<RichTextSearchService>();
+        services.AddScoped<RichTextEditService>();
+        services.AddScoped<RichTextWorkingSetFactory>();
+        services.AddScoped<RichTextFileService>();
+            services.AddScoped<BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextDocumentSettingsService>();
+            services.AddScoped<HtmlToRichTextBlocksConverter>();
+            services.AddScoped<IRichDocFormatConverter, PlainTextRichTextImportConverter>();
+            services.AddScoped<IRichDocFormatConverter, MarkdownRichTextImportConverter>();
+            services.AddScoped<IRichDocFormatConverter, HtmlRichTextImportConverter>();
+            services.AddScoped<IRichDocFormatConverterFactory, RichDocFormatConverterFactory>();
+            services.AddScoped<BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextDocumentImportService>();
+            services.AddScoped<IRichTextClipboardPasteDetector, RichTextClipboardPasteDetector>();
+            services.AddScoped<RichTextClipboardImportHelper>();
         services.AddSingleton<IEntityArchivePolicy, RichTextDocumentArchivePolicy>();
         services.AddSingleton(new EntityUrlPattern("/rich-document/"));
         services.AddSingleton<IEntityVersionPolicy, RichTextDocumentVersionPolicy>();

@@ -1,5 +1,7 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.Entities;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Conversion;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Registration;
@@ -57,6 +59,8 @@ public sealed class StoredPayloadFormatTests
     // Разрешает только собственную фабрику конвертеров; БД этому тесту не нужна.
     private static ServiceProvider CreateServices()
     {
-        var services = new ServiceCollection(); services.AddDataProviderMiniApp(); return services.BuildServiceProvider();
+        var services = new ServiceCollection(); services.AddDataProviderMiniApp();
+        BusinessEntity.MiniApps.DocumentsMiniApp.Registration.DocumentsMiniAppRegistration.AddDocumentsMiniApp(services);
+        BusinessEntity.MiniApps.SysParametersMiniApp.Registration.SysParametersMiniAppRegistration.AddSysParametersMiniApp(services); return services.BuildServiceProvider();
     }
 }

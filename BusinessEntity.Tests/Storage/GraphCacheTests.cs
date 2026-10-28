@@ -1,7 +1,9 @@
 using System.Reactive.Linq;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Entities;
+using BusinessEntity.Core.Chunks;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
@@ -26,7 +28,7 @@ public sealed class GraphCacheTests
     public async Task WarmGraphUsesNoSqlAndReturnsIndependentCopies()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync(); var actor = Actor();
-        var root = Folder("root"); var folder = Folder("folder"); var doc = new Entity { Name = "Document", EntityType = BusinessEntityTypeEnum.Document };
+        var root = Folder("root"); var folder = Folder("folder"); var doc = new Entity { Name = "Document", EntityType = global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id };
         var relation = Edge(root.Id, folder.Id); var second = Edge(folder.Id, doc.Id);
         await fixture.Writer.SaveAsync(Batch() with { Entities = [root, folder, doc], Relations = [relation, second],
             Payloads = [new(doc.Id, 0, new Document { Name = doc.Name, Text = "content" })] }, actor);
@@ -78,9 +80,9 @@ public sealed class GraphCacheTests
     public async Task PayloadCacheIsBoundedEvictsAndDoesNotShareRuntimeData()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync(payloadBytes: 2000, payloadEntries: 1);
-        var actor = Actor(); var first = new Entity { Name = "first", EntityType = BusinessEntityTypeEnum.Document };
-        var second = new Entity { Name = "second", EntityType = BusinessEntityTypeEnum.Document };
-        var huge = new Entity { Name = "huge", EntityType = BusinessEntityTypeEnum.Document };
+        var actor = Actor(); var first = new Entity { Name = "first", EntityType = global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id };
+        var second = new Entity { Name = "second", EntityType = global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id };
+        var huge = new Entity { Name = "huge", EntityType = global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id };
         await fixture.Writer.SaveAsync(Batch() with { Entities = [first, second, huge], Payloads = [
             new(first.Id, 0, new Document { Name = first.Name, Text = "first" }),
             new(second.Id, 0, new Document { Name = second.Name, Text = "second" }),
@@ -126,9 +128,9 @@ public sealed class GraphCacheTests
     public async Task TreePermissionsFilterCachedProjectionAndPublishedNames()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync(); var actor = Actor();
-        var root = new Entity { Name = "space", EntityType = BusinessEntityTypeEnum.Space };
-        var article = new Entity { Name = "published", EntityType = BusinessEntityTypeEnum.RichTextDocument, IsPublic = true };
-        var doc = new Entity { Name = "plain", EntityType = BusinessEntityTypeEnum.Document, IsPublic = true };
+        var root = new Entity { Name = "space", EntityType = global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id };
+        var article = new Entity { Name = "published", EntityType = global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id, IsPublic = true };
+        var doc = new Entity { Name = "plain", EntityType = global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, IsPublic = true };
         await fixture.Writer.SaveAsync(Batch() with { Entities = [root, article, doc], Relations = [Edge(root.Id, article.Id), Edge(root.Id, doc.Id)],
             Payloads = [new(article.Id, 0, new RichTextDocument { Name = article.Name }, [], []), new(doc.Id, 0, new Document { Name = doc.Name, Text = "plain" })],
             Publications = [new(article.Id, 1)] }, actor);
@@ -151,7 +153,7 @@ public sealed class GraphCacheTests
     }
 
     // Создаёт отдельную тестовую сущность, сохраняя ID только для проверки повторного создания.
-    private static Entity Folder(string name, Guid? id = null) => new() { Id = id ?? Guid.NewGuid(), Name = name, EntityType = BusinessEntityTypeEnum.Folder };
+    private static Entity Folder(string name, Guid? id = null) => new() { Id = id ?? Guid.NewGuid(), Name = name, EntityType = global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id };
     // Возвращает независимый доверенный адрес автора.
     private static BusRequestContext Actor() => new(Guid.NewGuid(), Guid.NewGuid());
     // Каждая изменяющая проверка получает новый OperationId.

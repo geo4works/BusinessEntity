@@ -648,6 +648,3 @@ function createRichTextViewportRuntime() {
 window.richTextReadViewport = createRichTextViewportRuntime();
 window.richTextEditViewport = createRichTextViewportRuntime();
 window.richTextOutlineViewport = createRichTextViewportRuntime();
-
-// Backward-compatible alias for any old markup still loaded in the browser.
-window.richTextViewport = window.richTextReadViewport;

@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore.Storage;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Caching;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,20 +27,18 @@ internal sealed partial class DataProviderTransactionService
     private readonly IStorageFaults _faults;
     private readonly TimeSpan _outcomeRetention;
     private readonly ImmutableEntityFileStore _files;
-    private readonly DataProviderCommitPublisher _publisher;
-    private readonly DataProviderGraphCache _graph;
+    private readonly CommittedGraphCoordinator _committedGraph;
+    private readonly EntityPersistencePolicies _persistenceRules;
     private readonly IReadOnlyDictionary<BusinessEntityTypeEnum, IEntityArchivePolicy> _archivePolicies;
 
-    // Получает только общие механизмы хранения и предметные политики, объявленные владельцами.
+    // Шесть зависимостей разделены по SQL, codec, правилам, fault hooks, файлам и публикации committed graph.
+    // Сама последовательность атомарного Save остаётся здесь, а правила и координация кэша выделены отдельно.
     public DataProviderTransactionService(DbContextOptions<KmsBusinessEntityDbContext> options,
-        EntityDataStorageCodec codec, IEnumerable<IEntityVersionPolicy> policies,
-        IStorageFaults faults, IConfiguration configuration, ImmutableEntityFileStore files, DataProviderCommitPublisher publisher, IEnumerable<IEntityArchivePolicy> archivePolicies, DataProviderGraphCache graph)
+        EntityDataStorageCodec codec, EntityPersistencePolicies policies, IStorageFaults faults,
+        ImmutableEntityFileStore files, CommittedGraphCoordinator committedGraph)
     {
-        _options = options; _codec = codec; _graph = graph; _policies = policies.ToDictionary(p => p.EntityType);
-        _faults = faults; _files = files; _publisher = publisher; _archivePolicies = archivePolicies.ToDictionary(x => x.EntityType);
-        var days = configuration.GetValue("DataProvider:OperationRetentionDays", 7);
-        if (days < 1) throw new ArgumentOutOfRangeException(nameof(configuration), "Срок исходов должен быть положительным.");
-        _outcomeRetention = TimeSpan.FromDays(days);
+        _persistenceRules = policies; _options = options; _codec = codec; _policies = policies.Versions; _archivePolicies = policies.Archives;
+        _faults = faults; _files = files; _committedGraph = committedGraph; _outcomeRetention = policies.OutcomeRetention;
     }
 
     // Сначала фиксирует собственный снимок входа, затем последовательно применяет его целиком.
@@ -47,7 +47,7 @@ internal sealed partial class DataProviderTransactionService
     {
         if (actor.UserId == null && !actor.IsSystem) throw new UnauthorizedAccessException();
         var prepared = Prepare(batch, actor);
-        await _graph.InitializeAsync(cancellationToken);
+        await _committedGraph.InitializeAsync(cancellationToken);
         var changes = prepared.Supplement;
         await _writer.WaitAsync(cancellationToken);
         var committed = false;
@@ -97,6 +97,7 @@ internal sealed partial class DataProviderTransactionService
                 (deleted, deletedRelations) = await DeleteEntitiesAsync(db, changes.DeleteEntities,
                     prepared.Payloads.Select(x => x.EntityId).Concat(changes.Restores.Select(x => x.EntityId)).ToArray(), cancellationToken);
             }
+            await _persistenceRules.ApplyOwnedAsync(batch.MiniAppId, changes.OwnedServiceChanges, actor, db.Database.GetDbConnection(), transaction.GetDbTransaction(), cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             _faults.Hit(StorageFaultPoint.AfterBusinessChanges);
             var changed = (changes.ImportSnapshot?.Entities.Select(e => e.Card.Id) ?? prepared.Entities.Select(e => e.Id)).Concat(prepared.Payloads.Select(p => p.EntityId))
@@ -117,13 +118,12 @@ internal sealed partial class DataProviderTransactionService
             await db.SaveChangesAsync(cancellationToken);
             var invalidated = result.ChangedEntities.Concat(result.DeletedEntities).ToHashSet();
             // Кандидат читается до commit; после commit нужны только атомарная публикация и события.
-            var snapshot = await _graph.PrepareAsync(db, invalidated, cancellationToken);
+            var snapshot = await _committedGraph.PrepareAsync(db, invalidated, cancellationToken);
             _faults.Hit(StorageFaultPoint.BeforeCommit);
             await transaction.CommitAsync(cancellationToken);
             committed = true;
-            _graph.Publish(snapshot, invalidated);
             // После этой границы ошибка/таймаут ответа не означает откат: исход уже находится в БД.
-            _publisher.Publish(result);
+            _committedGraph.Publish(snapshot, invalidated, result);
             _faults.Hit(StorageFaultPoint.AfterCommit);
             await _files.TryRecoverAsync(_options);
             return result;
@@ -160,24 +160,30 @@ internal sealed partial class DataProviderTransactionService
         if (entities.Select(e => e.Id).Distinct().Count() != entities.Length ||
             batch.Payloads.Select(p => p.EntityId).Distinct().Count() != batch.Payloads.Count)
             throw new ArgumentException("Пакет содержит повторные сущности или payload.");
-        var payloads = batch.Payloads.Select(p => new PreparedPayload(p.EntityId, p.BaseVersion,
-            p.Data.Name, p.Data.EntityType, _codec.SerializePayload(p.Data),
-            _policies.TryGetValue(p.Data.EntityType, out var policy) ? policy.GetContent(p.Data) : string.Empty,
-            p.ChangedChunks?.Select(PrepareChunk).ToArray(), p.ChunkOrder?.ToArray(), p.VersionDescription)).ToArray();
+        var payloads = batch.Payloads.Select(p =>
+        {
+            var json = _codec.SerializePayload(p.Data);
+            var hasPolicy = _policies.TryGetValue(p.Data.EntityType, out var policy);
+            if (p.Data.HasVersions && !hasPolicy) throw new NotSupportedException("Не объявлена политика истории версионного типа.");
+            // Без истории сравнивается всё каноническое тело; иначе CompanyName/Comment ошибочно считались no-op.
+            var content = hasPolicy ? policy!.GetContent(p.Data) : json;
+            return new PreparedPayload(p.EntityId, p.BaseVersion, p.Data.Name, p.Data.EntityType, json, content,
+                p.ChangedChunks?.Select(PrepareChunk).ToArray(), p.ChunkOrder?.ToArray(), p.VersionDescription);
+        }).ToArray();
         var frozen = JsonSerializer.Deserialize<FrozenSupplement>(JsonSerializer.Serialize(new FrozenSupplement(
             batch.DeleteEntities, batch.DeleteRelations, batch.Properties, batch.DeleteProperties, batch.Comments,
-            batch.Files, batch.Publications, batch.VersionDescriptions, batch.Restores, batch.ImportSnapshot), StorageJsonOptions.Default), StorageJsonOptions.Default)
+            batch.Files, batch.Publications, batch.VersionDescriptions, batch.Restores, batch.ImportSnapshot, batch.OwnedServiceChanges), StorageJsonOptions.Default), StorageJsonOptions.Default)
             ?? throw new InvalidDataException("Не удалось зафиксировать пакет.");
         if (frozen.ImportSnapshot != null && (entities.Length + payloads.Length + relations.Length + frozen.DeleteEntities.Count +
             frozen.DeleteRelations.Count + frozen.Comments.Count + frozen.Properties.Count + frozen.DeleteProperties.Count +
-            frozen.Restores.Count + frozen.Publications.Count + frozen.VersionDescriptions.Count > 0))
+            frozen.Restores.Count + frozen.Publications.Count + frozen.VersionDescriptions.Count + frozen.OwnedServiceChanges.Count > 0))
             throw new ArgumentException("Восстановление графа не смешивается с обычными правками.");
         var files = frozen.Files.Select(_files.Describe).ToArray();
         // RequestId не входит в идентичность операции: повторное ожидание имеет свою корреляцию.
         var hashInput = JsonSerializer.Serialize(new { actor.UserId, actor.IsSystem, batch.MiniAppId,
             batch.EditSessionId, Entities = entities, Payloads = payloads, Relations = relations,
             frozen.DeleteEntities, frozen.DeleteRelations, frozen.Properties, frozen.DeleteProperties, frozen.Comments,
-            frozen.Publications, frozen.VersionDescriptions, frozen.Restores, frozen.ImportSnapshot,
+            frozen.Publications, frozen.VersionDescriptions, frozen.Restores, frozen.ImportSnapshot, frozen.OwnedServiceChanges,
             Files = files.Select(f => new { f.Change.EntityId, f.Change.FileId, f.Change.Variant,
                 f.Change.FileName, f.Change.ContentType, f.Hash, f.Length }) }, StorageJsonOptions.Default);
         if (payloads.Select(p => p.EntityId).Intersect(frozen.Restores.Select(p => p.EntityId)).Any()
@@ -187,7 +193,7 @@ internal sealed partial class DataProviderTransactionService
     }
 
     // Содержимое чанка фиксируется до первого await; его внешняя Version не определяет новый номер.
-    private static BusinessEntityDataChunkDto PrepareChunk(Core.RichText.RichTextDocumentChunk chunk)
+    private static BusinessEntityDataChunkDto PrepareChunk(Core.Chunks.BusinessEntityDataChunk chunk)
     {
         if (chunk.Id == Guid.Empty) throw new ArgumentException("ChunkId обязателен.");
         var json = RichTextChunkStorageSerializer.SerializeChunkData(chunk.Blocks);
@@ -283,7 +289,7 @@ internal sealed partial class DataProviderTransactionService
         IReadOnlyList<EntityPropertyChange> Properties, IReadOnlyList<EntityPropertyKey> DeleteProperties,
         IReadOnlyList<EntityCommentChange> Comments, IReadOnlyList<EntityFileChange> Files,
         IReadOnlyList<EntityPublicationChange> Publications, IReadOnlyList<EntityVersionDescriptionChange> VersionDescriptions,
-        IReadOnlyList<EntityVersionRestore> Restores, GraphArchive? ImportSnapshot);
+        IReadOnlyList<EntityVersionRestore> Restores, GraphArchive? ImportSnapshot, IReadOnlyList<OwnedServiceStorageChange> OwnedServiceChanges);
 }
 
 // Точки искусственного сбоя принадлежат внутренним интеграционным тестам хранилища.

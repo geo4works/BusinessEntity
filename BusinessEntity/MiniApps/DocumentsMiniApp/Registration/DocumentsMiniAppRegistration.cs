@@ -1,3 +1,6 @@
+using BusinessEntity.Core.Types;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
+using BusinessEntity.MiniApps.DocumentsMiniApp.Internal.Serialization;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Saving;
@@ -12,7 +15,11 @@ public static class DocumentsMiniAppRegistration
     // Владелец типа передаёт движку правило версии через общий контракт.
     public static IServiceCollection AddDocumentsMiniApp(this IServiceCollection services)
     {
-        services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.Document, "DocumentsMiniApp"));
+        // Владелец объявляет тип; общий Core не перечисляет предметные классы.
+        services.AddSingleton<IEntityTypeDescriptor>(new EntityTypeDescriptor<global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities.Document>(
+            global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, "DocumentsMiniApp", global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Key, true, true, "NewDocument",
+            (id, name, text) => new EntityInitialContent(new global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities.Document { Id = id, Name = name, Tag = global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Key, Text = text ?? string.Concat(Enumerable.Repeat("Новый документ. ", 100)) }), allowedParents: [global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id, global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id], pageRoute: "/document/{id}"));
+        services.AddSingleton<IEntityDataStorageConverter, DocumentEntityDataStorageConverter>();
         services.AddSingleton<IEntityArchivePolicy, DocumentArchivePolicy>();
         services.AddSingleton(new EntityUrlPattern("/document/"));
         services.AddSingleton<IEntityVersionPolicy, DocumentVersionPolicy>();

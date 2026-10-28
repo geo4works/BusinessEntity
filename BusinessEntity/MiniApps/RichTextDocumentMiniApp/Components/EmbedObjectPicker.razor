@@ -1,0 +1,233 @@
+@namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
+@using BusinessEntity.MiniApps.SpacesMiniApp.Contracts
+@using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@inject IMediaLibraryConnector MediaLibrary
+@inject IUserContextService UserContext
+@inject IJSRuntime JSRuntime
+
+@if (IsOpen)
+{
+    <div class="embed-object-picker" role="dialog" aria-modal="true" aria-label="Вставка объектов">
+        <div class="embed-object-picker__dialog" @onclick:stopPropagation="true">
+            <div class="embed-object-picker__header">
+                <span>Вставка объектов</span>
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary embed-object-picker__close"
+                        title="Закрыть"
+                        @onclick="CloseAsync">
+                    <span class="oi oi-x" aria-hidden="true"></span>
+                </button>
+            </div>
+
+            <div class="embed-object-picker__body">
+                <div class="embed-object-picker__tabs" role="tablist" aria-label="Типы объектов">
+                    <button type="button" class="embed-object-picker__tab" disabled>Объекты</button>
+                    <button type="button" class="embed-object-picker__tab embed-object-picker__tab--active">Видео</button>
+                    <button type="button" class="embed-object-picker__tab" disabled>Аудио</button>
+                    <button type="button" class="embed-object-picker__tab" disabled>Файлы</button>
+                    <button type="button" class="embed-object-picker__tab" disabled>Картинки</button>
+                </div>
+
+                <div class="embed-object-picker__filter">
+                    <input class="form-control embed-object-picker__filter-input"
+                           placeholder="Фильтр по имени или описанию"
+                           value="@FilterText"
+                           @oninput="HandleFilterInputAsync"
+                           @onkeydown="HandleFilterKeyDownAsync" />
+                    <button type="button"
+                            class="btn btn-outline-primary embed-object-picker__filter-button"
+                            title="Фильтр"
+                            @onclick="ApplyFilterAsync">
+                        <span class="embed-object-picker__funnel" aria-hidden="true"></span>
+                    </button>
+                </div>
+
+                @if (IsLoading)
+                {
+                    <div class="embed-object-picker__empty">Загрузка...</div>
+                }
+                else if (Videos.Count == 0)
+                {
+                    <div class="embed-object-picker__empty">Видео не найдены.</div>
+                }
+                else
+                {
+                    <div class="embed-object-picker__list">
+                        @foreach (var video in Videos)
+                        {
+                            <button type="button"
+                                    class="embed-object-picker__video"
+                                    @key="video.Id"
+                                    @onclick="() => SelectVideoAsync(video)">
+                                <span class="embed-object-picker__video-icon">
+                                    <span class="oi oi-media-play" aria-hidden="true"></span>
+                                </span>
+                                <span class="embed-object-picker__video-main">
+                                    <span class="embed-object-picker__video-title">@video.DisplayName</span>
+                                    <span class="embed-object-picker__video-meta">
+                                        <span>@video.FileName</span>
+                                        <span>@FormatSize(video.OriginalSizeBytes)</span>
+                                        <span>@video.UploadedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                                    </span>
+                                </span>
+                            </button>
+                        }
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Message))
+                {
+                    <div class="embed-object-picker__message">@Message</div>
+                }
+
+                <div class="embed-object-picker__footer">
+                    <label class="btn btn-primary btn-sm embed-object-picker__upload">
+                        <span class="oi oi-cloud-upload" aria-hidden="true"></span>
+                        <span>Из файла...</span>
+                        <InputFile id="@UploadInputId" class="embed-object-picker__file-input" OnChange="SelectVideoFileAsync" accept="video/*" />
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool WasOpen { get; set; }
+    private bool IsLoading { get; set; }
+    private string FilterText { get; set; } = string.Empty;
+    private string Message { get; set; } = string.Empty;
+    private string UploadInputId { get; } = $"embed-video-upload-{Guid.NewGuid():N}";
+    private List<MediaVideoInfo> Videos { get; set; } = new();
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+    [Parameter] public EventCallback<MediaVideoInfo> OnVideoSelected { get; set; }
+    [Parameter] public Func<MediaVideoFileSelection, Task<string?>>? OnVideoFileSelected { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && !WasOpen)
+        {
+            WasOpen = true;
+            Message = string.Empty;
+            await LoadVideosAsync();
+        }
+        else if (!IsOpen)
+        {
+            WasOpen = false;
+        }
+    }
+
+    private async Task LoadVideosAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            Videos = (await MediaLibrary.GetVideosAsync(UserContext.CurrentSpaceId, FilterText)).ToList();
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task HandleFilterInputAsync(ChangeEventArgs eventArgs)
+    {
+        FilterText = eventArgs.Value?.ToString() ?? string.Empty;
+        await LoadVideosAsync();
+    }
+
+    private async Task HandleFilterKeyDownAsync(KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Enter")
+        {
+            await ApplyFilterAsync();
+        }
+    }
+
+    private Task ApplyFilterAsync()
+    {
+        return LoadVideosAsync();
+    }
+
+    private async Task SelectVideoAsync(MediaVideoInfo video)
+    {
+        await OnVideoSelected.InvokeAsync(video);
+    }
+
+    private async Task SelectVideoFileAsync(InputFileChangeEventArgs eventArgs)
+    {
+        var file = eventArgs.File;
+        if (file == null)
+        {
+            return;
+        }
+
+        Message = string.Empty;
+        if (OnVideoFileSelected == null)
+        {
+            Message = "Загрузка из файла недоступна.";
+            return;
+        }
+
+        var clientUploadToken = await OnVideoFileSelected.Invoke(new MediaVideoFileSelection
+        {
+            InputId = UploadInputId,
+            FileName = file.Name,
+            ContentType = file.ContentType,
+            Size = file.Size
+        });
+
+        if (string.IsNullOrWhiteSpace(clientUploadToken))
+        {
+            Message = "Не удалось стартовать загрузку видео.";
+            return;
+        }
+
+        var jobId = await JSRuntime.InvokeAsync<string>(
+            "mediaServerUpload.startFirstVideo",
+            UploadInputId,
+            clientUploadToken);
+
+        if (string.IsNullOrWhiteSpace(jobId))
+        {
+            Message = "Не удалось стартовать загрузку видео.";
+            return;
+        }
+
+        await CloseAsync();
+    }
+
+    private Task CloseAsync()
+    {
+        return OnClosed.InvokeAsync();
+    }
+
+    private static string FormatSize(long size)
+    {
+        if (size <= 0)
+        {
+            return "0 Б";
+        }
+
+        string[] suffixes = { "Б", "КБ", "МБ", "ГБ" };
+        var value = (double)size;
+        var suffixIndex = 0;
+        while (value >= 1024 && suffixIndex < suffixes.Length - 1)
+        {
+            value /= 1024;
+            suffixIndex++;
+        }
+
+        return suffixIndex == 0
+            ? $"{value:0} {suffixes[suffixIndex]}"
+            : $"{value:0.0} {suffixes[suffixIndex]}";
+    }
+}

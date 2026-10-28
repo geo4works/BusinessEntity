@@ -1,6 +1,7 @@
+using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
-using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 

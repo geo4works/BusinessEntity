@@ -20,9 +20,8 @@ public interface IMediaServerService
         Guid? spaceId = null,
         string? clientUploadToken = null);
 
-    Task<MediaVideoInfo> RenameVideoAsync(Guid videoId, string displayName, CancellationToken cancellationToken = default);
-
-    Task<MediaVideoInfo> UpdateVideoCommentAsync(Guid videoId, string comment, CancellationToken cancellationToken = default);
+    // Полное состояние metadata доступно собственному рабочему экземпляру библиотеки.
+    Task<Entities.MediaVideo> GetEditableVideoDataAsync(Guid videoId, CancellationToken ct = default);
 
     Task DeleteVideoAsync(Guid videoId, CancellationToken cancellationToken = default);
 

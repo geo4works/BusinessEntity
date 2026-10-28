@@ -51,11 +51,11 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
                 ["DataProvider:PayloadCacheMaxEntries"] = (payloadEntries ?? 128).ToString() }).Build();
         Files = new ImmutableEntityFileStore(_configuration, Faults, NullLogger<ImmutableEntityFileStore>.Instance);
         Options = new DbContextOptionsBuilder<KmsBusinessEntityDbContext>().UseNpgsql(connection).AddInterceptors(Metrics).Options;
-        var services = new ServiceCollection(); services.AddLogging(); services.AddBusinessEntityBus(); services.AddDataProviderMiniApp();
+        var services = new ServiceCollection(); services.AddLogging(); services.AddBusinessEntityBus(); services.AddSingleton<BusinessEntity.Core.Types.EntityTypeRegistry>(); services.AddDataProviderMiniApp();
+        services.AddSingleton<BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.IOwnedServiceStorageWriter, BusinessEntity.MiniApps.UserMiniApp.Internal.UserOwnedStorageWriter>();
         services.AddDocumentsMiniApp(); services.AddRichTextDocumentMiniApp(); services.AddSpacesMiniApp(); services.AddSysParametersMiniApp();
-        services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.Folder, false));
-        services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.MediaVideo, true));
-        services.AddSingleton(new EntityUrlPattern("/media-server-files/videos/"));
+        BusinessEntity.MiniApps.TreeMiniApp.Registration.TreeMiniAppRegistration.AddTreeMiniApp(services);
+        BusinessEntity.MiniApps.MediaServerMiniApp.Registration.MediaServerMiniAppRegistration.AddMediaServerMiniApp(services);
         services.AddSingleton(Options); services.AddSingleton<IConfiguration>(_configuration); services.AddSingleton(Metrics);
         _services = services.BuildServiceProvider();
         Writer = CreateWriter();
@@ -64,7 +64,8 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
     // Имитирует новый процесс с теми же SQL-данными и пустой памятью учёта операций.
     public DataProviderTransactionService CreateWriter() => new(Options,
         _services.GetRequiredService<EntityDataStorageCodec>(),
-        [new DocumentVersionPolicy(), new RichTextDocumentVersionPolicy()], Faults, _configuration, Files, _services.GetRequiredService<DataProviderCommitPublisher>(), _services.GetServices<IEntityArchivePolicy>(), Cache);
+        _services.GetRequiredService<EntityPersistencePolicies>(), Faults, Files,
+        _services.GetRequiredService<CommittedGraphCoordinator>());
 
     // Создаёт изолированную БД с безопасным сгенерированным именем и актуальной схемой.
     public static async Task<PostgresTestDatabase> CreateAsync(long? payloadBytes = null, int? payloadEntries = null)

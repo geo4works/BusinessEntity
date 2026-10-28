@@ -1,3 +1,4 @@
+using BusinessEntity.Services;
 using BusinessEntity.MiniApps.NavigationMiniApp.Registration;
 using BusinessEntity.MiniApps.AdministrationMiniApp.Registration;
 using BusinessEntity.MiniApps.DiagnosticsMiniApp.Registration;
@@ -9,7 +10,7 @@ using BusinessEntity.MiniApps.SysParametersMiniApp.Registration;
 using BusinessEntity.MiniApps.DocumentsMiniApp.Registration;
 using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Registration;
 using BusinessEntity.Infrastructure.Bus;
-using BusinessEntity.Contracts;
+using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
@@ -28,11 +29,6 @@ using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Registration;
 using BusinessEntity.Service;
 using BusinessEntity.Service.WebLogging;
-using BusinessEntity.Services;
-using BusinessEntity.Services.BackupRestore;
-using BusinessEntity.Services.RichTextImport;
-using BusinessEntity.Services.RichTextPaste;
-using BusinessEntity.Settings;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Radzen;
@@ -138,7 +134,7 @@ namespace BusinessEntity
             builder.Services.AddModularity();
             builder.Services.AddNavigationMiniApp(); builder.Services.AddAdministrationMiniApp(); builder.Services.AddDiagnosticsMiniApp();
             builder.Services.AddDataProviderMiniApp();
-            builder.Services.AddSingleton<EntitySaveBatchFactory>();
+            builder.Services.AddBusinessEntityCore();
             builder.Services.AddSpacesMiniApp();
             builder.Services.AddSysParametersMiniApp();
             builder.Services.AddDocumentsMiniApp();
@@ -151,25 +147,7 @@ namespace BusinessEntity
             builder.Services.AddUserMessagesMiniApp();
 
             // Регистрирует прикладные сервисы и message bus.
-            builder.Services.Configure<RichTextDocumentSettings>(
-                builder.Configuration.GetSection(RichTextDocumentSettings.SectionName));
-            builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
-            builder.Services.AddScoped<IBusinessEntityFactory, BusinessEntityFactory>();
-            builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
-            builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
-            builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentHelper>();
-            builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentSettingsService>();
-            builder.Services.AddScoped<HtmlToRichTextBlocksConverter>();
-            builder.Services.AddScoped<IRichDocFormatConverter, PlainTextRichTextImportConverter>();
-            builder.Services.AddScoped<IRichDocFormatConverter, MarkdownRichTextImportConverter>();
-            builder.Services.AddScoped<IRichDocFormatConverter, HtmlRichTextImportConverter>();
-            builder.Services.AddScoped<IRichDocFormatConverterFactory, RichDocFormatConverterFactory>();
-            builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentImportService>();
-            builder.Services.AddScoped<IRichTextClipboardPasteDetector, RichTextClipboardPasteDetector>();
-            builder.Services.AddScoped<RichTextClipboardImportHelper>();
-            builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
             builder.Services.AddBusinessEntityBus();
-            builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
             builder.Services.AddBackupRestoreMiniApp();
 
 			// Подключает Swagger для диагностики API.

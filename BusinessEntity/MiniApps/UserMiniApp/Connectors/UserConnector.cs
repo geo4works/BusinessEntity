@@ -1,7 +1,10 @@
+using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Printing;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.RichText;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Messages;
@@ -18,6 +21,12 @@ public sealed class UserConnector : IUserConnector
     public UserConnector(BusRequestClient client, BusRequestScope scope)
     { _client = client; _scope = scope; }
 
+    // Только транспорт; свежую карточку и права рассчитывает UserMiniApp.
+    public async Task<UserContentAccessDecision> GetEntityContentAccessAsync(Guid entityId, CancellationToken cancellationToken = default)
+    {
+        var response = await _client.SendAsync<GetEntityContentAccessRequest, GetEntityContentAccessResponse>(new(Guid.NewGuid(), entityId), cancellationToken);
+        return response.Result ?? throw new BusRequestFailedException(new("bus.invalid_response", "Не получено решение о правах."));
+    }
     // Выполняет GetCurrentUser через адресный request/response.
     public async Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
@@ -32,6 +41,7 @@ public sealed class UserConnector : IUserConnector
         var response = await _client.SendAsync<EnsureCurrentUserRequest, EnsureCurrentUserResponse>(
             new EnsureCurrentUserRequest(Guid.NewGuid()), cancellationToken);
         _scope.SetUser(response.Result?.Id);
+        _scope.SetApplicationAdminAuthority(response.HasApplicationAdminAuthority);
         return response.Result;
     }
 

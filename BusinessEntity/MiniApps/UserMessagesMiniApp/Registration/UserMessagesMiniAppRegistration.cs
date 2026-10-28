@@ -13,7 +13,7 @@ public static class UserMessagesMiniAppRegistration
     {
         services.AddScoped<UserMessagesMiniAppState>();
         services.AddScoped<UserMessagesMiniAppMessageHandler>();
-        services.AddScoped<IUserMessagesMiniApp, Facade.UserMessagesMiniApp>();
+        services.AddScoped<UserMessagesService>();
 
         services.AddSingleton<IUserMessageFlashStore, UserMessageFlashStore>();
         services.AddMiniAppHost("UserMessagesMiniApp",

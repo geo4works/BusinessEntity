@@ -106,7 +106,11 @@ async function run() {
         await membership.locator("option").filter({ hasText: cleanupName + " (0)" }).waitFor({ state: "attached" });
         await admin.getByRole("link", { name: "Группы", exact: true }).click();
         await admin.locator(".users-admin__groups-table").waitFor();
-        await group.click(); await admin.getByRole("button", { name: "Удалить группу", exact: true }).click();
+        await group.click();
+        // Дожидаемся именно выбранной формы, иначе Delete может относиться к прежней группе.
+        await admin.waitForFunction(name => Array.from(document.querySelectorAll("label"))
+          .find(label => label.textContent.trim() === "Имя группы")?.querySelector("input")?.value === name, cleanupName);
+        await admin.getByRole("button", { name: "Удалить группу", exact: true }).click();
         await admin.getByRole("button", { name: "Подтвердить удаление", exact: true }).click();
         await group.waitFor({ state: "detached" });
       }

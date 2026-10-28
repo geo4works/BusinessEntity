@@ -1,81 +1,73 @@
 # Реестр миниаппов
 
-Фактическое состояние этапа 5 TASK_ARCH_001, 2026-10-28.
-Приложение содержит владельцев из таблицы и регистрации типов. Каждый AddXxxMiniApp регистрирует один декларативный singleton MiniAppHostService. Общий runtime сохранения реализован; предметные редакторы подключаются в этапах 6/8.
+Фактическое состояние этапа 6 TASK_ARCH_001, 2026-10-29.
+15 логических владельцев внутри одного проекта. Каждый AddXxxMiniApp регистрирует
+один декларативный singleton MiniAppHostService. Core/Infrastructure — общие слои.
 
-| Миниапп | Назначение | Текущее время жизни | Доступ и состояние |
-|---|---|---|---|
-| DataProviderMiniApp | Граф, payload, чанки, properties, файлы | Writer/readers/cache/handlers singleton; connector scoped | Типизированные Bus Request/Response; codec только внутри DataProvider, connector использует BusRequestClient; SQL и постоянные файлы закрыты внутри Internal; единственная запись — SaveEntityBatch |
-| UserMiniApp | Identity, локальные пользователи, роли, группы, права | Scoped | Connector через BusRequestClient; отдельный UserIdentitySession, scoped session/general handlers с фильтром адреса |
-| TreeMiniApp | Дерево пространства и действия над узлами | Scoped | Bus connector без facade; scoped handler проверяет scope/окно перед исполнением |
-| ActivityMiniApp | Комментарии | Scoped | Bus connector без facade; scoped handler; комментарии пишет и читает DataProvider через шину |
-| MediaServerMiniApp | Видео и фоновые загрузки | Service scoped; registry/manager singleton, runtime каталога | Прямой API; фоновая очередь передаёт серверный UserId в отдельный scope; постоянные файлы и metadata пишет DataProvider; UI/контроллер — этапы 5–6 |
-| SampleDataMiniApp | Начальные данные | Scoped | Сервис запускает SampleDataStartupRuntime каталога после defaults |
-| BackupRestoreMiniApp | Архивы и расписание | Scheduler singleton runtime; restore scoped | Каталог запускает background после seed; export/import через DataProvider |
-| UserMessagesMiniApp | Адресованные пользователю сообщения | State/handler/facade scoped; flash-store singleton | PostUserMessage/ClearUserMessages адресуются пользователю и окну; корреляция исключает повторную доставку |
-
-Регистрации: [MiniApps](../../BusinessEntity/MiniApps).
-Фактические контракты: [каталог сообщений](bus-messages-catalog.md).
-
-## Регистрации владельцев типов этапа 2
-
-DocumentsMiniApp и RichTextDocumentMiniApp объявляют ownership, правила версий,
-архивов и URL. SpacesMiniApp и SysParametersMiniApp объявляют ownership и архивные
-правила. Их UI-модули зарегистрированы на этапе 5; SaveParticipant подключаются на этапе 6.
-TreeMiniApp объявляет владельца Folder, MediaServerMiniApp — MediaVideo.
-Core использует общие EntitySaveBatchFactory и GraphArchiveRemapper; конкретные
-типы в оставшихся моделях и helper устраняются на этапе 6.
-
-## Общий слой
-
-Core содержит модели, фабрики и BusinessEntityHelper. Миниаппами они не являются.
-До этапа 6 helper ещё знает конкретные типы; К-1 заменяет эти зависимости
-описателями от владельцев. Infrastructure предоставляет единый транспорт,
-жизненный цикл и механизм сохранения. Внутренние вкладочные хосты не вводятся.
-
-## Обновление
-
-Новый миниапп, module definition, handler, время жизни или публичный контракт
-фиксируется здесь вместе с кодом. После этапа 4 реестр содержит фактические
-host-service, размещения и владельцев контекстов сохранения.
-Источник: [ТЗ v2.2](../Tasks/TASK_ARCH_001_miniapp-bus-architecture-migration.md).
-
-Кэш DataProvider: согласованный structural snapshot, ограниченный payload LRU,
-публичные проекции навигации и статистика. Владельцы UI применяют права к копиям
-проекций. User SQL учитывается отдельно от storage counters.
-
-## Фактические модули этапа 4
-
-| DefinitionKey | Размещение / политика | Запуск |
+| Владелец | Сценарии и состояние | Транспорт и storage |
 |---|---|---|
-| DataProviderMiniApp:storage | Headless / AppSingleton | schema/files/cache, порядок 0 |
-| UserMiniApp:identity-bootstrap | Headless / AppSingleton | Authentik, 10 |
-| UserMiniApp:defaults | Headless / AppSingleton | собственная схема/defaults, 20 |
-| SysParametersMiniApp:defaults | Headless / AppSingleton | обязательный singleton, 30 |
-| SampleDataMiniApp:seed | Headless / AppSingleton | seed, 40 |
-| MediaServerMiniApp:uploads | Headless / AppSingleton | background queue, 50 |
-| BackupRestoreMiniApp:scheduler | Headless / AppSingleton | background backup, 60 |
-| TreeMiniApp:tree | ShellModuleHostArea LeftTree / WindowSingleton | tree.main |
+| DataProviderMiniApp | Singleton writer, graph snapshot и bounded payload LRU, история, файлы | Все canonical записи пакетами; scoped connector → общая шина |
+| UserMiniApp | Scoped identity, accounts/profile, roles, groups, assignments, permissions, preferences | Внешние клиенты — IUserConnector; собственные вызовы прямые; свои служебные таблицы — исключение |
+| TreeMiniApp | Scoped дерево, внутренние VM узлов и операции над выделенным набором | ITreeConnector; создание через общий Core и описатели; Move/Delete всего набора атомарны |
+| DocumentsMiniApp | Модель документа, редактор и DocumentsWorkingSet в edit session | Общий SaveContext → DataProvider; версия по имени/тексту |
+| RichTextDocumentMiniApp | Модель статьи, вложенные компоненты и client source, reader/edit/search/outline/import/files/print | RichTextWorkingSet фиксирует HTML до await; подготовка файлов и один Save пакет |
+| SpacesMiniApp | Контекст выбранного пространства, home/selection/admin, формы имён и свойств | ISpacesConnector; SpacePropertiesWorkingSet принадлежит административному модулю |
+| SysParametersMiniApp | Startup singleton, header и форма параметров | Тип и codec у владельца; EntityPayloadWorkingSet сохраняет параметры без истории |
+| MediaServerMiniApp | Каталог, HTTP/files, upload queue и библиотека | Внешнее чтение списка — IMediaLibraryConnector; MediaVideoWorkingSet сохраняет metadata набора одним пакетом |
+| ActivityMiniApp | Scoped комментарии | IActivityConnector; создание комментария — самостоятельная завершённая транзакция |
+| SampleDataMiniApp | Начальная заливка, административная команда | Startup runtime; внешний ISampleDataConnector, собственный UI вызывает свой сервис |
+| BackupRestoreMiniApp | Singleton scheduler и scoped restore, собственные archive/path services | IBackupRestoreConnector; canonical graph export/import через DataProvider |
+| UserMessagesMiniApp | Scoped state/handler/service, singleton flash-store | Post/Clear адресованы пользователю и окну; свой UI вызывает сервис напрямую |
+| NavigationMiniApp | Главное меню и ссылки объявленных владельцами возможностей | LeftNav, WindowSingleton |
+| AdministrationMiniApp | Административные ссылки | Page, WindowSingleton |
+| DiagnosticsMiniApp | Диагностика и просмотр логов | Page, WindowSingleton; чужие сценарии через коннекторы |
 
-Другие host-service пока объявляют пустой набор UI (перенос этапа 5).
-ModuleCatalog singleton принимает поздние объявления; WindowModularityManager
-scoped держит адреса и общие MiniAppSaveContext. AppSingleton не допускает UI/dirty.
-IModuleUiFactory проверяет локальный реестр типов; шина переносит только ключи.
-Снятие последнего dirty UI сохраняет runtime неактивным до возврата/guard;
-старый неактивный адрес не исполняет команду. Reconnect сохраняет circuit;
-новый circuit после аварии не восстанавливает локальные черновики.
+## Общий движок и типы
 
-## UI-владельцы этапа 5
+Core содержит Entity/Data/Chunk/Block/Relation, BusinessEntityHelper, фабрику,
+реестр IEntityTypeDescriptor, общие графовые операции и архивный remapper.
+В Core нет конкретных payload-классов и enum-списка предметных типов.
+BusinessEntityTypeEnum оставляет технический Undefined; стабильные числовые
+идентификаторы объявляют владельцы. Новый тип не требует правки Core.
 
-NavigationMiniApp (LeftNav), AdministrationMiniApp (навигационный вход),
-DiagnosticsMiniApp (diagnostics/logging) имеют свои декларативные host-service.
-Spaces предоставляет home/selection/admin и меню пространств; User — identity
-header/profile/authinfo/admin; SysParameters — company header/admin; Documents
-и RichText — собственные страницы; Activity — вложенный page комментариев.
-Media — library/uploads; Tree — tree/selection helper; UserMessages — общая панель.
-Всего 15 логических владельцев, без отдельных проектов на каждый.
+| ID | TypeKey / владелец | Публичная модель |
+|---|---|---|
+| 100 | Space / SpacesMiniApp | Contracts/Entities/Space |
+| 200 | Folder / TreeMiniApp | Contracts/Entities/Folder |
+| 300 | Document / DocumentsMiniApp | Contracts/Entities/Document |
+| 350 | RichTextDocument / RichTextDocumentMiniApp | Contracts/Entities/RichTextDocument |
+| 400 | SysParametersTp / SysParametersMiniApp | Contracts/Entities/SysParameters |
+| 500 | MediaVideo / MediaServerMiniApp | Contracts/Entities/MediaVideo |
 
-Полный актуальный список UI definition/component keys, URL, guard и save-context
-находится в [реестре модулей и маршрутов](modules-and-routes.md). Таблица headless
-выше продолжает действовать. Остатки смешанных Services/Core/Models и вложенных
-rich-text компонентов переносятся/разделяются этапом 6, старый selection — этапом 7.
+Описатель задаёт initial payload/chunks, имя, видимость, допустимых родителей,
+singleton и route. Порядок/имена physical kind и текущие JSON не менялись от переноса.
+Typed storage converters, version/archive policies регистрируют владельцы.
+DataProvider хранит общий codec/envelope/chunk contract и техническую фабрику.
+
+## Запуск и рабочие экземпляры
+
+ModuleCatalog запускает headless runtime по порядку: DataProvider storage 0,
+User identity 10, User schema/defaults 20, SysParameters defaults 30, Sample seed 40,
+Media queue 50, Backup scheduler 60. Остановка — в обратном порядке.
+Host-service не создаёт UI и не исполняет сценарии.
+
+WindowModularityManager создаёт ModuleId и edit session. Контекст сохранения
+держит участника-владельца, переживающего снятие dirty UI. AppSingleton не держит
+пользовательские черновики. Новый circuit после аварии не восстанавливает память.
+
+Documents, RichText, User profile/admin, SysParameters admin, Spaces admin и Media
+library используют Save/Discard рабочего набора. Успех подтверждает отправленную
+ревизию; поздние правки остаются dirty. Навигационный UX guard — этап 8.
+Dirty пространства и общий Save приложения отсутствуют.
+
+Служебные формы User применяются UserOwnedStorageWriter через открытую транзакцию
+DataProvider; outcome и строки User коммитятся вместе. Writer не получает DbContext
+бизнес-графа. Authentik API — внешняя операция подготовки, вне SQL rollback;
+повтор готового пакета не вызывает её ещё раз. Пароли в SQL-пакет не входят.
+
+Выбранное пространство — scoped контекст окружения из Contracts Spaces; его
+значения читают другие владельцы. Предметные операции Spaces/Backup/Media/Sample
+передаются через шину. Старый selection API пока принадлежит Tree; этап 7 удаляет его.
+
+[Маршруты, размещения и компоненты](modules-and-routes.md).
+[Каталог сообщений](bus-messages-catalog.md). [ТЗ](../Tasks/TASK_ARCH_001_miniapp-bus-architecture-migration.md).

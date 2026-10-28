@@ -160,13 +160,23 @@ public sealed class BusRequestClientTests
         var module = Guid.NewGuid(); var editSession = Guid.NewGuid(); var entity = Guid.NewGuid();
         using var address = context.Enter(module, editSession, entity);
         await scope.ServiceProvider.GetRequiredService<BusRequestClient>().SendAsync<ProbeRequest, ProbeResponse>(
-            new(Guid.NewGuid()) { Context = new(Guid.NewGuid(), Guid.NewGuid()) });
+            new(Guid.NewGuid()) { Context = new(Guid.NewGuid(), Guid.NewGuid(), HasApplicationAdminAuthority: true) });
         var received = scope.ServiceProvider.GetRequiredService<ProbeState>().Context!;
         Assert.Equal(actor, received.UserId);
+        Assert.False(received.HasApplicationAdminAuthority);
         Assert.Equal(context.LogicalWindowId, received.LogicalWindowId);
         Assert.Equal(module, received.ModuleId);
         Assert.Equal(editSession, received.EditSessionId);
         Assert.Equal(entity, received.ContextId);
+    }
+
+    // Смена серверного автора не сохраняет полномочия предыдущего пользователя.
+    [Fact]
+    public void IdentityChangeClearsAdministrativeAuthority()
+    {
+        var scope = new BusRequestScope(); scope.SetUser(Guid.NewGuid()); scope.SetApplicationAdminAuthority(true);
+        Assert.True(scope.Snapshot().HasApplicationAdminAuthority);
+        scope.SetUser(Guid.NewGuid()); Assert.False(scope.Snapshot().HasApplicationAdminAuthority);
     }
 
     // Собирает два тестовых предметных маршрута на одном транспорте.

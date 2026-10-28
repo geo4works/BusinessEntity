@@ -1,15 +1,18 @@
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
+using BusinessEntity.Services;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
-using BusinessEntity.Components;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
-using BusinessEntity.MiniApps.TreeMiniApp.Internal;
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
-using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
@@ -20,12 +23,18 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
     // Предметная страница статьи: чтение, история, публикация и импорт.
     public partial class RichDocumentContent : IDisposable
     {
+        [Inject] public BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextWorkingSetFactory WorkingSets { get; set; } = default!;
+        private BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextWorkingSet Working => WorkingSets.Get(Module!);
+        private bool HasRetainedEdit => CanEditDocument && Working.EntityId == Id && Working.BaseVersion > 0 &&
+            (Working.IsEditing || Module!.IsDirty);
+        [Inject] public RichTextDocumentReader RichTextDocumentReader { get; set; } = default!;
+        [Inject] public RichTextOutlineService RichTextOutlineService { get; set; } = default!;
+        [Inject] public RichTextEditService RichTextEditService { get; set; } = default!;
         [Parameter] public Guid Id { get; set; }
         [Parameter]
         [SupplyParameterFromQuery(Name = "edit")]
         public string? EditQuery { get; set; }
 
-        [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public RichTextDocumentImportService ImportService { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
         [Inject] public BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextUserMessages MessagePanel { get; set; } = default!;
@@ -35,7 +44,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] public NavigationManager NavigationManager { get; set; } = default!;
-        [Inject] private TreeMiniAppService TreeMiniAppService { get; set; } = default!;
+        [Inject] private ITreeConnector TreeConnector { get; set; } = default!;
 
         private BusinessEntity.Core.Classes.BusinessEntity? Entity;
         private RichTextDocument? Manifest;
@@ -65,7 +74,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         private bool RequestedEditMode => string.Equals(EditQuery, "1", StringComparison.OrdinalIgnoreCase) ||
                                           string.Equals(EditQuery, "true", StringComparison.OrdinalIgnoreCase);
         private bool StartInEditMode => RequestedEditMode && CanEditViewedVersion;
-        private bool CanEditViewedVersion => CanEditDocument && ViewedVersion >= LatestVersion;
+        private bool CanEditViewedVersion => CanEditDocument && (ViewedVersion >= LatestVersion || (HasRetainedEdit && Working.BaseVersion == ViewedVersion));
         private Guid _messagesForDocumentId;
         private Guid _loadedDocumentId;
         private const int OutlineChunkBatchSize = 5;
@@ -124,7 +133,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
 
             try
             {
-                var shell = await RichTextDocumentHelper.GetRichTextDocumentShellAsync(Id, cancellationToken);
+                var shell = await RichTextDocumentReader.GetRichTextDocumentShellAsync(Id, cancellationToken);
                 if (shell == null)
                 {
                     Entity = null;
@@ -147,6 +156,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
                 TreeSelectionService.RequestEntitySelection(Entity.Id);
 
                 await RefreshVersionsAsync(cancellationToken);
+                if (HasRetainedEdit) ViewedVersion = Working.BaseVersion;
                 if (!HasFullDocumentAccess)
                 {
                     ViewedVersion = Math.Min(Manifest.PublishedVersion, LatestVersion);
@@ -184,7 +194,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
             try
             {
                 var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync(cancellationToken);
-                var chunkWindow = await RichTextDocumentHelper.GetChunkWindowAsync(
+                var chunkWindow = await RichTextDocumentReader.GetChunkWindowAsync(
                     documentId,
                     0,
                     richTextDocumentSettings.GetInitialChunkCount(),
@@ -231,7 +241,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         {
             try
             {
-                await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
+                await foreach (var tableOfContents in RichTextOutlineService.GetTableOfContentsBatchesAsync(
                     documentId,
                     OutlineChunkBatchSize,
                     documentVersion,
@@ -316,7 +326,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
                 manifest.SupportsImages = importResult.Manifest.SupportsImages;
 
                 // Импорт больше не заменяет документ целиком: новый контент добавляется в конец текущего содержимого.
-                await RichTextDocumentHelper.AppendImportedContentAsync(
+                await RichTextEditService.AppendImportedContentAsync(
                     Entity,
                     manifest,
                     importResult.Chunks,
@@ -353,13 +363,13 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
             try
             {
                 var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync();
-                InitialChunkWindow = await RichTextDocumentHelper.GetChunkWindowAsync(
+                InitialChunkWindow = await RichTextDocumentReader.GetChunkWindowAsync(
                     Id,
                     0,
                     richTextDocumentSettings.GetInitialChunkCount(),
                     ViewedVersion);
 
-                await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
+                await foreach (var tableOfContents in RichTextOutlineService.GetTableOfContentsBatchesAsync(
                     Id,
                     OutlineChunkBatchSize,
                     ViewedVersion))
@@ -392,7 +402,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
 
             try
             {
-                var shell = await RichTextDocumentHelper.GetRichTextDocumentShellAsync(Id)
+                var shell = await RichTextDocumentReader.GetRichTextDocumentShellAsync(Id)
                     ?? throw new KeyNotFoundException("Статья после сохранения не найдена.");
                 Entity = shell.Entity;
                 Manifest = shell.Manifest;
@@ -429,7 +439,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
                 }
 
                 IsOutlineLoading = true;
-                await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
+                await foreach (var tableOfContents in RichTextOutlineService.GetTableOfContentsBatchesAsync(
                     Id,
                     OutlineChunkBatchSize,
                     ViewedVersion))
@@ -458,8 +468,8 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
                 var settings = await RichTextDocumentSettingsService.GetSettingsAsync();
                 var take = Math.Max(settings.GetInitialChunkCount(), 1);
                 InitialChunkWindow = targetPosition == null
-                    ? await RichTextDocumentHelper.GetChunkWindowAsync(Id, 0, take, ViewedVersion)
-                    : await RichTextDocumentHelper.GetChunkWindowAroundAsync(
+                    ? await RichTextDocumentReader.GetChunkWindowAsync(Id, 0, take, ViewedVersion)
+                    : await RichTextDocumentReader.GetChunkWindowAroundAsync(
                         Id,
                         Math.Max(targetPosition.ChunkSortOrder, 0),
                         take / 2,
@@ -555,7 +565,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
             try
             {
                 LoadCancellationTokenSource?.Cancel();
-                await TreeMiniAppService.DeleteEntitiesAsync(new[] { entityId });
+                await TreeConnector.DeleteEntitiesAsync(new[] { entityId });
 
                 TreeSelectionService.RequestEntitySelection(null);
                 NavigationManager.NavigateTo("/", replace: true);

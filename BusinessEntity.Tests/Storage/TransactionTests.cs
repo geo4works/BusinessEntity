@@ -3,8 +3,9 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 using BusinessEntity.MiniApps.UserMiniApp.Storage;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
+using BusinessEntity.Core.Chunks;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
@@ -23,8 +24,8 @@ public sealed class TransactionTests
     public async Task FailureRollsBackWholeBatchAndOutcome()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync();
-        var first = NewEntity("first", BusinessEntityTypeEnum.Folder);
-        var second = NewEntity("second", BusinessEntityTypeEnum.Folder);
+        var first = NewEntity("first", global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id);
+        var second = NewEntity("second", global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id);
         var batch = Batch() with { Entities = [first, second], Relations = [new BusinessEntityRelation
             { ObjectAId = first.Id, ObjectBId = second.Id, RelationType = "Contains" }] };
         fixture.Faults.ThrowAt = StorageFaultPoint.AfterBusinessChanges;
@@ -40,7 +41,7 @@ public sealed class TransactionTests
     public async Task RetrySurvivesRestartAndRejectsDifferentPackage()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync();
-        var entity = NewEntity("document", BusinessEntityTypeEnum.Document);
+        var entity = NewEntity("document", global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id);
         var batch = Batch() with { Entities = [entity], Payloads = [new(entity.Id, 0, new Document { Name = entity.Name, Text = "v1" })] };
         var actor = Actor();
         var first = await fixture.Writer.SaveAsync(batch, actor);
@@ -60,7 +61,7 @@ public sealed class TransactionTests
     public async Task LostReplyAfterCommitHasDurableOutcome()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync();
-        var batch = Batch() with { Entities = [NewEntity("committed", BusinessEntityTypeEnum.Folder)] };
+        var batch = Batch() with { Entities = [NewEntity("committed", global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id)] };
         var actor = Actor(); fixture.Faults.ThrowAt = StorageFaultPoint.AfterCommit;
         await Assert.ThrowsAsync<IOException>(() => fixture.Writer.SaveAsync(batch, actor));
         fixture.Faults.ThrowAt = null;
@@ -76,7 +77,7 @@ public sealed class TransactionTests
     public async Task ParallelAuthorsKeepFullOwnStateAndRestoreCreatesNewSnapshot()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync();
-        var entity = NewEntity("article", BusinessEntityTypeEnum.RichTextDocument);
+        var entity = NewEntity("article", global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id);
         var a = Chunk(entity.Id, "original A"); var b = Chunk(entity.Id, "original B");
         var manifest = new RichTextDocument { Name = entity.Name };
         await fixture.Writer.SaveAsync(Batch() with { Entities = [entity], Payloads = [new(entity.Id, 0, manifest, [a, b], [a.Id, b.Id])] }, Actor());
@@ -103,7 +104,7 @@ public sealed class TransactionTests
     public async Task PublicationAndDescriptionLeaveHistoryPayloadUntouched()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync();
-        var entity = NewEntity("article", BusinessEntityTypeEnum.RichTextDocument);
+        var entity = NewEntity("article", global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id);
         var manifest = new RichTextDocument { Name = entity.Name };
         var actor = Actor();
         await fixture.Writer.SaveAsync(Batch() with { Entities = [entity], Payloads = [new(entity.Id, 0, manifest, [], [])] }, actor);
@@ -124,7 +125,7 @@ public sealed class TransactionTests
     public async Task InsertAndDeletePreserveHistoricalMembership()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync();
-        var entity = NewEntity("article", BusinessEntityTypeEnum.RichTextDocument);
+        var entity = NewEntity("article", global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id);
         var manifest = new RichTextDocument { Name = entity.Name };
         var original = Chunk(entity.Id, "original"); var inserted = Chunk(entity.Id, "inserted");
         await fixture.Writer.SaveAsync(Batch() with { Entities = [entity], Payloads = [new(entity.Id, 0, manifest, [original], [original.Id])] }, Actor());
@@ -149,10 +150,10 @@ public sealed class TransactionTests
         });
         fixture.Faults.ThrowAt = StorageFaultPoint.BeforeCommit;
         await Assert.ThrowsAsync<IOException>(() => fixture.Writer.SaveAsync(Batch() with
-            { Entities = [NewEntity("rollback", BusinessEntityTypeEnum.Folder)] }, Actor()));
+            { Entities = [NewEntity("rollback", global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id)] }, Actor()));
         Assert.Equal(0, eventCount);
         fixture.Faults.ThrowAt = null;
-        await fixture.Writer.SaveAsync(Batch() with { Entities = [NewEntity("commit", BusinessEntityTypeEnum.Folder)] }, Actor());
+        await fixture.Writer.SaveAsync(Batch() with { Entities = [NewEntity("commit", global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id)] }, Actor());
         Assert.Equal(1, eventCount); Assert.True(committedAtDelivery);
     }
 
@@ -181,6 +182,6 @@ public sealed class TransactionTests
     // Создаёт легковесную карточку теста.
     private static Entity NewEntity(string name, BusinessEntityTypeEnum type) => new() { Name = name, EntityType = type };
     // Формирует содержимое технического чанка с сохраняемым идентификатором.
-    private static RichTextDocumentChunk Chunk(Guid entity, string text, Guid? id = null) => new()
-        { Id = id ?? Guid.NewGuid(), BusinessEntityId = entity, Blocks = [new RichTextBlock { Html = text }] };
+    private static BusinessEntityDataChunk Chunk(Guid entity, string text, Guid? id = null) => new()
+        { Id = id ?? Guid.NewGuid(), BusinessEntityId = entity, Blocks = [new BusinessEntityDataBlock { Html = text }] };
 }

@@ -31,7 +31,7 @@ public sealed record BusError(string Code, string Message)
 // Адрес и доверенный серверный автор запроса в пределах одного scope.
 public sealed record BusRequestContext(Guid ScopeId, Guid? UserId,
     Guid LogicalWindowId = default, Guid? ModuleId = null, Guid? EditSessionId = null,
-    Guid? ContextId = null, bool IsSystem = false);
+    Guid? ContextId = null, bool IsSystem = false, bool HasApplicationAdminAuthority = false);
 
 // База предметных запросов; контекст устанавливается клиентом перед отправкой.
 public abstract record BusRequest(Guid RequestId)

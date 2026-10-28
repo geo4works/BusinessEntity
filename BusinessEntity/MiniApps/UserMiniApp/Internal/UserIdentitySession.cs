@@ -1,5 +1,5 @@
-using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Internal;
 

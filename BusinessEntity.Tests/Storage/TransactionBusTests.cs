@@ -1,8 +1,8 @@
 using BusinessEntity.MiniApps.DocumentsMiniApp.Registration;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Saving;
-using BusinessEntity.Core.RichText;
-using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
@@ -27,7 +27,7 @@ public sealed class TransactionBusTests
         var services = new ServiceCollection(); services.AddLogging(); services.AddBusinessEntityBus();
         services.AddDataProviderMiniApp();
         services.AddDocumentsMiniApp();
-        services.AddSingleton<BusinessEntity.Core.Saving.IEntityArchivePolicy>(new BusinessEntity.Core.Saving.NoStoredReferencesArchivePolicy(BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Folder, false));
+        services.AddSingleton<BusinessEntity.Core.Saving.IEntityArchivePolicy>(new BusinessEntity.Core.Saving.NoStoredReferencesArchivePolicy(global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, false));
         services.AddRichTextDocumentMiniApp();
         services.AddSingleton(fixture.Options); services.AddSingleton(fixture.Metrics);
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
@@ -38,7 +38,7 @@ public sealed class TransactionBusTests
         scope.ServiceProvider.GetRequiredService<BusRequestScope>().MarkSystem();
         var connector = scope.ServiceProvider.GetRequiredService<IDataProviderConnector>();
         var batch = new EntitySaveBatch(Guid.NewGuid(), "test-seed", null)
-            { Entities = [new() { Name = "via bus", EntityType = BusinessEntityTypeEnum.Folder }] };
+            { Entities = [new() { Name = "via bus", EntityType = global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id }] };
         var result = await connector.SaveAsync(batch);
         var outcome = await connector.GetOperationOutcomeAsync(batch.OperationId);
         Assert.Equal(batch.OperationId, result.OperationId);
@@ -59,8 +59,8 @@ public sealed class TransactionBusTests
         Assert.Equal(propertyId, (await connector.GetStoredPropertiesAsync(EntityPropertyOwner.Entity, entityId)).Single().Id);
         Assert.Equal(commentId, (await connector.GetStoredCommentsAsync(entityId)).Single().Id);
         Assert.True(File.Exists((await connector.GetStoredFileAsync(entityId, "file", "original"))!.PhysicalPath));
-        var article = new BusinessEntity.Core.Classes.BusinessEntity { Name = "article", EntityType = BusinessEntityTypeEnum.RichTextDocument };
-        var chunk = new RichTextDocumentChunk { BusinessEntityId = article.Id, Blocks = [new RichTextBlock { Html = "content" }] };
+        var article = new BusinessEntity.Core.Classes.BusinessEntity { Name = "article", EntityType = global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id };
+        var chunk = new BusinessEntityDataChunk { BusinessEntityId = article.Id, Blocks = [new BusinessEntityDataBlock { Html = "content" }] };
         await connector.SaveAsync(new(Guid.NewGuid(), "test", null)
         {
             Entities = [article], Payloads = [new(article.Id, 0, new RichTextDocument { Name = article.Name }, [chunk], [chunk.Id])]

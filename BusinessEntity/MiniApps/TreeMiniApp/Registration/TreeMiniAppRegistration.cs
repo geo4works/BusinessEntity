@@ -1,3 +1,6 @@
+using BusinessEntity.Core.Types;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
+using BusinessEntity.MiniApps.TreeMiniApp.Internal.Serialization;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Saving;
@@ -16,15 +19,19 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Registration
     {
         public static IServiceCollection AddTreeMiniApp(this IServiceCollection services)
         {
+            services.AddScoped<ITreeSelectionService, TreeSelectionService>();
             services.AddScoped<TreeVisibilityService>();
             services.AddScoped<TreeMiniAppService>();
             services.AddScoped<TreeMiniAppMessageHandler>();
-            services.AddScoped<ITreeMiniApp, Facade.TreeMiniApp>();
             services.AddScoped<ITreeConnector, TreeConnector>();
 
-            services.AddBusEndpoint<TreeMiniAppMessageHandler>(typeof(GetTreeForSpaceRequest));
-            services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.Folder, "TreeMiniApp"));
-            services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.Folder, false));
+            services.AddBusEndpoint<TreeMiniAppMessageHandler>(typeof(GetTreeForSpaceRequest), typeof(DeleteTreeEntitiesRequest));
+            // Владелец объявляет тип; общий Core не перечисляет предметные классы.
+        services.AddSingleton<IEntityTypeDescriptor>(new EntityTypeDescriptor<global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.Entities.Folder>(
+            global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, "TreeMiniApp", global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Key, false, false, "NewFolder",
+            (id, name, text) => new EntityInitialContent(null), allowedParents: [global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id, global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id]));
+        services.AddSingleton<IEntityDataStorageConverter, FolderEntityDataStorageConverter>();
+            services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, false));
             services.AddMiniAppHost("TreeMiniApp", new ModuleDefinition("TreeMiniApp", "tree", "Дерево", "account_tree",
                 ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "tree.main", "LeftTree", OpenOnStartup: true),
             new ModuleDefinition("TreeMiniApp", "Tree.SelectionInfo", "Информация", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "tree.selection", "RightPanel", Order: 20, OpenOnStartup: true));

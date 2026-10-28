@@ -1,0 +1,73 @@
+@namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
+@if (!string.IsNullOrWhiteSpace(SaveError))
+{
+    <div class="alert alert-danger rich-document-save-error" role="alert">@SaveError</div>
+}
+
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components
+
+@if (IsEditMode)
+{
+    <RichTextDocumentEditView @ref="EditView"
+                              EditableEntityName="@EditableEntityName"
+                              TitleValidationMessage="@TitleValidationMessage"
+                              BusinessEntityId="@BusinessEntityId"
+                              InitialChunkWindow="@InitialChunkWindow"
+                              OutlineNodes="@OutlineNodes"
+                              IsInitialContentLoading="@IsInitialContentLoading"
+                              IsOutlineLoading="@IsOutlineLoading"
+                              IsBusy="@IsBusy"
+                              IsSaving="@IsSaving"
+                              IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
+                              StatusMessage="@StatusMessage"
+                              VersionsRefreshToken="@VersionsRefreshToken"
+                              ViewedVersion="@ViewedVersion"
+                              LatestVersion="@LatestVersion"
+                              PublishedVersion="@PublishedVersion"
+                              InitialTargetPosition="@EditInitialPosition"
+                              CanDelete="@CanDelete"
+                              CanPublish="@CanPublish"
+                              CanChangePublicFlag="@CanChangePublicFlag"
+                              IsPublic="@IsPublic"
+                              CanBrowseVersions="@CanBrowseVersions"
+                              OnTitleChanged="HandleTitleChangedAsync"
+                              OnSaveRequested="HandleSaveAsync"
+                              OnPublishRequested="HandlePublishAsync"
+                              OnDeleteRequested="HandleDeleteAsync"
+                              OnPublicChanged="HandlePublicChangedAsync"
+                              OnReadModeRequested="HandleReadModeAsync"
+                              OnRebuildTableOfContents="@OnRebuildTableOfContents"
+                              OnVersionSelected="@OnVersionSelected" />
+}
+else
+{
+    <RichTextDocumentReadView @key="ReadViewInstanceKey" CanRestoreVersion="@CanRestoreVersion"
+                              EntityName="@EntityName"
+                              BusinessEntityId="@BusinessEntityId"
+                              InitialChunkWindow="@InitialChunkWindow"
+                              OutlineNodes="@OutlineNodes"
+                              IsInitialContentLoading="@IsInitialContentLoading"
+                              IsOutlineLoading="@IsOutlineLoading"
+                              IsBusy="@IsBusy"
+                              IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
+                              StatusMessage="@StatusMessage"
+                              VersionsRefreshToken="@VersionsRefreshToken"
+                              ViewedVersion="@ViewedVersion"
+                              LatestVersion="@LatestVersion"
+                              PublishedVersion="@PublishedVersion"
+                              CanEdit="@CanEditViewedVersion"
+                              CanDelete="@CanDelete"
+                              CanPublish="@CanPublish"
+                              CanChangePublicFlag="@CanChangePublicFlag"
+                              IsPublic="@IsPublic"
+                              CanBrowseVersions="@CanBrowseVersions"
+                              InitialTargetPosition="@ReadInitialPosition"
+                              OnImportSelected="@OnImportSelected"
+                              OnRebuildTableOfContents="@OnRebuildTableOfContents"
+                              OnEditRequested="HandleEditRequestedAsync"
+                              OnPublishRequested="HandlePublishAsync"
+                              OnDeleteRequested="HandleDeleteAsync"
+                              OnPublicChanged="HandlePublicChangedAsync"
+                              OnVersionSelected="@OnVersionSelected" />
+}

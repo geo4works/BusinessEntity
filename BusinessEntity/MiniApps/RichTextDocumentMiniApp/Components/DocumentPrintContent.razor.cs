@@ -1,12 +1,17 @@
+using BusinessEntity.Services;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Printing;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;
 using BusinessEntity.Core.Services;
-using BusinessEntity.Components;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
-using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using System.Globalization;
@@ -23,10 +28,11 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         private CancellationTokenSource? LoadCancellationTokenSource { get; set; }
         private long LoadVersion { get; set; }
 
+        [Inject] public RichTextDocumentReader RichTextDocumentReader { get; set; } = default!;
+        [Inject] public RichTextOutlineService RichTextOutlineService { get; set; } = default!;
         [Parameter] public Guid Id { get; set; }
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
-        [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
@@ -52,7 +58,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         private string SelectedPrintPresetName { get; set; } = string.Empty;
         private IReadOnlyList<DocPrintSettingsPreset> PrintPresets => PrintPresetCollection.Presets;
         private string PageTitleText => Entity == null ? "Печать документа" : $"Печать: {Entity.Name}";
-        private bool IsRichTextDocument => Entity?.EntityType == BusinessEntityTypeEnum.RichTextDocument;
+        private bool IsRichTextDocument => Entity?.EntityType == global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id;
         private bool IsPrintCommandDisabled => IsLoading || IsPrintCommandRunning || Entity == null || !string.IsNullOrEmpty(Error);
         private bool IsPrintSettingsDisabled => IsLoading || IsPrintCommandRunning;
         private bool HasNamedPrintPreset => PrintPresets.Any(x =>
@@ -110,13 +116,13 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
                     return;
                 }
 
-                if (entity.EntityType == BusinessEntityTypeEnum.RichTextDocument)
+                if (entity.EntityType == global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id)
                 {
                     await LoadRichTextDocumentAsync(loadVersion, cancellationToken);
                     return;
                 }
 
-                if (entity.EntityType == BusinessEntityTypeEnum.Document)
+                if (entity.EntityType == global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id)
                 {
                     await LoadPlainDocumentAsync(entity, cancellationToken);
                     return;
@@ -169,7 +175,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
             }
             else
             {
-                var latestDocument = await DataProviderConnector.GetDataAsync<BusinessEntity.Core.DomainEntities.Document>(Id, cancellationToken);
+                var latestDocument = await DataProviderConnector.GetDataAsync<BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities.Document>(Id, cancellationToken);
                 dataItems = latestDocument == null
                     ? Array.Empty<BusinessEntityData>()
                     : new BusinessEntityData[] { latestDocument };
@@ -183,7 +189,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         // Загружает rich-text документ для печати с тем же оконным viewport, что и обычный просмотр.
         private async Task LoadRichTextDocumentAsync(long loadVersion, CancellationToken cancellationToken)
         {
-            var shell = await RichTextDocumentHelper.GetRichTextDocumentShellAsync(Id, cancellationToken);
+            var shell = await RichTextDocumentReader.GetRichTextDocumentShellAsync(Id, cancellationToken);
             if (shell == null)
             {
                 Error = "Rich-text документ не найден.";
@@ -223,7 +229,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         private async Task LoadInitialChunkWindowAsync(long loadVersion, CancellationToken cancellationToken)
         {
             var settings = await RichTextDocumentSettingsService.GetSettingsAsync(cancellationToken);
-            var chunkWindow = await RichTextDocumentHelper.GetChunkWindowAsync(
+            var chunkWindow = await RichTextDocumentReader.GetChunkWindowAsync(
                 Id,
                 0,
                 settings.GetInitialChunkCount(),
@@ -244,7 +250,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         {
             try
             {
-                await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
+                await foreach (var tableOfContents in RichTextOutlineService.GetTableOfContentsBatchesAsync(
                     Id,
                     OutlineChunkBatchSize,
                     ViewedVersion,
@@ -535,8 +541,8 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         {
             return Entity?.EntityType switch
             {
-                BusinessEntityTypeEnum.RichTextDocument => $"/rich-document/{Id}",
-                BusinessEntityTypeEnum.Document => $"/document/{Id}",
+                global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id => $"/rich-document/{Id}",
+                global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id => $"/document/{Id}",
                 _ => "/"
             };
         }
@@ -557,7 +563,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         {
             return data switch
             {
-                BusinessEntity.Core.DomainEntities.Document document => document.Text ?? string.Empty,
+                BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities.Document document => document.Text ?? string.Empty,
                 _ => string.Empty
             };
         }

@@ -325,6 +325,8 @@ internal sealed class AuthentikManagementClient
         using var request = CreateRequest(HttpMethod.Delete, $"/api/v3/core/users/{authentikUserPk}/");
         using var response = await SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        // Повтор удаления уже отсутствующего внешнего пользователя завершает локальную очистку.
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return;
         EnsureSuccess(response, body, "удалить пользователя из Authentik");
     }
 

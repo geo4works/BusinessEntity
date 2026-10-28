@@ -1,7 +1,7 @@
 using System.Text;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
+using BusinessEntity.Core.Chunks;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 using BusinessEntity.Infrastructure.Bus;
@@ -102,14 +102,14 @@ public sealed class FileTransactionTests
     public async Task ConcurrentSavesAreOrderedWithoutMergingAuthors()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync();
-        var entity = Entity(); entity.EntityType = BusinessEntityTypeEnum.RichTextDocument;
+        var entity = Entity(); entity.EntityType = global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id;
         var manifest = new RichTextDocument { Name = entity.Name };
-        var chunk = new RichTextDocumentChunk { BusinessEntityId = entity.Id, Blocks = [new RichTextBlock { Html = "base" }] };
+        var chunk = new BusinessEntityDataChunk { BusinessEntityId = entity.Id, Blocks = [new BusinessEntityDataBlock { Html = "base" }] };
         await fixture.Writer.SaveAsync(new(Guid.NewGuid(), "test", null) { Entities = [entity], Payloads = [new(entity.Id, 0, manifest, [chunk], [chunk.Id])] }, Actor());
         var tasks = Enumerable.Range(1, 6).Select(i => fixture.Writer.SaveAsync(new(Guid.NewGuid(), "test", null)
         {
-            Payloads = [new(entity.Id, 1, manifest, [new RichTextDocumentChunk { Id = chunk.Id,
-                BusinessEntityId = entity.Id, Blocks = [new RichTextBlock { Html = "author " + i }] }])]
+            Payloads = [new(entity.Id, 1, manifest, [new BusinessEntityDataChunk { Id = chunk.Id,
+                BusinessEntityId = entity.Id, Blocks = [new BusinessEntityDataBlock { Html = "author " + i }] }])]
         }, Actor())).ToArray();
         var results = await Task.WhenAll(tasks);
         Assert.Equal(Enumerable.Range(2, 6), results.Select(r => r.Versions.Single().Version).Order());
@@ -119,7 +119,7 @@ public sealed class FileTransactionTests
     }
 
     // Создаёт карточку, которую owns только тестовая БД.
-    private static Entity Entity() => new() { Name = "files", EntityType = BusinessEntityTypeEnum.Folder };
+    private static Entity Entity() => new() { Name = "files", EntityType = global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id };
     // Собирает атомарную карточку и её файл.
     private static EntitySaveBatch Batch(Entity entity, EntityFileChange file) => new(Guid.NewGuid(), "test", null) { Entities = [entity], Files = [file] };
     // Создаёт короткий файловый объект для настоящего дискового IO.

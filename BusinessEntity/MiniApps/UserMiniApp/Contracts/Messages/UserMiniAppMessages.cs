@@ -1,7 +1,10 @@
+using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Printing;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.RichText;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Messages;
@@ -14,7 +17,11 @@ public sealed record GetCurrentUserResponse(Guid RequestId, BusinessEntityUser? 
 // Запрос операции EnsureCurrentUser.
 public sealed record EnsureCurrentUserRequest(Guid RequestId) : BusRequest(RequestId);
 // Результат операции EnsureCurrentUser или явный отказ.
-public sealed record EnsureCurrentUserResponse(Guid RequestId, UserDto? Result, BusError? Error = null) : BusResponse(RequestId, Error);
+public sealed record EnsureCurrentUserResponse(Guid RequestId, UserDto? Result, BusError? Error = null) : BusResponse(RequestId, Error)
+{
+    // Серверные полномочия Authentik admin/akadmin передаются отдельно от редактируемого профиля.
+    public bool HasApplicationAdminAuthority { get; init; }
+}
 
 // Запрос операции DeleteCurrentUser.
 public sealed record DeleteCurrentUserRequest(Guid RequestId) : BusRequest(RequestId);
@@ -220,3 +227,8 @@ public sealed record GetAnonymousAccessibleSpacesResponse(Guid RequestId, IReadO
 public sealed record GetAnonymousAccessibleDocumentsRequest(Guid RequestId, Guid SpaceId) : BusRequest(RequestId);
 // Результат операции GetAnonymousAccessibleDocuments или явный отказ.
 public sealed record GetAnonymousAccessibleDocumentsResponse(Guid RequestId, IReadOnlyList<UserAccessibleDocumentRecord>? Result, BusError? Error = null) : BusResponse(RequestId, Error);
+
+// Права на каноническую сущность проверяются сервером по идентификатору.
+public sealed record GetEntityContentAccessRequest(Guid RequestId, Guid EntityId) : BusRequest(RequestId);
+// Решение владельца прав, не зависящее от изменяемой карточки UI.
+public sealed record GetEntityContentAccessResponse(Guid RequestId, UserContentAccessDecision? Result, BusError? Error = null) : BusResponse(RequestId, Error);

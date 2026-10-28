@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.UserMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
@@ -9,7 +10,25 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
     // Компонент административного CRUD локальных пользователей UserMiniApp.
     public partial class UsersAdministration
     {
-        [Inject] public IUserConnector UserConnector { get; set; } = default!;
+        [Inject] private UserFormsWorkingSetFactory WorkingSets { get; set; } = default!;
+        private UserFormsWorkingSet Working => WorkingSets.Get(Module!);
+        // Save всегда охватывает весь рабочий экземпляр, а не только видимую строку.
+        private async Task SaveWorkingSetAsync()
+        {
+            var result = await Module!.SaveContext!.SaveAsync(Module.ModuleId);
+            if (!result.Success) throw new InvalidOperationException(result.Error);
+        }
+        // События ввода отмечают dirty в владельце и сохраняют выбранные формы между переключениями.
+        private void AccountChanged() { if (SelectedUserId.HasValue) Working.Changed(UserFormKind.Account, SelectedUserId.Value); }
+        private void RoleChanged() { if (SelectedRoleId.HasValue) Working.Changed(UserFormKind.Role, SelectedRoleId.Value); }
+        private void GroupChanged() { if (SelectedGroupId.HasValue) Working.Changed(UserFormKind.Group, SelectedGroupId.Value); }
+        private void MembersChanged() { if (MembershipGroupId.HasValue) Working.Changed(UserFormKind.Members, MembershipGroupId.Value); }
+        [Inject] private UserAccountsService UserAccountsService { get; set; } = default!;
+        [Inject] private UserGroupService UserGroupService { get; set; } = default!;
+        [Inject] private UserIdentityService UserIdentityService { get; set; } = default!;
+        [Inject] private UserRoleAssignmentDirectory UserRoleAssignmentDirectory { get; set; } = default!;
+        [Inject] private UserRoleAssignmentService UserRoleAssignmentService { get; set; } = default!;
+        [Inject] private UserRoleCatalogService UserRoleCatalogService { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
         [Inject] public BusinessEntity.Infrastructure.Bus.BusRequestScope BusScope { get; set; } = default!;
 
@@ -141,7 +160,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         // Запоминает текущего локального пользователя, чтобы сообщения администрирования попадали в его правую панель.
         private async Task ResolveCurrentMessageUserAsync()
         {
-            var currentUser = await UserConnector.EnsureCurrentUserAsync();
+            var currentUser = await UserIdentityService.EnsureCurrentUserAsync();
             CurrentMessageUserId = currentUser?.Id ?? Guid.Empty;
         }
 
@@ -200,7 +219,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                Users = await UserConnector.ReadAdministrationUsersFromAuthentikAsync();
+                Users = await UserAccountsService.ReadAdministrationUsersFromAuthentikAsync();
                 var selectedUser = SelectedUserId.HasValue
                     ? Users.FirstOrDefault(user => user.Id == SelectedUserId.Value)
                     : Users.FirstOrDefault();
@@ -263,7 +282,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                Users = await UserConnector.GetAdministrationUsersAsync();
+                Users = await UserAccountsService.GetAdministrationUsersAsync();
                 var selectedId = userIdToSelect ?? SelectedUserId;
                 var selectedUser = selectedId.HasValue
                     ? Users.FirstOrDefault(user => user.Id == selectedId.Value)
@@ -330,7 +349,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                Roles = await UserConnector.GetRolesAsync();
+                Roles = await UserRoleCatalogService.GetRolesAsync();
                 IsRolesLoaded = true;
                 var selectedId = roleIdToSelect ?? SelectedRoleId;
                 var selectedRole = selectedId.HasValue
@@ -364,7 +383,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                Groups = await UserConnector.GetUserGroupsAsync();
+                Groups = await UserGroupService.GetUserGroupsAsync();
                 IsGroupsLoaded = true;
                 var selectedId = groupIdToSelect ?? SelectedGroupId;
                 var selectedGroup = selectedId.HasValue
@@ -411,7 +430,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             try
             {
                 MembershipGroupId = groupId;
-                GroupMemberships = await UserConnector.GetUserGroupMembershipsAsync(groupId.Value);
+                GroupMemberships = await UserGroupService.GetUserGroupMembershipsAsync(groupId.Value);
+                GroupMemberships = Working.Open(UserFormKind.Members, groupId.Value, GroupMemberships.ToList(), GroupMemberships);
                 IsGroupMembershipsLoaded = true;
             }
             catch (Exception ex)
@@ -432,7 +452,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                AccessSpaces = await UserConnector.GetRoleAssignmentSpacesAsync();
+                AccessSpaces = await UserRoleAssignmentDirectory.GetRoleAssignmentSpacesAsync();
                 var nextSpaceId = preferredSpaceId.HasValue &&
                                   AccessSpaces.Any(space => space.Id == preferredSpaceId.Value)
                     ? preferredSpaceId
@@ -462,7 +482,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 var assignments = new List<UserRoleAssignmentRecord>();
                 foreach (var space in AccessSpaces)
                 {
-                    var spaceAssignments = await UserConnector.GetRoleAssignmentsAsync(space.Id);
+                    var spaceAssignments = await UserRoleAssignmentService.GetRoleAssignmentsAsync(space.Id);
                     assignments.AddRange(spaceAssignments);
                 }
 
@@ -484,11 +504,11 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         {
             if (spaceId == Guid.Empty)
             {
-                return await UserConnector.GetRoleAssignmentsAsync(spaceId);
+                return await UserRoleAssignmentService.GetRoleAssignmentsAsync(spaceId);
             }
 
-            var allSpacesAssignments = await UserConnector.GetRoleAssignmentsAsync(Guid.Empty);
-            var selectedSpaceAssignments = await UserConnector.GetRoleAssignmentsAsync(spaceId);
+            var allSpacesAssignments = await UserRoleAssignmentService.GetRoleAssignmentsAsync(Guid.Empty);
+            var selectedSpaceAssignments = await UserRoleAssignmentService.GetRoleAssignmentsAsync(spaceId);
 
             return allSpacesAssignments
                 .Concat(selectedSpaceAssignments)
@@ -508,7 +528,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                var createdUser = await UserConnector.CreateAdministrationUserAsync();
+                var createdUser = await UserAccountsService.CreateAdministrationUserAsync();
                 UpsertUserInList(createdUser);
                 SelectUser(createdUser);
                 if (ActiveSection == UserAdministrationSection.GroupMembers && MembershipGroupId.HasValue)
@@ -537,7 +557,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                var createdRole = await UserConnector.CreateRoleAsync();
+                var createdRole = await UserRoleCatalogService.CreateRoleAsync();
                 await LoadRolesCoreAsync(createdRole.Id);
                 EnsureAccessAssignmentSelections();
                 StatusMessage = $"Роль {createdRole.Name} создана.";
@@ -561,7 +581,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                var createdGroup = await UserConnector.CreateUserGroupAsync();
+                var createdGroup = await UserGroupService.CreateUserGroupAsync();
                 await LoadGroupsCoreAsync(createdGroup.Id);
                 MembershipGroupId = createdGroup.Id;
                 AccessGroupId = createdGroup.Id;
@@ -592,6 +612,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 AuthentikLogin = user.AuthentikLogin,
                 DisplayedName = user.DisplayedName
             };
+            EditModel = Working.Open(UserFormKind.Account, user.Id, EditModel, user);
         }
 
         // Выбирает роль из таблицы и переносит ее данные в форму редактора ролей.
@@ -612,6 +633,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 AdminSpace = role.AdminSpace,
                 GlobalAdmin = role.GlobalAdmin
             };
+            RoleEditModel = Working.Open(UserFormKind.Role, role.Id, RoleEditModel, role);
         }
 
         // Выбирает группу из таблицы и переносит ее данные в форму редактора групп.
@@ -625,6 +647,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             {
                 Name = group.Name
             };
+            GroupEditModel = Working.Open(UserFormKind.Group, group.Id, GroupEditModel, group);
         }
 
         // Обновляет Authentik-логин и локальное отображаемое имя через UserMiniApp connector.
@@ -642,7 +665,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             try
             {
                 var isPasswordChanged = !string.IsNullOrWhiteSpace(EditModel.Password);
-                var savedUser = await UserConnector.UpdateAdministrationUserAsync(SelectedUserId.Value, EditModel);
+                AccountChanged(); await SaveWorkingSetAsync();
+                var savedUser = Working.Result<UserAdministrationRecord>(UserFormKind.Account, SelectedUserId.Value);
 
                 UpsertUserInList(savedUser);
                 SelectUser(savedUser);
@@ -679,7 +703,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                var savedRole = await UserConnector.UpdateRoleAsync(SelectedRoleId.Value, RoleEditModel);
+                RoleChanged(); await SaveWorkingSetAsync();
+                var savedRole = Working.Result<UserRoleRecord>(UserFormKind.Role, SelectedRoleId.Value);
                 await LoadRolesCoreAsync(savedRole.Id);
                 if (IsAccessRightsLoaded)
                 {
@@ -712,7 +737,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                var savedGroup = await UserConnector.UpdateUserGroupAsync(SelectedGroupId.Value, GroupEditModel);
+                GroupChanged(); await SaveWorkingSetAsync();
+                var savedGroup = Working.Result<UserGroupRecord>(UserFormKind.Group, SelectedGroupId.Value);
                 await LoadGroupsCoreAsync(savedGroup.Id);
                 if (IsAccessRightsLoaded)
                 {
@@ -753,7 +779,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                         .ToList()
                 };
 
-                GroupMemberships = await UserConnector.UpdateUserGroupMembershipsAsync(MembershipGroupId.Value, request);
+                MembersChanged(); await SaveWorkingSetAsync();
+                GroupMemberships = Working.Open(UserFormKind.Members, MembershipGroupId.Value, Working.Result<IReadOnlyList<UserGroupMembershipRecord>>(UserFormKind.Members, MembershipGroupId.Value).ToList());
                 await LoadGroupsCoreAsync(SelectedGroupId);
                 StatusMessage = "Состав группы сохранен.";
             }
@@ -782,7 +809,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                await UserConnector.CreateRoleAssignmentAsync(
+                await UserRoleAssignmentService.CreateRoleAssignmentAsync(
                     AccessSpaceId.Value,
                     new UserRoleAssignmentSaveRequest
                     {
@@ -815,7 +842,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                var deleted = await UserConnector.DeleteRoleAssignmentAsync(assignmentId);
+                var deleted = await UserRoleAssignmentService.DeleteRoleAssignmentAsync(assignmentId);
                 RoleAssignments = await LoadRoleAssignmentsForCurrentViewAsync();
                 StatusMessage = deleted ? "Назначение роли удалено." : "Назначение роли не найдено.";
             }
@@ -889,7 +916,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             try
             {
                 var deletedUserId = SelectedUserId.Value;
-                var deleted = await UserConnector.DeleteAdministrationUserAsync(deletedUserId);
+                var deleted = await UserAccountsService.DeleteAdministrationUserAsync(deletedUserId);
                 var statusMessage = deleted ? "Пользователь удален." : "Пользователь не найден.";
                 SelectedUserId = null;
                 DeleteConfirmationUserId = null;
@@ -930,7 +957,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                var deleted = await UserConnector.DeleteRoleAsync(SelectedRoleId.Value);
+                var deleted = await UserRoleCatalogService.DeleteRoleAsync(SelectedRoleId.Value);
                 var statusMessage = deleted ? "Роль удалена." : "Роль не найдена.";
                 SelectedRoleId = null;
                 DeleteConfirmationRoleId = null;
@@ -967,7 +994,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             try
             {
                 var groupId = SelectedGroupId.Value;
-                var deleted = await UserConnector.DeleteUserGroupAsync(groupId);
+                var deleted = await UserGroupService.DeleteUserGroupAsync(groupId);
                 var statusMessage = deleted ? "Группа удалена." : "Группа не найдена.";
                 SelectedGroupId = null;
                 DeleteConfirmationGroupId = null;
@@ -1119,6 +1146,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
 
             membership.IsMember = isMember;
+                MembersChanged();
         }
 
         // Отмечает всех локально загруженных пользователей как участников выбранной группы.
@@ -1129,7 +1157,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 membership.IsMember = true;
             }
 
-            GroupMemberships = GroupMemberships.ToList();
+            MembersChanged();
         }
 
         // Выбирает доступные группу и роль для формы добавления назначения.

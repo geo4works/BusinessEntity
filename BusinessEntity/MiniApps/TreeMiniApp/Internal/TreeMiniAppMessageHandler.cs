@@ -15,6 +15,9 @@ internal sealed class TreeMiniAppMessageHandler : ScopedBusEndpoint
     // Создаёт единственную подписку для текущего окна.
     protected override void SubscribeRequests()
     {
+        Subscribe<DeleteTreeEntitiesRequest, DeleteTreeEntitiesResponse>(async request =>
+        { await _service.DeleteEntitiesAsync(request.EntityIds); return new DeleteTreeEntitiesResponse(request.RequestId); },
+            static (id, error) => new DeleteTreeEntitiesResponse(id, error));
         Subscribe<GetTreeForSpaceRequest, GetTreeForSpaceResponse>(async request =>
             new GetTreeForSpaceResponse(request.RequestId, await _service.GetTreeForSpaceAsync(request.SpaceId)),
             static (id, error) => new GetTreeForSpaceResponse(id, null, error));

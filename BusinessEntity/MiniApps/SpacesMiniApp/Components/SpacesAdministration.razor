@@ -1,13 +1,20 @@
+@using BusinessEntity.MiniApps.BackupRestoreMiniApp.Contracts
+@using BusinessEntity.MiniApps.SpacesMiniApp.Internal
 @namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
 @inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
 @using BusinessEntity.Core.Classes
-@using BusinessEntity.Core.DomainEntities
+@using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.SpacesMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Printing
 @using BusinessEntityEntity = BusinessEntity.Core.Classes.BusinessEntity
-@using BusinessEntity.Services
-@using BusinessEntity.Services.BackupRestore
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts
 @inject SpaceHelper SpaceHelper
-@inject SpaceBackupService SpaceBackupService
-@inject SpaceRestoreService SpaceRestoreService
+@inject SpacePropertiesWorkingSetFactory WorkingSets
+@inject IBackupRestoreConnector BackupRestore
 
 <div class="card">
     <div class="card-body">
@@ -94,7 +101,7 @@
                                     @if (EditingSpaceId == space.Id)
                                     {
                                         <input class="form-control"
-                                               @bind="EditingSpaceName"
+                                               @bind="EditingSpaceName" @bind:event="oninput" @bind:after="RenameChanged"
                                                @bind:event="oninput" />
                                     }
                                     else
@@ -231,6 +238,11 @@
 </div>
 
 @code {
+    private SpacePropertiesWorkingSet Working => WorkingSets.Get(Module!);
+    // Сохраняет весь набор настроек текущего рабочего экземпляра.
+    private async Task SaveWorkingSetAsync()
+    { var result = await Module!.SaveContext!.SaveAsync(Module.ModuleId); if (!result.Success) throw new InvalidOperationException(result.Error); }
+    private readonly Dictionary<Guid, string> _backupFolders = new();
     private readonly List<BusinessEntityEntity> Spaces = new();
     private readonly Dictionary<Guid, GenericSpaceProperties> SpacePropertiesBySpaceId = new();
     private readonly Dictionary<Guid, GenericSpaceProperties> DraftSpacePropertiesBySpaceId = new();
@@ -285,8 +297,8 @@
                     throw new InvalidOperationException("Укажите путь к папке backup пространства.");
                 }
 
-                var result = await SpaceRestoreService.RestoreSpaceAsync(
-                    new SpaceRestoreService.SpaceRestoreRequest
+                var result = await BackupRestore.RestoreSpaceAsync(
+                    new SpaceRestoreRequest
                     {
                         BackupRootPath = ImportBackupRootPath,
                         TargetSpaceName = string.IsNullOrWhiteSpace(ImportTargetSpaceName)
@@ -313,7 +325,7 @@
         DeleteCandidateId = null;
         ExpandedSettingsSpaceId = null;
         EditingSpaceId = space.Id;
-        EditingSpaceName = space.Name;
+        EditingSpaceName = Working.OpenName(space.Id, space.Name);
     }
 
     /// <summary>
@@ -325,7 +337,8 @@
             async () =>
             {
                 await RequireSpaceAdminAsync(spaceId);
-                var renamedSpace = await SpaceHelper.RenameSpaceAsync(spaceId, EditingSpaceName);
+                RenameChanged(); await SaveWorkingSetAsync();
+                var renamedSpace = await SpaceHelper.GetSpaceByIdAsync(spaceId);
                 EditingSpaceId = null;
                 EditingSpaceName = string.Empty;
                 StatusMessage = $"Пространство '{renamedSpace?.Name}' переименовано.";
@@ -336,8 +349,12 @@
     /// <summary>
     /// Отменяет режим редактирования.
     /// </summary>
+    // Название изменяется в предметном наборе до Save.
+    private void RenameChanged() { if (EditingSpaceId.HasValue) Working.SetName(EditingSpaceId.Value, EditingSpaceName); }
+
     private void CancelEdit()
     {
+        if (EditingSpaceId.HasValue) Working.CancelName(EditingSpaceId.Value);
         EditingSpaceId = null;
         EditingSpaceName = string.Empty;
         ResetMessages();
@@ -398,6 +415,8 @@
             foreach (var space in allSpaces)
                 if (IsGlobalAdmin || (Module != null && await ModuleManager.CanExecuteAsync(Module.ModuleId, "AdminSpace", space.Id))) spaces.Add(space);
             var properties = await SpaceHelper.GetGenericSpacePropertiesAsync(spaces.Select(x => x.Id));
+            foreach (var space in spaces)
+                _backupFolders[space.Id] = await BackupRestore.GetDisplaySpaceBackupFolderAsync(space.Id, properties[space.Id]);
 
             Spaces.Clear();
             Spaces.AddRange(spaces);
@@ -418,7 +437,7 @@
 
             if (ExpandedSettingsSpaceId.HasValue)
             {
-                DraftSpacePropertiesBySpaceId[ExpandedSettingsSpaceId.Value] = CloneSpaceProperties(
+                DraftSpacePropertiesBySpaceId[ExpandedSettingsSpaceId.Value] = Working.Open(ExpandedSettingsSpaceId.Value,
                     GetSpaceProperties(ExpandedSettingsSpaceId.Value));
             }
         }
@@ -443,7 +462,7 @@
         }
 
         ExpandedSettingsSpaceId = space.Id;
-        DraftSpacePropertiesBySpaceId[space.Id] = CloneSpaceProperties(GetSpaceProperties(space.Id));
+        DraftSpacePropertiesBySpaceId[space.Id] = Working.Open(space.Id, GetSpaceProperties(space.Id));
     }
 
     private bool GetDraftDoBackup(Guid spaceId)
@@ -459,6 +478,7 @@
             string value when bool.TryParse(value, out var parsed) => parsed,
             _ => false
         };
+        Working.Changed();
     }
 
     private string GetDraftBackupFolder(Guid spaceId)
@@ -468,12 +488,12 @@
 
     private void SetDraftBackupFolder(Guid spaceId, ChangeEventArgs args)
     {
-        GetDraftSpaceProperties(spaceId).BackupFolder = args.Value?.ToString() ?? string.Empty;
+        GetDraftSpaceProperties(spaceId).BackupFolder = args.Value?.ToString() ?? string.Empty; Working.Changed();
     }
 
     private string GetDisplayBackupFolder(Guid spaceId)
     {
-        return SpaceBackupService.GetDisplaySpaceBackupFolder(spaceId, GetDraftSpaceProperties(spaceId));
+        return _backupFolders.GetValueOrDefault(spaceId, string.Empty);
     }
 
     private int GetDraftBackupIntervalMinutes(Guid spaceId)
@@ -487,6 +507,7 @@
             int.TryParse(args.Value?.ToString(), out var value) && value > 0
                 ? value
                 : 1;
+        Working.Changed();
     }
 
     private async Task SaveSpacePropertiesAsync(Guid spaceId)
@@ -495,11 +516,10 @@
             async () =>
             {
                 await RequireSpaceAdminAsync(spaceId);
-                var settings = await SpaceHelper.SaveGenericSpacePropertiesAsync(
-                    spaceId,
-                    CloneSpaceProperties(GetDraftSpaceProperties(spaceId)));
+                Working.Changed(); await SaveWorkingSetAsync();
+                var settings = GetDraftSpaceProperties(spaceId);
                 SpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(settings);
-                DraftSpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(settings);
+                DraftSpacePropertiesBySpaceId[spaceId] = settings;
                 StatusMessage = "Настройки пространства сохранены.";
             });
     }
@@ -510,13 +530,12 @@
             async () =>
             {
                 await RequireSpaceAdminAsync(spaceId);
-                var settings = await SpaceHelper.SaveGenericSpacePropertiesAsync(
-                    spaceId,
-                    CloneSpaceProperties(GetDraftSpaceProperties(spaceId)));
+                Working.Changed(); await SaveWorkingSetAsync();
+                var settings = GetDraftSpaceProperties(spaceId);
                 SpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(settings);
-                DraftSpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(settings);
+                DraftSpacePropertiesBySpaceId[spaceId] = settings;
 
-                var result = await SpaceBackupService.RunManualBackupAsync(spaceId);
+                var result = await BackupRestore.RunManualBackupAsync(spaceId);
                 StatusMessage = result.ManifestUpdated
                     ? $"Backup пространства '{result.SpaceName}' выполнен. Обновлено сущностей: {result.ChangedEntityCount}."
                     : $"Backup пространства '{result.SpaceName}' выполнен. Изменений для записи нет.";
@@ -529,7 +548,7 @@
             async () =>
             {
                 await RequireSpaceAdminAsync(spaceId);
-                var result = await SpaceBackupService.ClearSpaceBackupAsync(
+                var result = await BackupRestore.ClearSpaceBackupAsync(
                     spaceId,
                     CloneSpaceProperties(GetDraftSpaceProperties(spaceId)));
                 StatusMessage = result.Deleted
@@ -564,7 +583,7 @@
             return settings;
         }
 
-        var draft = CloneSpaceProperties(GetSpaceProperties(spaceId));
+        var draft = Working.Open(spaceId, GetSpaceProperties(spaceId));
         DraftSpacePropertiesBySpaceId[spaceId] = draft;
         return draft;
     }

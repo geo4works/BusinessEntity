@@ -60,9 +60,14 @@ async function run() {
   } finally {
     try {
       if(createdName){
+        // Завершаем собственную тестовую сессию до удаления её учётной записи.
+        if(userPage && !userPage.isClosed()) await userPage.close();
         await admin.goto(base+"/administration/users",{waitUntil:"networkidle"});await admin.locator(".users-admin__list").waitFor();
         const row=createdExternalId ? admin.locator(".users-admin__list button").filter({has:admin.locator(".users-admin__user-code",{hasText:createdExternalId})}) : admin.locator(".users-admin__list button").filter({hasText:createdName}); await row.click();
+        if(createdExternalId) await admin.waitForFunction(value=>Array.from(document.querySelectorAll(".users-admin__form label"))
+          .find(label=>label.textContent.includes("Код в аутентик"))?.querySelector("input")?.value===value,createdExternalId);
         await admin.locator(".users-admin__form-actions").getByRole("button",{name:"Удалить",exact:true}).click();
+        await admin.getByText("Подтвердите удаление пользователя.",{exact:true}).first().waitFor();
         await admin.locator(".users-admin__form-actions").getByRole("button",{name:"Подтвердить удаление",exact:true}).click();await row.waitFor({state:"detached"});
       }
     } catch(error){console.error("User fixture cleanup: "+error.message);process.exitCode=1;}

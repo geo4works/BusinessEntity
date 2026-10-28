@@ -1,8 +1,8 @@
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Chunks;
 using HtmlAgilityPack;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
 using BusinessEntity.Core.Saving;
 
 namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal;
@@ -10,7 +10,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal;
 // Владелец статьи хранит полную версию заголовка и состава неизменяемых строк чанков.
 internal sealed class RichTextDocumentVersionPolicy : IEntityVersionPolicy
 {
-    public BusinessEntityTypeEnum EntityType => BusinessEntityTypeEnum.RichTextDocument;
+    public BusinessEntityTypeEnum EntityType => global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id;
     public bool UsesChunks => true;
     // Содержимое статьи находится в чанках; manifest проверяется собственным типом владельца.
     public string GetContent(IBusinessEntityData data)
@@ -19,7 +19,7 @@ internal sealed class RichTextDocumentVersionPolicy : IEntityVersionPolicy
         return string.Empty;
     }
     // Содержимое статьи объявляет свои зависимости; общий движок не разбирает HTML и типы блоков.
-    public IReadOnlyList<EntityFileReference> GetFileReferences(Guid entityId, IReadOnlyList<RichTextDocumentChunk> chunks)
+    public IReadOnlyList<EntityFileReference> GetFileReferences(Guid entityId, IReadOnlyList<BusinessEntityDataChunk> chunks)
     {
         var references = new HashSet<EntityFileReference>();
         foreach (var block in chunks.SelectMany(chunk => chunk.Blocks))

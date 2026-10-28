@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build:richtext-editor": "esbuild ClientAssets/richtext-editor.js --bundle --format=iife --global-name=RichTextEditorBundle --outfile=wwwroot/js/richtext-editor.bundle.js --minify"
+    "build:richtext-editor": "esbuild MiniApps/RichTextDocumentMiniApp/ClientAssets/richtext-editor.js --bundle --format=iife --global-name=RichTextEditorBundle --outfile=wwwroot/js/richtext-editor.bundle.js --minify"
   },
   "dependencies": {
     "@tiptap/core": "^2.11.5",

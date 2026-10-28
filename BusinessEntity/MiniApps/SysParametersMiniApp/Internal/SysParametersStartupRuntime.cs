@@ -1,4 +1,4 @@
-using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.Entities;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Services;
 using BusinessEntity.Infrastructure.Modularity;
@@ -12,7 +12,7 @@ internal sealed class SysParametersStartupRuntime : IModuleRuntime
     // Использует общий движок без дублирования singleton алгоритма.
     public SysParametersStartupRuntime(BusinessEntityHelper entities) => _entities = entities;
     // Публичный читатель не должен впервые создавать обязательные настройки.
-    public async Task StartAsync(CancellationToken ct) => await _entities.GetOrCreateSingletonEntityAsync<SysParameters>(BusinessEntityTypeEnum.SysParametersTp, "SysParameters", ct);
+    public async Task StartAsync(CancellationToken ct) => await _entities.GetOrCreateSingletonEntityAsync<SysParameters>(global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.SysParametersTpType.Id, "SysParameters", ct);
     // Постоянные настройки не удаляются при завершении runtime.
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
 }

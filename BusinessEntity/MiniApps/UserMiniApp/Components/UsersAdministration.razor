@@ -79,21 +79,21 @@
                         <label class="users-admin__field">
                             <span>Код в аутентик</span>
                             <InputText class="form-control"
-                                       @bind-Value="EditModel.ExternalId"
+                                       @bind-Value="EditModel.ExternalId" @bind-Value:after="AccountChanged"
                                        disabled="true" />
                         </label>
 
                         <label class="users-admin__field">
                             <span>Логин в аутентик</span>
                             <InputText class="form-control"
-                                       @bind-Value="EditModel.AuthentikLogin"
+                                       @bind-Value="EditModel.AuthentikLogin" @bind-Value:after="AccountChanged"
                                        disabled="@(IsBusy || SelectedUser?.IsSystem == true)" />
                         </label>
 
                         <label class="users-admin__field">
                             <span>Отображаемое имя</span>
                             <InputText class="form-control"
-                                       @bind-Value="EditModel.DisplayedName"
+                                       @bind-Value="EditModel.DisplayedName" @bind-Value:after="AccountChanged"
                                        disabled="@(IsBusy || SelectedUser?.IsSystem == true)" />
                         </label>
 
@@ -103,7 +103,7 @@
                                 <InputText class="form-control users-admin__password-input"
                                            type="@PasswordInputType"
                                            autocomplete="new-password"
-                                           @bind-Value="EditModel.Password"
+                                           @bind-Value="EditModel.Password" @bind-Value:after="AccountChanged"
                                            disabled="@(IsBusy || SelectedUser?.IsSystem == true)" />
                                 <button type="button"
                                         class="btn btn-outline-secondary users-admin__password-toggle"
@@ -353,43 +353,43 @@
                             <label class="users-admin__field">
                                 <span>Имя роли</span>
                                 <InputText class="form-control"
-                                           @bind-Value="RoleEditModel.Name"
+                                           @bind-Value="RoleEditModel.Name" @bind-Value:after="RoleChanged"
                                            disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
                             </label>
 
                             <div class="users-admin__role-permissions" aria-label="Права роли">
                                 <label>
-                                    <InputCheckbox @bind-Value="RoleEditModel.ViewPublished"
+                                    <InputCheckbox @bind-Value="RoleEditModel.ViewPublished" @bind-Value:after="RoleChanged"
                                                    disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
                                     <span>ViewPublished</span>
                                 </label>
                                 <label>
-                                    <InputCheckbox @bind-Value="RoleEditModel.ViewDraft"
+                                    <InputCheckbox @bind-Value="RoleEditModel.ViewDraft" @bind-Value:after="RoleChanged"
                                                    disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
                                     <span>ViewDraft</span>
                                 </label>
                                 <label>
-                                    <InputCheckbox @bind-Value="RoleEditModel.EditDraft"
+                                    <InputCheckbox @bind-Value="RoleEditModel.EditDraft" @bind-Value:after="RoleChanged"
                                                    disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
                                     <span>EditDraft</span>
                                 </label>
                                 <label>
-                                    <InputCheckbox @bind-Value="RoleEditModel.PublishDraft"
+                                    <InputCheckbox @bind-Value="RoleEditModel.PublishDraft" @bind-Value:after="RoleChanged"
                                                    disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
                                     <span>PublishDraft</span>
                                 </label>
                                 <label>
-                                    <InputCheckbox @bind-Value="RoleEditModel.AdminItems"
+                                    <InputCheckbox @bind-Value="RoleEditModel.AdminItems" @bind-Value:after="RoleChanged"
                                                    disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
                                     <span>AdminItems</span>
                                 </label>
                                 <label>
-                                    <InputCheckbox @bind-Value="RoleEditModel.AdminSpace"
+                                    <InputCheckbox @bind-Value="RoleEditModel.AdminSpace" @bind-Value:after="RoleChanged"
                                                    disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
                                     <span>AdminSpace</span>
                                 </label>
                                 <label>
-                                    <InputCheckbox @bind-Value="RoleEditModel.GlobalAdmin"
+                                    <InputCheckbox @bind-Value="RoleEditModel.GlobalAdmin" @bind-Value:after="RoleChanged"
                                                    disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
                                     <span>GlobalAdmin</span>
                                 </label>
@@ -458,7 +458,7 @@
                             <label class="users-admin__group-inline-field">
                                 <span>Имя группы</span>
                                 <InputText class="form-control form-control-sm"
-                                           @bind-Value="GroupEditModel.Name"
+                                           @bind-Value="GroupEditModel.Name" @bind-Value:after="GroupChanged"
                                            disabled="@(IsBusy || !SelectedGroupId.HasValue)" />
                             </label>
 

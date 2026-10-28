@@ -1,12 +1,31 @@
 @namespace BusinessEntity.MiniApps.SysParametersMiniApp.Components
+@using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages
+@using ReactiveUI
 @inject BusinessEntity.Core.Services.BusinessEntityHelper Entities
+@inject IMessageBus Bus
+@implements IDisposable
 @if (!string.IsNullOrWhiteSpace(CompanyName)) { <div class="app-header__company">@CompanyName</div> }
 @code {
     private string CompanyName = string.Empty;
-    // Обязательные параметры уже созданы startup runtime; ошибка не заменяется пустым объектом.
+    private Guid _entityId;
+    private IDisposable? _subscription;
+    private bool _disposed;
+    // Начальные параметры создаёт runtime владельца; обязательные данные не заменяются пустым объектом.
     protected override async Task OnInitializedAsync()
     {
-        var entity = await Entities.GetOrCreateSingletonEntityAsync<BusinessEntity.Core.DomainEntities.SysParameters>(BusinessEntity.Core.Classes.BusinessEntityTypeEnum.SysParametersTp, "SysParameters");
-        CompanyName = entity.Data.CompanyName?.Trim() ?? string.Empty;
+        await LoadAsync();
+        _subscription = Bus.Listen<EntityBatchCommitted>().Subscribe(message =>
+        {
+            if (!_disposed && message.ChangedEntities.Contains(_entityId))
+                _ = InvokeAsync(async () => { if (_disposed) return; await LoadAsync(); StateHasChanged(); });
+        });
     }
+    // Header обновляется после подтверждённого события DataProvider, а не во время редактирования формы.
+    private async Task LoadAsync()
+    {
+        var entity = await Entities.GetRequiredSingletonEntityAsync<BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.Entities.SysParameters>(global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.SysParametersTpType.Id, "SysParameters");
+        _entityId = entity.Id; CompanyName = entity.Data.CompanyName.Trim();
+    }
+    // Подписка не удерживает закрывшееся окно.
+    public void Dispose() { _disposed = true; _subscription?.Dispose(); }
 }

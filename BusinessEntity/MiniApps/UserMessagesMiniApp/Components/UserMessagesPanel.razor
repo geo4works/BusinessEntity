@@ -1,6 +1,6 @@
 @using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts
 @using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
-@inject IUserMessagesMiniApp UserMessages
+@inject BusinessEntity.MiniApps.UserMessagesMiniApp.Internal.UserMessagesService UserMessages
 @inject IUserConnector UserConnector
 @inject BusinessEntity.Infrastructure.Bus.BusRequestScope BusScope
 @inject IUserMessageFlashStore FlashMessages
@@ -31,7 +31,6 @@
     // Материализует текущего пользователя и подписывает компонент на изменения его стека сообщений.
     protected override async Task OnInitializedAsync()
     {
-        UserMessages.EnsureInitialized();
         var currentUser = await UserConnector.EnsureCurrentUserAsync();
         CurrentUserId = currentUser?.Id ?? Guid.Empty;
         UserMessages.MessagesChanged += OnMessagesChanged;

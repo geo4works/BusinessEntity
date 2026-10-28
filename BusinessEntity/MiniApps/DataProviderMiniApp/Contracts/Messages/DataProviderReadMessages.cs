@@ -1,5 +1,6 @@
 using BusinessEntity.Core.Saving;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions;
 

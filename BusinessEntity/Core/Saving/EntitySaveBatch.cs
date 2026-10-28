@@ -1,6 +1,6 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Chunks;
 
 namespace BusinessEntity.Core.Saving;
 
@@ -8,6 +8,7 @@ namespace BusinessEntity.Core.Saving;
 public sealed record EntitySaveBatch(Guid OperationId, string MiniAppId, Guid? EditSessionId)
 {
     public BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Archives.GraphArchive? ImportSnapshot { get; init; }
+    public IReadOnlyList<BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.OwnedServiceStorageChange> OwnedServiceChanges { get; init; } = [];
     public IReadOnlyList<Classes.BusinessEntity> Entities { get; init; } = [];
     public IReadOnlyList<Guid> DeleteEntities { get; init; } = [];
     public IReadOnlyList<EntityPayloadChange> Payloads { get; init; } = [];
@@ -25,7 +26,7 @@ public sealed record EntitySaveBatch(Guid OperationId, string MiniAppId, Guid? E
 // Полный manifest автора и изменения чанков относительно явно указанной базы.
 // ChunkOrder задаёт весь порядок автора; null сохраняет порядок базовой версии.
 public sealed record EntityPayloadChange(Guid EntityId, int BaseVersion, IBusinessEntityData Data,
-    IReadOnlyList<RichTextDocumentChunk>? ChangedChunks = null, IReadOnlyList<Guid>? ChunkOrder = null,
+    IReadOnlyList<BusinessEntityDataChunk>? ChangedChunks = null, IReadOnlyList<Guid>? ChunkOrder = null,
     string VersionDescription = "");
 
 // Свойства адресуются своему уровню без передачи storage DTO.

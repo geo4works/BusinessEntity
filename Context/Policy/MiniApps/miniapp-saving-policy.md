@@ -61,3 +61,26 @@ Semaphore сериализует Save/Discard. После потери отве�
 не включаются в этот повтор и остаются dirty. Если SQL уже принят, но локальный
 Acknowledge отказал, следующий Save завершает подтверждение без второй записи.
 Discard не допускается при pending-операции, пока её исход не выяснен.
+
+## Подключённые владельцы этапа 6
+
+DocumentsWorkingSet, RichTextWorkingSet, UserFormsWorkingSet,
+SpacePropertiesWorkingSet, MediaVideoWorkingSet и общий EntityPayloadWorkingSet
+удерживают черновики в edit session. Capture синхронно копирует авторские значения;
+PrepareAsync конвертирует уже зафиксированные HTML/DTO и проверяет права.
+OperationId при подготовке не меняется. Формы не хранят второй независимый dirty.
+
+Статья фиксирует BaseVersion, название, описание и изменения HTML до await.
+Возврат UI продолжает эту базу; acknowledgement не очищает более новый HTML в
+серверном наборе или Tiptap. Описание после успеха очищает поле ввода без новой
+dirty-ревизии. Обычный документ хранит полную свою копию текста и названия.
+
+Служебные таблицы User остаются исключением. Формы собирают их изменения в
+OwnedServiceChanges; UserOwnedStorageWriter получает общую открытую SQL-транзакцию,
+а DataProvider пишет outcome в ней же. Изменения Authentik готовятся отдельно от
+SQL; SQL rollback не отменяет внешнее API. Уже подготовленный повтор не отправляет
+пароль/username повторно; пароль не попадает в пакет или outcome.
+
+Тип без истории сравнивает всё canonical тело payload. Изменение company/settings
+или comment видео сохраняет строку v1; это не новая версия. Тип с HasVersions
+обязан объявить свою политику истории, пустой content fallback не используется.

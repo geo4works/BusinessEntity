@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
 using System.Text.Json;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Infrastructure.Bus;
@@ -70,7 +71,7 @@ internal sealed partial class DataProviderTransactionService
             return new(payload.EntityId, latest.Version, false);
         }
         entity.Name = payload.Name; entity.LastModifiedDate = now; entity.LastModifiedByUserId = actor.UserId;
-        var envelope = DataPayloadEnvelopeSerializer.CreateEnvelopeJson(payload.Type.ToString(), payload.Json,
+        var envelope = DataPayloadEnvelopeSerializer.CreateEnvelopeJson(_codec.GetStorageKind(payload.Type), payload.Json,
             entity.CreatedByUserId, actor.UserId);
         if (latest != null && !keepsHistory)
         {
@@ -89,7 +90,7 @@ internal sealed partial class DataProviderTransactionService
             db.ChunkReferences.Add(new ChunkReferenceRow { BusinessEntityId = payload.EntityId, Version = nextVersion,
                 Position = position, ChunkId = order[position], ChunkRowVersion = references[order[position]] });
         if (policy != null)
-            foreach (var file in policy.GetFileReferences(payload.EntityId, order.Select(id => new Core.RichText.RichTextDocumentChunk
+            foreach (var file in policy.GetFileReferences(payload.EntityId, order.Select(id => new Core.Chunks.BusinessEntityDataChunk
                 { Id = id, BusinessEntityId = payload.EntityId, Blocks = RichTextChunkStorageSerializer.DeserializeChunkData(candidateRows[id].Data) }).ToArray()))
                 db.VersionFileReferences.Add(new VersionFileReferenceRow { SourceEntityId = payload.EntityId, Version = nextVersion,
                     FileEntityId = file.EntityId, FileId = file.FileId, Variant = file.Variant });

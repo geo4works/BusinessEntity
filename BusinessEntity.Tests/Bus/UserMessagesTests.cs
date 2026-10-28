@@ -1,5 +1,6 @@
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMessagesMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMessagesMiniApp.Registration;
 using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
@@ -22,9 +23,8 @@ public sealed class UserMessagesTests
         var firstAddress = first.ServiceProvider.GetRequiredService<BusRequestScope>();
         firstAddress.SetUser(user);
         second.ServiceProvider.GetRequiredService<BusRequestScope>().SetUser(user);
-        var firstMessages = first.ServiceProvider.GetRequiredService<IUserMessagesMiniApp>();
-        var secondMessages = second.ServiceProvider.GetRequiredService<IUserMessagesMiniApp>();
-        firstMessages.EnsureInitialized(); secondMessages.EnsureInitialized();
+        var firstMessages = first.ServiceProvider.GetRequiredService<UserMessagesService>();
+        var secondMessages = second.ServiceProvider.GetRequiredService<UserMessagesService>();
         var bus = services.GetRequiredService<IMessageBus>();
         var message = new PostUserMessage(user, firstAddress.LogicalWindowId, Guid.NewGuid(), "Ошибка БД", UserMessageLevel.Error);
         bus.SendMessage(message); bus.SendMessage(message);

@@ -1,7 +1,8 @@
-using BusinessEntity.Contracts;
+using BusinessEntity.Services;
+using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Middleware
@@ -35,7 +36,7 @@ namespace BusinessEntity.Middleware
         public async Task InvokeAsync(HttpContext context)
         {
             var userContext = context.RequestServices.GetRequiredService<IUserContextService>();
-            var spaceHelper = context.RequestServices.GetRequiredService<SpaceHelper>();
+            var spaceHelper = context.RequestServices.GetRequiredService<ISpacesConnector>();
             var webLogger = context.RequestServices.GetService<IWebLoggerService>();
             var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 

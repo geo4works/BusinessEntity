@@ -1,9 +1,9 @@
+using BusinessEntity.Services;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
-using BusinessEntity.Services;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
 {
@@ -11,18 +11,15 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
     internal sealed class TreeMiniAppService
     {
         private readonly BusinessEntityHelper _businessEntityHelper;
-        private readonly RichTextDocumentHelper _richTextDocumentHelper;
         private readonly IUserConnector _userConnector;
         private readonly TreeVisibilityService _treeVisibilityService;
 
         public TreeMiniAppService(
             BusinessEntityHelper businessEntityHelper,
-            RichTextDocumentHelper richTextDocumentHelper,
             IUserConnector userConnector,
             TreeVisibilityService treeVisibilityService)
         {
             _businessEntityHelper = businessEntityHelper;
-            _richTextDocumentHelper = richTextDocumentHelper;
             _userConnector = userConnector;
             _treeVisibilityService = treeVisibilityService;
         }
@@ -32,7 +29,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         {
             var projection = await _businessEntityHelper.GetSubgraphAsync(spaceId, cancellationToken);
             var space = projection.Entities.SingleOrDefault(entity => entity.Id == spaceId);
-            if (space == null || space.EntityType != BusinessEntityTypeEnum.Space)
+            if (space == null || space.EntityType != global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id)
             {
                 return null;
             }
@@ -63,13 +60,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             var parent = await _businessEntityHelper.GetBusinessEntityById(parentId)
                 ?? throw new InvalidOperationException($"Parent entity '{parentId}' was not found.");
 
-            return entityType switch
-            {
-                BusinessEntityTypeEnum.Folder => await _businessEntityHelper.CreateSubFolderAsync(parent, cancellationToken),
-                BusinessEntityTypeEnum.Document => await _businessEntityHelper.CreateDocumentAsync(parent, ct: cancellationToken),
-                BusinessEntityTypeEnum.RichTextDocument => await _richTextDocumentHelper.CreateRichTextDocumentAsync(parent, cancellationToken),
-                _ => throw new InvalidOperationException($"Tree create is not supported for entity type '{entityType}'.")
-            };
+            return await _businessEntityHelper.CreateChildAsync(parent, entityType, ct: cancellationToken);
         }
 
         // Переименовывает сущность дерева.
@@ -90,10 +81,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
                 await EnsureCanAdminItemsAsync(entityId, cancellationToken);
             }
 
-            foreach (var entityId in distinctEntityIds)
-            {
-                await _businessEntityHelper.RemoveBusinessEntity(entityId);
-            }
+            await _businessEntityHelper.RemoveEntitiesAsync(distinctEntityIds, "TreeMiniApp", cancellationToken);
         }
 
         // Перемещает набор сущностей к новому родителю.
@@ -110,13 +98,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
                 await EnsureCanAdminItemsAsync(entityId, cancellationToken);
             }
 
-            foreach (var entityId in distinctEntityIds)
-            {
-                var entity = await _businessEntityHelper.GetBusinessEntityById(entityId)
-                    ?? throw new InvalidOperationException($"Entity '{entityId}' was not found.");
-
-                await _businessEntityHelper.ChangeVisualFolderParentForItem(entity, targetParent);
-            }
+            await _businessEntityHelper.MoveEntitiesAsync(distinctEntityIds, targetParentId, "TreeMiniApp", cancellationToken);
         }
 
         // Запрещает anonymous-режиму выполнять изменения дерева.

@@ -2,8 +2,11 @@ using BusinessEntity.MiniApps.UserMiniApp.Storage;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Repositories.EfPostgres;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Entities;
+using BusinessEntity.Core.Chunks;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
@@ -40,11 +43,11 @@ public sealed class GraphIntegrityTests
     public async Task MissingFileRejectsVersionAndHistoricalReferenceProtectsVideo()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync(); var actor = Actor();
-        var video = new Entity { Name = "video", EntityType = BusinessEntityTypeEnum.MediaVideo };
-        var article = new Entity { Name = "article", EntityType = BusinessEntityTypeEnum.RichTextDocument };
+        var video = new Entity { Name = "video", EntityType = global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Id };
+        var article = new Entity { Name = "article", EntityType = global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id };
         var manifest = new RichTextDocument { Name = article.Name };
-        var chunk = new RichTextDocumentChunk { BusinessEntityId = article.Id,
-            Blocks = [new RichTextBlock { Kind = "video", VideoId = video.Id.ToString("D") }] };
+        var chunk = new BusinessEntityDataChunk { BusinessEntityId = article.Id,
+            Blocks = [new BusinessEntityDataBlock { Kind = "video", VideoId = video.Id.ToString("D") }] };
         var batch = Batch() with { Entities = [article], Payloads = [new(article.Id, 0, manifest, [chunk], [chunk.Id])] };
         var missing = await Assert.ThrowsAsync<BusRequestFailedException>(() => fixture.Writer.SaveAsync(batch, actor));
         Assert.Equal("file.reference_missing", missing.Error.Code);
@@ -83,7 +86,7 @@ public sealed class GraphIntegrityTests
     public async Task DeleteCannotReturnSavedVersionForDeletedDescendantEvenForNoOp()
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync(); var actor = Actor();
-        var root = Folder("root"); var doc = new Entity { Name = "document", EntityType = BusinessEntityTypeEnum.Document };
+        var root = Folder("root"); var doc = new Entity { Name = "document", EntityType = global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id };
         var data = new Document { Name = doc.Name, Text = "text" };
         await fixture.Writer.SaveAsync(Batch() with { Entities = [root, doc], Payloads = [new(doc.Id, 0, data)],
             Relations = [new() { ObjectAId = root.Id, ObjectBId = doc.Id, RelationType = "Contains" }] }, actor);
@@ -99,7 +102,7 @@ public sealed class GraphIntegrityTests
     {
         await using var fixture = await PostgresTestDatabase.CreateAsync();
         await Assert.ThrowsAsync<ArgumentException>(() => fixture.Writer.SaveAsync(Batch() with
-            { Entities = [new Entity { Name = "video", EntityType = BusinessEntityTypeEnum.MediaVideo }] }, Actor()));
+            { Entities = [new Entity { Name = "video", EntityType = global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Id }] }, Actor()));
         await using var db = new KmsBusinessEntityDbContext(fixture.Options);
         Assert.Empty(await db.BusinessEntities.ToListAsync());
     }
@@ -123,7 +126,7 @@ public sealed class GraphIntegrityTests
         Assert.Null(await repository.GetByIdAsync(property.Id));
     }
 
-    private static Entity Folder(string name) => new() { Name = name, EntityType = BusinessEntityTypeEnum.Folder };
+    private static Entity Folder(string name) => new() { Name = name, EntityType = global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id };
     // Создаёт независимого доверенного автора тестовой операции.
     private static BusRequestContext Actor() => new(Guid.NewGuid(), Guid.NewGuid());
     // Создаёт отдельную операцию сохранения тестового владельца.

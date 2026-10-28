@@ -1,7 +1,6 @@
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Chunks;
 
 namespace BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Messages;
 

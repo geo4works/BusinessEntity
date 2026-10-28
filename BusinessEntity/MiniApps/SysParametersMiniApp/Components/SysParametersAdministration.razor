@@ -1,9 +1,16 @@
 @namespace BusinessEntity.MiniApps.SysParametersMiniApp.Components
 @inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
 @using BusinessEntity.Core.Classes
-@using BusinessEntity.Core.DomainEntities
+@using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.SpacesMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Entities
+@using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Printing
 @using BusinessEntity.Core.Services
 @inject BusinessEntityHelper BusinessEntityHelper
+@inject global::BusinessEntity.Core.Types.EntityTypeRegistry EntityTypes
 
 <div class="card">
     <div class="card-body">
@@ -22,7 +29,7 @@
                 <div class="col-md-8">
                     <label class="form-label">Название компании</label>
                     <input class="form-control"
-                           @bind="CompanyName"
+                           @bind="CompanyName" @bind:after="UpdateDraft"
                            @bind:event="oninput"
                            placeholder="Введите название компании" />
                 </div>
@@ -32,7 +39,7 @@
                            type="number"
                            min="1000"
                            step="500"
-                           @bind="RichTextChunkCharLimit" />
+                           @bind="RichTextChunkCharLimit" @bind:after="UpdateDraft" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">RichDocument: чанков при открытии</label>
@@ -40,7 +47,7 @@
                            type="number"
                            min="1"
                            step="1"
-                           @bind="RichTextInitialChunkCount" />
+                           @bind="RichTextInitialChunkCount" @bind:after="UpdateDraft" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">RichDocument: чанков перед пунктом содержания</label>
@@ -48,7 +55,7 @@
                            type="number"
                            min="0"
                            step="1"
-                           @bind="RichTextTableOfContentsBeforeBuffer" />
+                           @bind="RichTextTableOfContentsBeforeBuffer" @bind:after="UpdateDraft" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">RichDocument: чанков после пункта содержания</label>
@@ -56,7 +63,7 @@
                            type="number"
                            min="0"
                            step="1"
-                           @bind="RichTextTableOfContentsAfterBuffer" />
+                           @bind="RichTextTableOfContentsAfterBuffer" @bind:after="UpdateDraft" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">RichDocument: предыдущих чанков при скролле</label>
@@ -64,14 +71,14 @@
                            type="number"
                            min="0"
                            step="1"
-                           @bind="RichTextScrollPreviousChunkCount" />
+                           @bind="RichTextScrollPreviousChunkCount" @bind:after="UpdateDraft" />
                 </div>
                 <div class="col-md-4">
                     <div class="form-check mt-4">
                         <input class="form-check-input"
                                id="rich-text-hide-toc-scrollbar"
                                type="checkbox"
-                               @bind="RichTextHideTableOfContentsScrollbar" />
+                               @bind="RichTextHideTableOfContentsScrollbar" @bind:after="UpdateDraft" />
                         <label class="form-check-label" for="rich-text-hide-toc-scrollbar">
                             Скрывать scrollbar содержания
                         </label>
@@ -83,7 +90,7 @@
                            type="number"
                            min="0"
                            step="1"
-                           @bind="RichTextEditChunksBeforeFocused" />
+                           @bind="RichTextEditChunksBeforeFocused" @bind:after="UpdateDraft" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">RichDocument editor: чанков после фокуса</label>
@@ -91,7 +98,7 @@
                            type="number"
                            min="0"
                            step="1"
-                           @bind="RichTextEditChunksAfterFocused" />
+                           @bind="RichTextEditChunksAfterFocused" @bind:after="UpdateDraft" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">RichDocument editor: чанков при открытии</label>
@@ -99,7 +106,7 @@
                            type="number"
                            min="1"
                            step="1"
-                           @bind="RichTextEditChunksOnOpen" />
+                           @bind="RichTextEditChunksOnOpen" @bind:after="UpdateDraft" />
                 </div>
                 <div class="col-md-auto">
                     <button class="btn btn-primary"
@@ -124,6 +131,23 @@
 </div>
 
 @code {
+    private global::BusinessEntity.Infrastructure.Saving.EntityPayloadWorkingSet? Working;
+    // Форма пишет в общий рабочий набор своего миниаппа.
+    private void UpdateDraft()
+    {
+        if (Working == null || SysParametersEntity == null) return;
+        SysParametersEntity.Data.CompanyName = CompanyName ?? string.Empty;
+        SysParametersEntity.Data.RichTextChunkCharLimit = RichTextChunkCharLimit;
+        SysParametersEntity.Data.RichTextInitialChunkCount = RichTextInitialChunkCount;
+        SysParametersEntity.Data.RichTextTableOfContentsBeforeBuffer = RichTextTableOfContentsBeforeBuffer;
+        SysParametersEntity.Data.RichTextTableOfContentsAfterBuffer = RichTextTableOfContentsAfterBuffer;
+        SysParametersEntity.Data.RichTextScrollPreviousChunkCount = RichTextScrollPreviousChunkCount;
+        SysParametersEntity.Data.RichTextHideTableOfContentsScrollbar = RichTextHideTableOfContentsScrollbar;
+        SysParametersEntity.Data.RichTextEditChunksBeforeFocused = RichTextEditChunksBeforeFocused;
+        SysParametersEntity.Data.RichTextEditChunksAfterFocused = RichTextEditChunksAfterFocused;
+        SysParametersEntity.Data.RichTextEditChunksOnOpen = RichTextEditChunksOnOpen;
+        Working.MarkChanged();
+    }
     private BusinessEntity<SysParameters>? SysParametersEntity { get; set; }
     private bool IsLoading { get; set; }
     private bool IsBusy { get; set; }
@@ -151,10 +175,13 @@
         try
         {
             ErrorMessage = null;
-            SysParametersEntity = await BusinessEntityHelper.GetOrCreateSingletonEntityAsync<SysParameters>(
-                BusinessEntityTypeEnum.SysParametersTp,
+            SysParametersEntity = await BusinessEntityHelper.GetRequiredSingletonEntityAsync<SysParameters>(
+                global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.SysParametersTpType.Id,
                 "SysParameters");
 
+            var save = Module!.SaveContext!;
+            Working = save.GetOrCreateParticipant(() => new global::BusinessEntity.Infrastructure.Saving.EntityPayloadWorkingSet(save, EntityTypes));
+            SysParametersEntity.AttachData(Working.Open(SysParametersEntity.Data));
             CompanyName = SysParametersEntity.Data.CompanyName ?? string.Empty;
             RichTextChunkCharLimit = SysParametersEntity.Data.RichTextChunkCharLimit <= 0
                 ? 12000
@@ -207,7 +234,7 @@
 
             SysParametersEntity.Name = "SysParameters";
             SysParametersEntity.Data.Name = "SysParameters";
-            SysParametersEntity.Data.Tag = BusinessEntityTypeEnum.SysParametersTp.ToString();
+            SysParametersEntity.Data.Tag = global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.SysParametersTpType.Key;
             SysParametersEntity.Data.CompanyName = CompanyName?.Trim() ?? string.Empty;
             SysParametersEntity.Data.RichTextChunkCharLimit = RichTextChunkCharLimit < 1000
                 ? 1000
@@ -235,7 +262,9 @@
                 ? 1
                 : RichTextEditChunksOnOpen;
 
-            await BusinessEntityHelper.SaveEntityAsync(SysParametersEntity);
+            Working!.MarkChanged();
+            var result = await Module!.SaveContext!.SaveAsync(Module.ModuleId);
+            if (!result.Success) throw new InvalidOperationException(result.Error);
             StatusMessage = "Параметры системы сохранены.";
         }
         catch (Exception ex)

@@ -1,0 +1,113 @@
+@inherits BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@namespace BusinessEntity.MiniApps.DocumentsMiniApp.Components
+@if (!string.IsNullOrWhiteSpace(SaveError))
+{
+    <div class="alert alert-danger document-save-error" role="alert">@SaveError</div>
+}
+
+<div class="document-shell">
+    <div class="document-layout">
+        <div class="document-layout__content">
+            @if (!IsEditing)
+            {
+                <div class="py-2">
+                    <h4 class="mb-3">@ViewTitle</h4>
+                    @if (string.IsNullOrWhiteSpace(ViewText))
+                    {
+                        <div class="alert alert-secondary mb-0">Нет содержимого.</div>
+                    }
+                    else
+                    {
+                        <pre style="white-space: pre-wrap; background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #e9ecef;">@ViewText</pre>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="py-2">
+                    <input class="form-control mb-2" placeholder="Заголовок"
+                           style="font-size: 1.5rem; font-weight: 500;"
+                           @bind="EditTitle" @bind:event="oninput" @bind:after="UpdateDraft" />
+
+                    <textarea class="form-control" rows="16" placeholder="Текст документа"
+                              @bind="EditBody" @bind:event="oninput" @bind:after="UpdateDraft"></textarea>
+                </div>
+            }
+        </div>
+
+        <div class="document-layout__actions">
+            <div class="document-actions" role="group" aria-label="Действия документа">
+                @if (!IsEditing)
+                {
+                    @if (CanChangePublicFlag)
+                    {
+                        <label class="form-check form-check-inline mb-0">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   checked="@IsPublic"
+                                   @onchange="HandlePublicChangedAsync" />
+                            <span class="form-check-label">Общий</span>
+                        </label>
+                    }
+                    @if (Entity != null)
+                    {
+                        <DeclaredLink MiniAppId="DocumentsMiniApp" CommandId="document.print" ContextId="Entity.Id">
+                            <span class="material-icons" aria-hidden="true">print</span>
+                            <span>Печать</span>
+                        </DeclaredLink>
+                    }
+                    @if (CanEdit)
+                    {
+                        <DeclaredButton MiniAppId="DocumentsMiniApp" CommandId="document.edit" OnInvoked="EnterEditMode" Enabled="@(CanEdit)" CssClass="btn btn-sm document-actions__edit-button" Title="Edit">
+                            Edit
+                        </DeclaredButton>
+                    }
+                    @if (CanDelete)
+                    {
+                        <DeclaredButton MiniAppId="DocumentsMiniApp" CommandId="document.delete" OnInvoked="HandleDeleteRequestedAsync" Enabled="CanDelete" CssClass="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1">
+                            <span class="material-icons" aria-hidden="true">delete</span>
+                            <span>Удалить</span>
+                        </DeclaredButton>
+                    }
+                }
+                else
+                {
+                    @if (CanChangePublicFlag)
+                    {
+                        <label class="form-check form-check-inline mb-0">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   checked="@IsPublic"
+                                   @onchange="HandlePublicChangedAsync"
+                                   disabled="@IsSaving" />
+                            <span class="form-check-label">Общий</span>
+                        </label>
+                    }
+                    <DeclaredButton MiniAppId="DocumentsMiniApp" CommandId="document.save" OnInvoked="SaveAsync" Enabled="@(!IsSaving)" CssClass="btn btn-sm btn-primary">
+                        @(IsSaving ? "Сохранение..." : "Сохранить")
+                    </DeclaredButton>
+                    <DeclaredButton MiniAppId="DocumentsMiniApp" CommandId="document.cancel" OnInvoked="CancelEdit" Enabled="@(!IsSaving)" CssClass="btn btn-sm btn-outline-secondary">Отмена</DeclaredButton>
+                    @if (CanDelete)
+                    {
+                        <DeclaredButton MiniAppId="DocumentsMiniApp" CommandId="document.delete" OnInvoked="HandleDeleteRequestedAsync" Enabled="CanDelete" CssClass="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1">
+                            <span class="material-icons" aria-hidden="true">delete</span>
+                            <span>Удалить</span>
+                        </DeclaredButton>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Entity != null && !IsEditing)
+{
+    <PageModuleHost DefinitionKey="ActivityMiniApp:Activity.Comments" ContextId="Entity.Id"
+                    Parameters="@(new Dictionary<string, object> { ["BusinessEntityId"] = Entity.Id, ["CanWrite"] = true })" />
+}
+
+@if (Entity != null && CanBrowseVersions && !IsEditing)
+{
+    <EntityVersionHistory EntityId="@Entity.Id" EntityType="@Entity.EntityType" CanRestore="@CanEdit"
+                          RefreshToken="@HistoryRefreshToken" OnSelected="SelectVersionAsync" />
+}

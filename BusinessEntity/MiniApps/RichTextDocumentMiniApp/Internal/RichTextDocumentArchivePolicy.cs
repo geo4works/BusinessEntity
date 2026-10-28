@@ -10,7 +10,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal;
 internal sealed class RichTextDocumentArchivePolicy : IEntityArchivePolicy
 {
     private readonly EntityUrlRewriter _links;
-    public BusinessEntityTypeEnum EntityType => BusinessEntityTypeEnum.RichTextDocument;
+    public BusinessEntityTypeEnum EntityType => global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id;
     public bool RequiresPayload => true;
     // Общий алгоритм ссылок не дублируется в миниаппе.
     public RichTextDocumentArchivePolicy(EntityUrlRewriter links) => _links = links;

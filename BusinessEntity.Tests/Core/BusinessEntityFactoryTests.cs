@@ -1,5 +1,5 @@
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities;
 using BusinessEntity.Core.Services;
 using Xunit;
 
@@ -8,20 +8,32 @@ namespace BusinessEntity.Tests.Core;
 // Проверяет общие гарантии создания сущности и связанного payload.
 public sealed class BusinessEntityFactoryTests
 {
-    private readonly BusinessEntityFactory _factory = new();
+    private readonly BusinessEntityFactory _factory = CreateFactory();
+
+    // Подключает реальные описатели владельцев без запуска их runtime.
+    private static BusinessEntityFactory CreateFactory()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        BusinessEntity.MiniApps.DocumentsMiniApp.Registration.DocumentsMiniAppRegistration.AddDocumentsMiniApp(services);
+        BusinessEntity.MiniApps.RichTextDocumentMiniApp.Registration.RichTextDocumentMiniAppRegistration.AddRichTextDocumentMiniApp(services);
+        BusinessEntity.MiniApps.SpacesMiniApp.Registration.SpacesMiniAppRegistration.AddSpacesMiniApp(services);
+        BusinessEntity.MiniApps.TreeMiniApp.Registration.TreeMiniAppRegistration.AddTreeMiniApp(services);
+        using var provider = Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(services);
+        return new BusinessEntityFactory(new BusinessEntity.Core.Types.EntityTypeRegistry(Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<BusinessEntity.Core.Types.IEntityTypeDescriptor>(provider)));
+    }
 
     // Новая карточка получает собственный идентификатор и время UTC.
     [Fact]
     public void CreatesIndependentEntityIdentities()
     {
         var before = DateTime.UtcNow;
-        var first = _factory.Create(BusinessEntityTypeEnum.Folder, "Папка");
-        var second = _factory.Create(BusinessEntityTypeEnum.Folder, "Папка");
+        var first = _factory.Create(global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, "Папка");
+        var second = _factory.Create(global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, "Папка");
 
         Assert.NotEqual(Guid.Empty, first.Id);
         Assert.NotEqual(first.Id, second.Id);
         Assert.Equal("Папка", first.Name);
-        Assert.Equal(BusinessEntityTypeEnum.Folder, first.EntityType);
+        Assert.Equal(global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, first.EntityType);
         Assert.InRange(first.CreatedDate, before, DateTime.UtcNow);
         Assert.Equal(DateTimeKind.Utc, first.CreatedDate.Kind);
     }
@@ -32,7 +44,7 @@ public sealed class BusinessEntityFactoryTests
     {
         var payload = new Document { Name = "Документ", Text = "Содержимое" };
 
-        var entity = _factory.Create(BusinessEntityTypeEnum.Document, payload);
+        var entity = _factory.Create(global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, payload);
 
         Assert.Same(payload, entity.Data);
         Assert.Equal(entity.Id, payload.Id);
@@ -43,10 +55,10 @@ public sealed class BusinessEntityFactoryTests
 
     // Контентная карточка получает установленный движком признак общей видимости.
     [Theory]
-    [InlineData(BusinessEntityTypeEnum.Document, true)]
-    [InlineData(BusinessEntityTypeEnum.RichTextDocument, true)]
-    [InlineData(BusinessEntityTypeEnum.Folder, false)]
-    [InlineData(BusinessEntityTypeEnum.Space, false)]
+    [InlineData(global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, true)]
+    [InlineData(global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id, true)]
+    [InlineData(global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, false)]
+    [InlineData(global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id, false)]
     public void AppliesInitialContentVisibility(BusinessEntityTypeEnum type, bool expected)
     {
         Assert.Equal(expected, _factory.Create(type, "Объект").IsPublic);
@@ -75,6 +87,6 @@ public sealed class BusinessEntityFactoryTests
     public void RejectsMissingPayload()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            _factory.Create<Document>(BusinessEntityTypeEnum.Document, (Document)null!));
+            _factory.Create<Document>(global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, (Document)null!));
     }
 }

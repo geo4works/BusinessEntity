@@ -1,3 +1,4 @@
+using BusinessEntity.Core.Types;
 using System;
 using System.Reflection;
 using BusinessEntity.Core.Classes;
@@ -9,6 +10,10 @@ namespace BusinessEntity.Core.Services
     // Инкапсулирует правила инициализации entity и ее payload
     public class BusinessEntityFactory : IBusinessEntityFactory
     {
+        private readonly EntityTypeRegistry _types;
+        // Общая фабрика получает metadata зарегистрированных владельцами типов.
+        public BusinessEntityFactory(EntityTypeRegistry types) => _types = types;
+
         // Кэш MethodInfo для runtime-создания typed entity
         private static readonly MethodInfo CreateTypedMethod =
             typeof(BusinessEntityFactory).GetMethod(nameof(CreateTypedInternal), BindingFlags.Instance | BindingFlags.NonPublic)
@@ -102,7 +107,7 @@ namespace BusinessEntity.Core.Services
         }
 
         // Создает и инициализирует базовую entity общими полями
-        private static global::BusinessEntity.Core.Classes.BusinessEntity CreateCoreEntity(BusinessEntityTypeEnum type, string? name)
+        private global::BusinessEntity.Core.Classes.BusinessEntity CreateCoreEntity(BusinessEntityTypeEnum type, string? name)
         {
             return new global::BusinessEntity.Core.Classes.BusinessEntity
             {
@@ -116,11 +121,7 @@ namespace BusinessEntity.Core.Services
             };
         }
 
-        // Возвращает дефолтный признак "Общее" только для контентных типов.
-        private static bool GetDefaultIsPublic(BusinessEntityTypeEnum type)
-        {
-            return type == BusinessEntityTypeEnum.Document ||
-                   type == BusinessEntityTypeEnum.RichTextDocument;
-        }
+        // Признак видимости задаёт владелец, а не ветвление общего движка.
+        private bool GetDefaultIsPublic(BusinessEntityTypeEnum type) => _types.Get(type).DefaultIsPublic;
     }
 }

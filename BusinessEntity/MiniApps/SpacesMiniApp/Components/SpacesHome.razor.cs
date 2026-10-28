@@ -1,10 +1,11 @@
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
+using BusinessEntity.Services;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.Contracts;
-using BusinessEntity.Models;
+using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
-using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using Microsoft.AspNetCore.Components;
 using BusinessEntity.Core.BaseClasses.Relations;
 
@@ -16,17 +17,11 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
         [Inject] public IUserContextService UserContext { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<SpacesHome> Logger { get; set; } = default!;
-        [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
-        [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
 
         private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }
         private bool IsAuthenticated { get; set; }
-        private IEnumerable<MacroRelationType> PossibleRelations { get; set; } = new List<MacroRelationType>();
-        private IEnumerable<string> EntityTypeEnums { get; set; } = new List<string>();
-        private IEnumerable<string> RelationTypeEnums { get; set; } = new List<string>();
-        private List<BusinessEntity.Core.Classes.BusinessEntity> BusinessEntities { get; set; } = new List<BusinessEntity.Core.Classes.BusinessEntity>();
         private IReadOnlyList<UserSpaceRecord> AnonymousAccessibleSpaces { get; set; } = Array.Empty<UserSpaceRecord>();
         private bool IsAnonymousSpacesLoading { get; set; }
         private UserSpaceRecord? CurrentAnonymousSpace => UserContext.CurrentSpaceId.HasValue
@@ -48,19 +43,6 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
                     CurrentUserName = currentUser!.UserName;
                     CurrentUserId = currentUser.UserId;
 
-                    // Получаем возможные отношения между сущностями
-                    PossibleRelations = RelationTypesProvider.GetPossibleRelations();
-
-                    // Получаем все возможные типы сущностей из enum
-                    EntityTypeEnums = Enum.GetNames(typeof(BusinessEntityTypeEnum));
-
-                    // Получаем все возможные типы отношений из enum
-                    RelationTypeEnums = Enum.GetNames(typeof(BusinessEntityRelationTypeEnum));
-
-                    // Загружаем созданные сущности
-                    var entities = await BusinessEntityHelper.GetAllBusinessEntities();
-                    BusinessEntities = entities.ToList();
-
                     Logger.LogInformation("User {UserName} accessed main page", CurrentUserName);
                 }
                 else
@@ -78,7 +60,7 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
             }
         }
 
-        private void OnTreeSelectionChanged(List<TreeNodeItemViewModelBase> selectedNodes)
+        private void OnTreeSelectionChanged(List<TreeSelectedItem> selectedNodes)
         {
             try
             {
@@ -157,8 +139,8 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
 
             var route = firstDocument.EntityType switch
             {
-                BusinessEntityTypeEnum.RichTextDocument => $"/rich-document/{firstDocument.Id}",
-                BusinessEntityTypeEnum.Document => $"/document/{firstDocument.Id}",
+                global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id => $"/rich-document/{firstDocument.Id}",
+                global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id => $"/document/{firstDocument.Id}",
                 _ => "/"
             };
 

@@ -1,3 +1,4 @@
+@using BusinessEntity.MiniApps.UserMiniApp.Internal
 @namespace BusinessEntity.MiniApps.UserMiniApp.Components
 @inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
 @attribute [Authorize]
@@ -5,7 +6,8 @@
 @using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos
 @using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts
 @using ReactiveUI
-@inject IUserConnector UserConnector
+@inject UserAccountsService UserAccountsService
+@inject UserFormsWorkingSetFactory WorkingSets
 @inject IMessageBus MessageBus
 @inject BusinessEntity.Infrastructure.Bus.BusRequestScope BusScope
 
@@ -25,7 +27,7 @@
                 <label class="profile-page__field">
                     <span>Отображаемое имя</span>
                     <InputText class="form-control"
-                               @bind-Value="ProfileModel.DisplayedName"
+                               @bind-Value="ProfileModel.DisplayedName" @bind-Value:after="ProfileChanged"
                                disabled="@IsSaving" />
                 </label>
 
@@ -37,7 +39,7 @@
                         <InputText class="form-control profile-page__password-input"
                                    type="@OldPasswordInputType"
                                    autocomplete="current-password"
-                                   @bind-Value="ProfileModel.OldPassword"
+                                   @bind-Value="ProfileModel.OldPassword" @bind-Value:after="ProfileChanged"
                                    disabled="@IsSaving" />
                         <button type="button"
                                 class="btn btn-outline-secondary profile-page__password-toggle"
@@ -54,7 +56,7 @@
                         <InputText class="form-control profile-page__password-input"
                                    type="@NewPasswordInputType"
                                    autocomplete="new-password"
-                                   @bind-Value="ProfileModel.NewPassword"
+                                   @bind-Value="ProfileModel.NewPassword" @bind-Value:after="ProfileChanged"
                                    disabled="@IsSaving" />
                         <button type="button"
                                 class="btn btn-outline-secondary profile-page__password-toggle"
@@ -71,7 +73,7 @@
                         <InputText class="form-control profile-page__password-input"
                                    type="@RepeatPasswordInputType"
                                    autocomplete="new-password"
-                                   @bind-Value="ProfileModel.RepeatPassword"
+                                   @bind-Value="ProfileModel.RepeatPassword" @bind-Value:after="ProfileChanged"
                                    disabled="@IsSaving" />
                         <button type="button"
                                 class="btn btn-outline-secondary profile-page__password-toggle"
@@ -100,6 +102,9 @@
 </section>
 
 @code {
+    private UserFormsWorkingSet Working => WorkingSets.Get(Module!);
+    // Значения формы принадлежат рабочему экземпляру User.
+    private void ProfileChanged() => Working.Changed(UserFormKind.Profile, Guid.Empty);
     private UserProfileUpdateRequest ProfileModel { get; set; } = new();
     private bool IsLoading { get; set; }
     private bool IsSaving { get; set; }
@@ -122,9 +127,10 @@
 
         try
         {
-            var profile = await UserConnector.GetProfileAsync();
+            var profile = await UserAccountsService.GetProfileAsync();
             CurrentUserId = profile?.UserId ?? Guid.Empty;
             ProfileModel.DisplayedName = profile?.DisplayedName ?? string.Empty;
+            ProfileModel = Working.Open(UserFormKind.Profile, Guid.Empty, ProfileModel, profile!);
         }
         catch (Exception ex)
         {
@@ -145,7 +151,10 @@
         try
         {
             var isPasswordChanged = HasPasswordChange();
-            var profile = await UserConnector.UpdateProfileAsync(ProfileModel);
+            ProfileChanged();
+            var attempt = await Module!.SaveContext!.SaveAsync(Module.ModuleId);
+            if (!attempt.Success) throw new InvalidOperationException(attempt.Error);
+            var profile = Working.Result<UserProfileDto>(UserFormKind.Profile, Guid.Empty);
             CurrentUserId = profile.UserId;
             ProfileModel.DisplayedName = profile.DisplayedName;
             ClearPasswordFields();

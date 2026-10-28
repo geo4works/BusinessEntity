@@ -6,8 +6,8 @@ using System.Threading;
 using System.Collections.Generic;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Types;
+using BusinessEntity.Core.Chunks;
 using System.Linq;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.WebLogger.Services;
@@ -22,6 +22,7 @@ namespace BusinessEntity.Core.Services
         // Коннектор хранения entity, data и relations
         private readonly IDataProviderConnector _dataProviderConnector;
         private readonly EntitySaveBatchFactory _batches;
+        private readonly EntityTypeRegistry _types;
         // Логгер бизнес-операций
         private readonly IWebLoggerService? _webLogger;
         // Фабрика для создания entity и typed entity
@@ -31,9 +32,9 @@ namespace BusinessEntity.Core.Services
         public BusinessEntityHelper(
             IDataProviderConnector dataProviderConnector,
             IWebLoggerService? webLogger,
-            IBusinessEntityFactory businessEntityFactory, EntitySaveBatchFactory batches)
+            IBusinessEntityFactory businessEntityFactory, EntitySaveBatchFactory batches, EntityTypeRegistry types)
         {
-            _batches = batches;
+            _batches = batches; _types = types;
             _dataProviderConnector = dataProviderConnector ?? throw new ArgumentNullException(nameof(dataProviderConnector));
             _webLogger = webLogger; // Логгер может быть не настроен, поэтому допускаем null
             _businessEntityFactory = businessEntityFactory ?? throw new ArgumentNullException(nameof(businessEntityFactory));
@@ -42,8 +43,11 @@ namespace BusinessEntity.Core.Services
         // Создает простую сущность и сохраняет ее в хранилище
         public async Task<Classes.BusinessEntity> CreateBusinessEntity(BusinessEntityTypeEnum type, string name)
         {
-            var entity = CreateEntityForType(type, name);
-            await _dataProviderConnector.SaveAsync(_batches.Create(type) with { Entities = [entity] });
+            var entity = _businessEntityFactory.Create(type, name);
+            var initial = _types.Get(type).CreateInitial(entity.Id, name, null);
+            var payloads = initial.Data == null ? Array.Empty<EntityPayloadChange>()
+                : new[] { new EntityPayloadChange(entity.Id, 0, initial.Data, initial.Chunks, initial.ChunkOrder) };
+            await _dataProviderConnector.SaveAsync(_batches.Create(type) with { Entities = [entity], Payloads = payloads });
             return entity;
         }
 
@@ -96,12 +100,12 @@ namespace BusinessEntity.Core.Services
             return take.HasValue ? entities.Take(take.Value).ToList() : entities;
         }
 
-        // Возвращает только пространства
-        public async Task<IReadOnlyList<Classes.BusinessEntity>> GetSpacesAsync(int? take = null)
+        // Возвращает карточки объявленного типа без знания его предметного значения.
+        public async Task<IReadOnlyList<Classes.BusinessEntity>> GetEntitiesOfTypeAsync(BusinessEntityTypeEnum type, int? take = null)
         {
-            var spaces = (await _dataProviderConnector.GetAllAsync())
-                .Where(e => e.EntityType == BusinessEntityTypeEnum.Space);
-            return take.HasValue ? spaces.Take(take.Value).ToList() : spaces.ToList();
+            _types.Get(type);
+            var entities = (await _dataProviderConnector.GetAllAsync()).Where(entity => entity.EntityType == type);
+            return (take.HasValue ? entities.Take(take.Value) : entities).ToArray();
         }
 
         // Возвращает все relation с необязательным ограничением по количеству
@@ -153,7 +157,7 @@ namespace BusinessEntity.Core.Services
             CancellationToken ct = default)
         {
             // Формируем базовое имя по типу
-            var baseName = $"New{newType}"; // "NewFolder"
+            var baseName = _types.Get(newType).DefaultNamePrefix;
             var children = await GetContainedEntitiesAsync(parent.Id, ct);
             var sameTypeChildren = children.Where(c => c.EntityType == newType)
                                           .Select(c => c.Name)
@@ -168,40 +172,20 @@ namespace BusinessEntity.Core.Services
             }
         }
 
-        // Создает новую подпапку внутри папки или пространства
-        public async Task<Classes.BusinessEntity> CreateSubFolderAsync(Classes.BusinessEntity parent, CancellationToken ct = default)
+        // Создаёт связанный дочерний объект по правилам и initial payload владельца типа.
+        public async Task<Classes.BusinessEntity> CreateChildAsync(Classes.BusinessEntity parent, BusinessEntityTypeEnum type,
+            string? initialContent = null, CancellationToken ct = default)
         {
-            if (parent.EntityType != BusinessEntityTypeEnum.Folder && parent.EntityType != BusinessEntityTypeEnum.Space)
-                throw new ArgumentException("Parent must be Folder or Space", nameof(parent));
-            var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Folder, ct);
-            var entity = CreateEntityForType(BusinessEntityTypeEnum.Folder, name);
-            var relation = new BusinessEntityRelation { ObjectAId = parent.Id, ObjectBId = entity.Id,
-                RelationType = BusinessEntityRelationTypeEnum.Contains.ToString() };
-            await _dataProviderConnector.SaveAsync(_batches.Create(entity.EntityType) with { Entities = [entity], Relations = [relation] }, ct);
+            var descriptor = _types.Get(type);
+            if (!descriptor.AllowedParentTypes.Contains(parent.EntityType)) throw new ArgumentException("Тип нельзя вложить в выбранного родителя.");
+            var name = await GetNewItemNameAsync(parent, type, ct); var entity = _businessEntityFactory.Create(type, name);
+            var initial = descriptor.CreateInitial(entity.Id, name, initialContent);
+            var payloads = initial.Data == null ? Array.Empty<EntityPayloadChange>()
+                : new[] { new EntityPayloadChange(entity.Id, 0, initial.Data, initial.Chunks, initial.ChunkOrder) };
+            var relation = new BusinessEntityRelation { ObjectAId = parent.Id, ObjectBId = entity.Id, RelationType = "Contains" };
+            await _dataProviderConnector.SaveAsync(_batches.Create(type) with { Entities = [entity], Payloads = payloads, Relations = [relation] }, ct);
             return entity;
         }
-
-        // Блок операций создания документа
-        #region Document operations
-        // Создает новый документ с заданным текстом
-        public async Task<Classes.BusinessEntity> CreateDocumentAsync(Classes.BusinessEntity parent,
-            string? bodyText = null, CancellationToken ct = default)
-        {
-            if (parent.EntityType != BusinessEntityTypeEnum.Folder && parent.EntityType != BusinessEntityTypeEnum.Space)
-                throw new ArgumentException("Parent must be Folder or Space", nameof(parent));
-            var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Document, ct);
-            var data = new Document { Name = name, Tag = BusinessEntityTypeEnum.Document.ToString(),
-                Text = string.IsNullOrWhiteSpace(bodyText) ? new string('x', 100) : bodyText };
-            var entity = CreateEntityForType(BusinessEntityTypeEnum.Document, name, data.Text);
-            data.Id = entity.Id;
-            var relation = new BusinessEntityRelation { ObjectAId = parent.Id, ObjectBId = entity.Id,
-                RelationType = BusinessEntityRelationTypeEnum.Contains.ToString() };
-            var result = await _dataProviderConnector.SaveAsync(_batches.Create(entity.EntityType) with
-                { Entities = [entity], Payloads = [new(entity.Id, 0, data)], Relations = [relation] }, ct);
-            data.Version = result.Versions.Single().Version;
-            return entity;
-        }
-        #endregion
 
         // Меняет родителя элемента в дереве по связи Contains
         public async Task ChangeVisualFolderParentForItem(Classes.BusinessEntity child, Classes.BusinessEntity newVisualParent)
@@ -215,6 +199,26 @@ namespace BusinessEntity.Core.Services
                 RelationType = BusinessEntityRelationTypeEnum.Contains.ToString() };
             await _dataProviderConnector.SaveAsync(_batches.Create(child.EntityType) with { DeleteRelations = old, Relations = [relation] });
         }
+
+        // Перемещение всего набора готовит связи заранее и отправляет одну транзакцию от владельца сценария.
+        public async Task MoveEntitiesAsync(IReadOnlyList<Guid> ids, Guid parentId, string miniAppId, CancellationToken ct)
+        {
+            var all = await _dataProviderConnector.QueryGraphAsync(GraphQueryKind.All, cancellationToken: ct);
+            var parent = all.Entities.Single(x => x.Id == parentId);
+            var children = ids.Distinct().Select(id => all.Entities.Single(x => x.Id == id)).ToArray();
+            foreach (var child in children)
+            {
+                if (!_types.Get(child.EntityType).AllowedParentTypes.Contains(parent.EntityType)) throw new ArgumentException("Недопустимое вложение.");
+                if (await WouldCreateCyclicDependency(child.Id, parentId)) throw new InvalidOperationException("Перемещение создаёт цикл.");
+            }
+            var selected = children.Select(x => x.Id).ToHashSet();
+            var removed = all.Relations.Where(x => selected.Contains(x.ObjectBId) && x.RelationType == "Contains").Select(x => x.Id).ToArray();
+            var added = children.Select(child => new BusinessEntityRelation { ObjectAId = parentId, ObjectBId = child.Id, RelationType = "Contains" }).ToArray();
+            await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), miniAppId, null) { DeleteRelations = removed, Relations = added }, ct);
+        }
+        // Удаляет весь выбранный набор одной транзакцией, включая зависимые поддеревья на стороне DataProvider.
+        public Task RemoveEntitiesAsync(IReadOnlyList<Guid> ids, string miniAppId, CancellationToken ct) =>
+            _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), miniAppId, null) { DeleteEntities = ids.Distinct().ToArray() }, ct);
 
         // Полностью удаляет сущность и ее дочернее поддерево
         public async Task<(bool success, List<string> messages)> RemoveBusinessEntityPermanently(Guid entityId, CancellationToken ct = default)
@@ -262,23 +266,15 @@ namespace BusinessEntity.Core.Services
             if (entityData == null) throw new ArgumentNullException(nameof(entityData));
             _webLogger?.Debug($"GetData: entityId={entityData.Id}, type={entityData.EntityType}");
 
-            switch (entityData.EntityType)
+            var descriptor = _types.Get(entityData.EntityType);
+            var data = await _dataProviderConnector.GetDataAsync<BusinessEntityData>(entityData.Id);
+            if (data == null)
             {
-                case BusinessEntityTypeEnum.Space:
-                    return await LoadTypedDataListAsync<Space>(entityData);
-                case BusinessEntityTypeEnum.Folder:
-                    return await LoadTypedDataListAsync<Folder>(entityData);
-                case BusinessEntityTypeEnum.Document:
-                    return await LoadTypedDataListAsync<Document>(entityData);
-                case BusinessEntityTypeEnum.RichTextDocument:
-                    return await LoadTypedDataListAsync<RichTextDocument>(entityData);
-                case BusinessEntityTypeEnum.MediaVideo:
-                    return await LoadTypedDataListAsync<MediaVideo>(entityData);
-                case BusinessEntityTypeEnum.SysParametersTp:
-                    return await LoadTypedDataListAsync<SysParameters>(entityData);
-                default:
-                    return Array.Empty<BusinessEntityData>();
+                if (descriptor.PayloadRequired) throw new InvalidDataException("У обязательного payload отсутствует сохранённая версия.");
+                return [];
             }
+            if (!descriptor.DataType.IsInstanceOfType(data)) throw new InvalidDataException("Payload не соответствует описателю типа.");
+            ApplyEntityMetadata(entityData, data); return [data];
         }
 
         // Загружает typed-сущность вместе с ее payload-объектом
@@ -291,7 +287,13 @@ namespace BusinessEntity.Core.Services
                 return null;
             }
 
-            var data = await _dataProviderConnector.GetDataAsync<TData>(entity.Id, ct) ?? new TData();
+            var data = await _dataProviderConnector.GetDataAsync<TData>(entity.Id, ct);
+            if (data == null)
+            {
+                var descriptor = _types.Get(entity.EntityType);
+                if (descriptor.PayloadRequired) throw new InvalidDataException("Обязательный payload отсутствует.");
+                data = new TData(); // Отсутствие payload разрешено контрактом контейнерного типа.
+            }
             var typedEntity = _businessEntityFactory.Create(entity.EntityType, data, entity.Name);
             typedEntity = CopyEntityState(entity, typedEntity);
 
@@ -307,39 +309,36 @@ namespace BusinessEntity.Core.Services
 
             if (string.IsNullOrWhiteSpace(typedEntity.Data.Tag))
             {
-                typedEntity.Data.Tag = typedEntity.EntityType.ToString();
+                typedEntity.Data.Tag = _types.Get(typedEntity.EntityType).TypeKey;
             }
 
             return typedEntity;
         }
 
-        // Возвращает singleton-объект указанного типа; если его нет — создает и сохраняет
-        public async Task<Classes.BusinessEntity<TData>> GetOrCreateSingletonEntityAsync<TData>(
-            BusinessEntityTypeEnum type,
-            string name,
-            CancellationToken ct = default)
+        // Читает обязательный singleton; создавать начальное состояние вправе startup владельца.
+        public async Task<Classes.BusinessEntity<TData>> GetRequiredSingletonEntityAsync<TData>(BusinessEntityTypeEnum type, string name, CancellationToken ct = default)
             where TData : class, IBusinessEntityData, new()
         {
-            var existingEntity = (await GetAllBusinessEntities())
-                .Where(x => x.EntityType == type && string.Equals(x.Name, name, StringComparison.Ordinal))
-                .OrderBy(x => x.CreatedDate)
-                .FirstOrDefault();
-
-            if (existingEntity != null)
-            {
-                var typedExistingEntity = await GetEntityWithDataAsync<TData>(existingEntity.Id, ct);
-                if (typedExistingEntity != null)
-                {
-                    return typedExistingEntity;
-                }
-            }
-
-            var createdEntity = _businessEntityFactory.Create<TData>(type, name);
-            createdEntity.Name = name;
-            createdEntity.Data.Name = name;
-            createdEntity.Data.Tag = type.ToString();
-
-            return await SaveEntityAsync(createdEntity, ct);
+            var entity = await FindSingletonEntityAsync(type, name, ct) ?? throw new InvalidDataException("Обязательный singleton отсутствует.");
+            return await GetEntityWithDataAsync<TData>(entity.Id, ct) ?? throw new InvalidDataException("Обязательный singleton удалён во время чтения.");
+        }
+        // Startup создаёт отсутствующий singleton из описателя владельца; дубликаты считаются ошибкой.
+        public async Task<Classes.BusinessEntity<TData>> GetOrCreateSingletonEntityAsync<TData>(BusinessEntityTypeEnum type, string name, CancellationToken ct = default)
+            where TData : class, IBusinessEntityData, new()
+        {
+            var existing = await FindSingletonEntityAsync(type, name, ct);
+            if (existing != null) return await GetEntityWithDataAsync<TData>(existing.Id, ct)
+                ?? throw new InvalidDataException("Singleton удалён во время инициализации.");
+            var created = _businessEntityFactory.Create<TData>(type, name);
+            created.Data.Name = name; created.Data.Tag = _types.Get(type).TypeKey;
+            return await SaveEntityAsync(created, ct);
+        }
+        // Поиск обобщённый: singleton и тип данных объявляет владелец, Core не перечисляет домены.
+        private async Task<Classes.BusinessEntity?> FindSingletonEntityAsync(BusinessEntityTypeEnum type, string name, CancellationToken ct)
+        {
+            if (!_types.Get(type).IsSingleton) throw new ArgumentException("Тип не объявлен singleton.");
+            var graph = await _dataProviderConnector.QueryGraphAsync(GraphQueryKind.All, cancellationToken: ct);
+            return graph.Entities.Where(x => x.EntityType == type && string.Equals(x.Name, name, StringComparison.Ordinal)).SingleOrDefault();
         }
 
         // Сохраняет typed business-объект как entity + payload без relation
@@ -375,15 +374,16 @@ namespace BusinessEntity.Core.Services
 
             if (string.IsNullOrWhiteSpace(entity.Data.Tag))
             {
-                entity.Data.Tag = entity.EntityType.ToString();
+                entity.Data.Tag = _types.Get(entity.EntityType).TypeKey;
             }
 
             entity.SynchronizeDataWithEntity();
 
             var persistenceEntity = CopyEntityState(entity, _businessEntityFactory.Create(entity.EntityType, entity.Name));
+            var sent = _types.Get(entity.EntityType).Clone(entity.Data as BusinessEntityData ?? throw new ArgumentException("Payload не реализует общую модель данных."));
             var exists = await _dataProviderConnector.GetDataAsync<IBusinessEntityData>(entity.Id, ct);
             var saved = await _dataProviderConnector.SaveAsync(_batches.Create(entity.EntityType) with
-                { Entities = [persistenceEntity], Payloads = [new(entity.Id, exists == null ? 0 : entity.Data.Version, entity.Data)] }, ct);
+                { Entities = [persistenceEntity], Payloads = [new(entity.Id, exists == null ? 0 : sent.Version, sent)] }, ct);
             entity.Data.Version = saved.Versions.Single().Version;
             return entity;
         }
@@ -392,168 +392,20 @@ namespace BusinessEntity.Core.Services
         public async Task SaveEntity(Classes.BusinessEntity entityData, BusinessEntityData data)
         {
             ArgumentNullException.ThrowIfNull(entityData); ArgumentNullException.ThrowIfNull(data);
-            data.Id = entityData.Id; data.Name = entityData.Name; data.EntityType = entityData.EntityType;
+            var sent = _types.Get(entityData.EntityType).Clone(data);
+            sent.Id = entityData.Id; sent.Name = entityData.Name; sent.EntityType = entityData.EntityType;
             var entityToSave = CreatePersistenceEntity(entityData, data);
             var exists = await _dataProviderConnector.GetDataAsync<IBusinessEntityData>(entityData.Id);
             var result = await _dataProviderConnector.SaveAsync(_batches.Create(entityData.EntityType) with
-                { Entities = [entityToSave], Payloads = [new(entityData.Id, exists == null ? 0 : data.Version, data)] });
+                { Entities = [entityToSave], Payloads = [new(entityData.Id, exists == null ? 0 : sent.Version, sent)] });
             data.Version = result.Versions.Single().Version;
         }
 
-        // Создает runtime-entity нужного типа через фабрику
-        private Classes.BusinessEntity CreateEntityForType(BusinessEntityTypeEnum type, string name, string? payload = null)
-        {
-            return type switch
-            {
-                BusinessEntityTypeEnum.Document => _businessEntityFactory.Create(
-                    type,
-                    new Document
-                    {
-                        Name = name,
-                        Text = payload ?? string.Empty
-                    },
-                    name),
-                BusinessEntityTypeEnum.Folder => _businessEntityFactory.Create<Folder>(type, name),
-                BusinessEntityTypeEnum.Space => _businessEntityFactory.Create<Space>(type, name),
-                BusinessEntityTypeEnum.MediaVideo => _businessEntityFactory.Create<MediaVideo>(type, name),
-                BusinessEntityTypeEnum.SysParametersTp => _businessEntityFactory.Create<SysParameters>(type, name),
-                _ => _businessEntityFactory.Create(type, name)
-            };
-        }
-
-        // Подготавливает entity к сохранению через connector
+        // Карточка копируется общим алгоритмом; предметный payload фиксируется через описатель владельца.
         private Classes.BusinessEntity CreatePersistenceEntity(Classes.BusinessEntity entityData, BusinessEntityData data)
         {
-            var entityType = ResolveEntityType(entityData, data);
-
-            return data switch
-            {
-                Document document => CreateDocumentPersistenceEntity(entityData, document, entityType),
-                RichTextDocument richTextDocument => CreateRichTextDocumentPersistenceEntity(entityData, richTextDocument, entityType),
-                MediaVideo mediaVideo => CreateMediaVideoPersistenceEntity(entityData, mediaVideo, entityType),
-                SysParameters sysParameters => CreateSysParametersPersistenceEntity(entityData, sysParameters, entityType),
-                Folder => CopyEntityState(entityData, _businessEntityFactory.Create<Folder>(entityType, entityData.Name)),
-                Space => CopyEntityState(entityData, _businessEntityFactory.Create<Space>(entityType, entityData.Name)),
-                _ => CopyEntityState(entityData, _businessEntityFactory.Create(entityType, entityData.Name))
-            };
-        }
-
-        // Создает entity документа для сохранения
-        private Classes.BusinessEntity CreateDocumentPersistenceEntity(Classes.BusinessEntity entityData, Document document, BusinessEntityTypeEnum entityType)
-        {
-            var typedEntity = _businessEntityFactory.Create(
-                entityType,
-                new Document
-                {
-                    Name = string.IsNullOrWhiteSpace(document.Name) ? entityData.Name : document.Name,
-                    Tag = document.Tag,
-                    PublishedVersion = document.PublishedVersion,
-                    Text = document.Text ?? string.Empty
-                },
-                entityData.Name);
-
-            typedEntity = CopyEntityState(entityData, typedEntity);
-            typedEntity.Data.Tag = document.Tag;
-            typedEntity.Data.PublishedVersion = document.PublishedVersion;
-            typedEntity.Data.Text = document.Text ?? string.Empty;
-
-            return typedEntity;
-        }
-
-        // Создает entity rich-text документа для сохранения manifest-а без потери storage-настроек.
-        private Classes.BusinessEntity CreateRichTextDocumentPersistenceEntity(Classes.BusinessEntity entityData, RichTextDocument richTextDocument, BusinessEntityTypeEnum entityType)
-        {
-            var typedEntity = _businessEntityFactory.Create(
-                entityType,
-                new RichTextDocument
-                {
-                    Name = string.IsNullOrWhiteSpace(richTextDocument.Name) ? entityData.Name : richTextDocument.Name,
-                    Tag = richTextDocument.Tag,
-                    ContentStorage = richTextDocument.ContentStorage,
-                    EditorFormat = richTextDocument.EditorFormat,
-                    ChunkPolicy = richTextDocument.ChunkPolicy,
-                    EmbeddedFileStorage = richTextDocument.EmbeddedFileStorage,
-                    SupportsImages = richTextDocument.SupportsImages,
-                    PublishedVersion = richTextDocument.PublishedVersion
-                },
-                entityData.Name);
-
-            typedEntity = CopyEntityState(entityData, typedEntity);
-            typedEntity.Data.Tag = richTextDocument.Tag;
-            typedEntity.Data.ContentStorage = richTextDocument.ContentStorage;
-            typedEntity.Data.EditorFormat = richTextDocument.EditorFormat;
-            typedEntity.Data.ChunkPolicy = richTextDocument.ChunkPolicy;
-            typedEntity.Data.EmbeddedFileStorage = richTextDocument.EmbeddedFileStorage;
-            typedEntity.Data.SupportsImages = richTextDocument.SupportsImages;
-            typedEntity.Data.PublishedVersion = richTextDocument.PublishedVersion;
-
-            return typedEntity;
-        }
-
-        // Создает entity видео для сохранения typed payload без потери storage-полей.
-        private Classes.BusinessEntity CreateMediaVideoPersistenceEntity(Classes.BusinessEntity entityData, MediaVideo mediaVideo, BusinessEntityTypeEnum entityType)
-        {
-            var typedEntity = _businessEntityFactory.Create(
-                entityType,
-                new MediaVideo
-                {
-                    Name = string.IsNullOrWhiteSpace(mediaVideo.Name) ? entityData.Name : mediaVideo.Name,
-                    Tag = mediaVideo.Tag,
-                    FileName = mediaVideo.FileName ?? string.Empty,
-                    DisplayName = mediaVideo.DisplayName ?? string.Empty,
-                    ContentType = mediaVideo.ContentType ?? "application/octet-stream",
-                    OriginalSizeBytes = mediaVideo.OriginalSizeBytes,
-                    DurationSeconds = mediaVideo.DurationSeconds,
-                    UploadedByUserId = mediaVideo.UploadedByUserId,
-                    UploadedDate = mediaVideo.UploadedDate,
-                    Comment = mediaVideo.Comment ?? string.Empty
-                },
-                entityData.Name);
-
-            typedEntity = CopyEntityState(entityData, typedEntity);
-            typedEntity.Data.Tag = mediaVideo.Tag;
-            typedEntity.Data.FileName = mediaVideo.FileName ?? string.Empty;
-            typedEntity.Data.DisplayName = mediaVideo.DisplayName ?? string.Empty;
-            typedEntity.Data.ContentType = mediaVideo.ContentType ?? "application/octet-stream";
-            typedEntity.Data.OriginalSizeBytes = mediaVideo.OriginalSizeBytes;
-            typedEntity.Data.DurationSeconds = mediaVideo.DurationSeconds;
-            typedEntity.Data.UploadedByUserId = mediaVideo.UploadedByUserId;
-            typedEntity.Data.UploadedDate = mediaVideo.UploadedDate;
-            typedEntity.Data.Comment = mediaVideo.Comment ?? string.Empty;
-
-            return typedEntity;
-        }
-
-        // Создает entity системных параметров для сохранения typed payload без потери прикладных полей.
-        private Classes.BusinessEntity CreateSysParametersPersistenceEntity(Classes.BusinessEntity entityData, SysParameters sysParameters, BusinessEntityTypeEnum entityType)
-        {
-            var typedEntity = _businessEntityFactory.Create(
-                entityType,
-                new SysParameters
-                {
-                    Name = string.IsNullOrWhiteSpace(sysParameters.Name) ? entityData.Name : sysParameters.Name,
-                    Tag = sysParameters.Tag,
-                    CompanyName = sysParameters.CompanyName ?? string.Empty,
-                    RichTextChunkCharLimit = sysParameters.RichTextChunkCharLimit,
-                    RichTextInitialChunkCount = sysParameters.RichTextInitialChunkCount,
-                    RichTextTableOfContentsBeforeBuffer = sysParameters.RichTextTableOfContentsBeforeBuffer,
-                    RichTextTableOfContentsAfterBuffer = sysParameters.RichTextTableOfContentsAfterBuffer,
-                    RichTextScrollPreviousChunkCount = sysParameters.RichTextScrollPreviousChunkCount,
-                    RichTextHideTableOfContentsScrollbar = sysParameters.RichTextHideTableOfContentsScrollbar
-                },
-                entityData.Name);
-
-            typedEntity = CopyEntityState(entityData, typedEntity);
-            typedEntity.Data.Tag = sysParameters.Tag;
-            typedEntity.Data.CompanyName = sysParameters.CompanyName ?? string.Empty;
-            typedEntity.Data.RichTextChunkCharLimit = sysParameters.RichTextChunkCharLimit;
-            typedEntity.Data.RichTextInitialChunkCount = sysParameters.RichTextInitialChunkCount;
-            typedEntity.Data.RichTextTableOfContentsBeforeBuffer = sysParameters.RichTextTableOfContentsBeforeBuffer;
-            typedEntity.Data.RichTextTableOfContentsAfterBuffer = sysParameters.RichTextTableOfContentsAfterBuffer;
-            typedEntity.Data.RichTextScrollPreviousChunkCount = sysParameters.RichTextScrollPreviousChunkCount;
-            typedEntity.Data.RichTextHideTableOfContentsScrollbar = sysParameters.RichTextHideTableOfContentsScrollbar;
-
-            return typedEntity;
+            ResolveEntityType(entityData, data);
+            return CopyEntityState(entityData, _businessEntityFactory.Create(entityData.EntityType, entityData.Name));
         }
 
         // Копирует метаданные существующей entity в новую runtime-entity
@@ -598,22 +450,8 @@ namespace BusinessEntity.Core.Services
             return entityData.EntityType;
         }
 
-        // Загружает один typed payload с общими метаданными карточки.
-        private async Task<IReadOnlyList<BusinessEntityData>> LoadTypedDataListAsync<TData>(Classes.BusinessEntity entityData)
-            where TData : BusinessEntityData, IBusinessEntityData, new()
-        {
-            var data = await _dataProviderConnector.GetDataAsync<TData>(entityData.Id);
-            if (data == null)
-            {
-                return Array.Empty<BusinessEntityData>();
-            }
-
-            ApplyEntityMetadata(entityData, data);
-            return new BusinessEntityData[] { data };
-        }
-
         // Накладывает общие entity-метаданные поверх typed payload, полученного из data-provider.
-        private static void ApplyEntityMetadata(Classes.BusinessEntity entityData, BusinessEntityData data)
+        private void ApplyEntityMetadata(Classes.BusinessEntity entityData, BusinessEntityData data)
         {
             data.Id = entityData.Id;
             data.Name = entityData.Name;
@@ -623,7 +461,7 @@ namespace BusinessEntity.Core.Services
 
             if (string.IsNullOrWhiteSpace(data.Tag))
             {
-                data.Tag = entityData.EntityType.ToString();
+                data.Tag = _types.Get(entityData.EntityType).TypeKey;
             }
         }
     }

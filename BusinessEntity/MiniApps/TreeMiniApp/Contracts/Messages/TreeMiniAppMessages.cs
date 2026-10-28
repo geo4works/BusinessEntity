@@ -18,4 +18,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages
 
     // Ответ со снимком дерева пространства.
     public sealed record GetTreeForSpaceResponse(Guid RequestId, TreeSpaceSnapshot? Snapshot, BusError? Error = null) : BusResponse(RequestId, Error);
+    // Завершённая операция удаления всего выбранного набора.
+    public sealed record DeleteTreeEntitiesRequest(Guid RequestId, IReadOnlyList<Guid> EntityIds) : BusRequest(RequestId);
+    // Подтверждение атомарного удаления набора.
+    public sealed record DeleteTreeEntitiesResponse(Guid RequestId, BusError? Error = null) : BusResponse(RequestId, Error);
 }

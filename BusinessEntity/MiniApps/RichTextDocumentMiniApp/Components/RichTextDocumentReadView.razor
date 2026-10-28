@@ -1,0 +1,131 @@
+@namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components
+
+<div class="rich-text-document-shell">
+    <div class="rich-text-document-header mb-3">
+        <div class="rich-text-document-header__outline-spacer"></div>
+        <div class="rich-text-document-title">
+            <h4 class="mb-0">@EntityName</h4>
+        </div>
+    </div>
+
+    @if (IsBusy)
+    {
+        <div class="alert alert-secondary mb-0">Обработка rich-text документа...</div>
+    }
+    else if (IsDocumentEmpty)
+    {
+        <div class="rich-text-document-layout">
+            <div class="rich-text-document-layout__outline"></div>
+            <div class="rich-text-document-layout__content">
+                <div class="alert alert-secondary mb-0">Документ пуст. Импортируйте .txt, .md или .html.</div>
+            </div>
+            <div class="rich-text-document-layout__widgets">
+                <div class="rich-text-document-actions" role="group" aria-label="Действия rich-text документа">
+                    @if (CanChangePublicFlag)
+                    {
+                        <label class="form-check form-check-inline mb-0">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   checked="@IsPublic"
+                                   @onchange="HandlePublicChangedAsync" />
+                            <span class="form-check-label">Общий</span>
+                        </label>
+                    }
+                    <DeclaredLink MiniAppId="RichTextDocumentMiniApp" CommandId="article.print" ContextId="BusinessEntityId">
+                        <span class="material-icons" aria-hidden="true">print</span>
+                        <span>Печать</span>
+                    </DeclaredLink>
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.edit" OnInvoked="HandleEditAsync" Enabled="@(CanEdit)" CssClass="btn btn-sm btn-outline-primary" Title="Edit">
+                        Edit
+                    </DeclaredButton>
+                    <DeclaredFileInput MiniAppId="RichTextDocumentMiniApp" CommandId="article.import" Enabled="CanEdit" OnSelected="HandleImportSelected" />
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.publish" OnInvoked="HandlePublishAsync" Enabled="@(CanPublish)" CssClass="btn btn-sm btn-outline-success">
+                        Опубликовать
+                    </DeclaredButton>
+                    @if (CanDelete)
+                    {
+                        <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.delete" OnInvoked="HandleDeleteAsync" Enabled="@(CanDelete)" CssClass="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1">
+                            <span class="material-icons" aria-hidden="true">delete</span>
+                            <span>Удалить</span>
+                        </DeclaredButton>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="rich-text-document-layout">
+            <div class="rich-text-document-layout__outline">
+                <RichTextDocumentOutline Nodes="VisibleOutlineNodes"
+                                         TreeElementId="@OutlineTreeElementId"
+                                         DisplayLevelCount="@DisplayLevelCount"
+                                         IsLoading="@IsOutlineLoading"
+                                         IsRebuilding="@IsRebuildingTableOfContents"
+                                         CanRebuild="@CanEdit"
+                                         HideScrollbar="@HideTableOfContentsScrollbar"
+                                         OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
+                                         OnRebuildRequested="HandleRebuildTableOfContentsAsync"
+                                         OnHeadingSelected="HandleHeadingSelectedAsync" />
+            </div>
+            <div class="rich-text-document-layout__content">
+                <RichTextDocumentViewport @ref="Viewport"
+                                          ViewportElementId="@ViewportElementId"
+                                          BusinessEntityId="@BusinessEntityId"
+                                          DocumentVersion="@ViewedVersion"
+                                          OutlineNodes="@LocalOutlineNodes"
+                                          IsInitialContentLoading="@IsInitialContentLoading"
+                                          InitialTargetPosition="@InitialTargetPosition"
+                                          InitialWindow="@InitialChunkWindow" />
+            </div>
+            <div class="rich-text-document-layout__widgets">
+                <div class="rich-text-document-actions" role="group" aria-label="Действия rich-text документа">
+                    @if (CanChangePublicFlag)
+                    {
+                        <label class="form-check form-check-inline mb-0">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   checked="@IsPublic"
+                                   @onchange="HandlePublicChangedAsync" />
+                            <span class="form-check-label">Общий</span>
+                        </label>
+                    }
+                    <DeclaredLink MiniAppId="RichTextDocumentMiniApp" CommandId="article.print" ContextId="BusinessEntityId">
+                        <span class="material-icons" aria-hidden="true">print</span>
+                        <span>Печать</span>
+                    </DeclaredLink>
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.edit" OnInvoked="HandleEditAsync" Enabled="@(CanEdit)" CssClass="btn btn-sm btn-outline-primary" Title="Edit">
+                        Edit
+                    </DeclaredButton>
+                    <DeclaredFileInput MiniAppId="RichTextDocumentMiniApp" CommandId="article.import" Enabled="CanEdit" OnSelected="HandleImportSelected" />
+                    <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.publish" OnInvoked="HandlePublishAsync" Enabled="@(CanPublish)" CssClass="btn btn-sm btn-outline-success">
+                        Опубликовать
+                    </DeclaredButton>
+                    @if (CanDelete)
+                    {
+                        <DeclaredButton MiniAppId="RichTextDocumentMiniApp" CommandId="article.delete" OnInvoked="HandleDeleteAsync" Enabled="@(CanDelete)" CssClass="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1">
+                            <span class="material-icons" aria-hidden="true">delete</span>
+                            <span>Удалить</span>
+                        </DeclaredButton>
+                    }
+                </div>
+                <RichTextDocumentWidgets CanRestoreVersion="@CanRestoreVersion" BusinessEntityId="@BusinessEntityId"
+                                         Bookmarks="@Bookmarks"
+                                         ActiveBookmarkId="@ActiveBookmarkId"
+                                         VersionsRefreshToken="@VersionsRefreshToken"
+                                         ViewedVersion="@ViewedVersion"
+                                         LatestVersion="@LatestVersion"
+                                         PublishedVersion="@PublishedVersion"
+                                         CanBrowseVersions="@CanBrowseVersions"
+                                         OnSearchNext="HandleSearchNextAsync"
+                                         OnSearchPrevious="HandleSearchPreviousAsync"
+                                         OnCreateBookmark="HandleCreateBookmarkAsync"
+                                         OnBookmarkSelected="HandleBookmarkSelectedAsync"
+                                         OnBookmarkDeleted="HandleBookmarkDeletedAsync"
+                                         OnVersionSelected="HandleVersionSelectedAsync" />
+            </div>
+        </div>
+    }
+</div>

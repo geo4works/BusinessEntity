@@ -8,6 +8,8 @@ public interface IMiniAppSaveParticipant
 {
     // Синхронно фиксирует независимый полный пакет до первого await сохранения.
     EntitySaveBatch Capture(Guid operationId, Guid editSessionId, long revision);
+    // При необходимости асинхронно готовит уже фиксированный снимок (HTML, файлы), не читая живой UI.
+    Task<EntitySaveBatch> PrepareAsync(EntitySaveBatch captured, CancellationToken ct) => Task.FromResult(captured);
     // Подтверждает отправленный снимок; новые изменения не подменяются сохранёнными данными.
     Task AcknowledgeAsync(EntitySaveBatch sent, SaveBatchResult result, long revision, CancellationToken ct);
     // Сбрасывает локальный черновик и перечитывает сохранённое состояние.

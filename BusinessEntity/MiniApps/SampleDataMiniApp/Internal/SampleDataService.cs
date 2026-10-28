@@ -51,7 +51,7 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                 // _webLogger?.Information("[мини-апп:sample-data] [seed:start] Инициализация тестовой заливки начата");
                 // _webLogger?.Information("[Seed] InitializeSampleDataAsync: start");
                 var existingEntities = await _helper.GetAllBusinessEntities();
-                var existingSpaces = existingEntities.Where(e => e.EntityType == BusinessEntityTypeEnum.Space).ToList();
+                var existingSpaces = existingEntities.Where(e => e.EntityType == global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id).ToList();
 
                 var existingRelations = await _helper.GetAllRelations();
                 bool hasContainsRelations = existingRelations.Any(r => r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString());
@@ -66,7 +66,7 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                 var documentsSpace = existingSpaces.FirstOrDefault(s => s.Name == "Документы");
                 if (documentsSpace == null)
                 {
-                    documentsSpace = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Space, "Документы");
+                    documentsSpace = await _helper.CreateBusinessEntity(global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id, "Документы");
                     await LogSeedEntityCreatedAsync("space", "space-root", "Документы", documentsSpace);
                 }
 
@@ -75,7 +75,7 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                 var newsSpace = existingSpaces.FirstOrDefault(s => s.Name == "Новости");
                 if (newsSpace == null)
                 {
-                    newsSpace = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Space, "Новости");
+                    newsSpace = await _helper.CreateBusinessEntity(global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id, "Новости");
                     await LogSeedEntityCreatedAsync("space", "space-root", "Новости", newsSpace);
                 }
 
@@ -91,13 +91,13 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                     {
                         // _webLogger?.Information("[Seed] Creating direct pages in 'Документы' space");
                         var directPage1Text = await _dataFill.GetNextLineAsync(ct);
-                        var directPage1 = await _helper.CreateDocumentAsync(documentsSpace, directPage1Text, ct);
+                        var directPage1 = await _helper.CreateChildAsync(documentsSpace, global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, directPage1Text, ct);
                         await _helper.RenameEntity(directPage1.Id, "Welcome Document", ct);
                         await LogSeedEntityCreatedAsync("document", "space='Документы'", "Welcome Document", directPage1, directPage1Text.Length);
                         // _webLogger?.Information($"[Seed] Created direct document 1: Id={directPage1.Id}");
 
                         var directPage2Text = await _dataFill.GetNextLineAsync(ct);
-                        var directPage2 = await _helper.CreateDocumentAsync(documentsSpace, directPage2Text, ct);
+                        var directPage2 = await _helper.CreateChildAsync(documentsSpace, global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, directPage2Text, ct);
                         await _helper.RenameEntity(directPage2.Id, "Quick Start Guide", ct);
                         await LogSeedEntityCreatedAsync("document", "space='Документы'", "Quick Start Guide", directPage2, directPage2Text.Length);
                         // _webLogger?.Information($"[Seed] Created direct document 2: Id={directPage2.Id}");
@@ -114,7 +114,7 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                         try
                         {
                             // _webLogger?.Information($"[Seed] Creating folder {i} in 'Документы'");
-                            var folder = await _helper.CreateSubFolderAsync(documentsSpace, ct);
+                            var folder = await _helper.CreateChildAsync(documentsSpace, global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, ct: ct);
                             await _helper.RenameEntity(folder.Id, $"Folder {i}", ct);
                             await LogSeedEntityCreatedAsync("folder", "space='Документы'", $"Folder {i}", folder);
                             // _webLogger?.Information($"[Seed] Created folder {i}: Id={folder.Id}");
@@ -123,7 +123,7 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                             for (int j = 1; j <= pageCount; j++)
                             {
                                 var pageText = await _dataFill.GetNextLineAsync(ct);
-                                var page = await _helper.CreateDocumentAsync(folder, pageText, ct);
+                                var page = await _helper.CreateChildAsync(folder, global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, pageText, ct);
                                 await _helper.RenameEntity(page.Id, $"Document {i}-{j}", ct);
                                 await LogSeedEntityCreatedAsync("document", $"folder='Folder {i}'", $"Document {i}-{j}", page, pageText.Length);
                                 // _webLogger?.Information($"[Seed] Created document {i}-{j}: Id={page.Id}");
@@ -131,13 +131,13 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
 
                             if (i == 1)
                             {
-                                var subFolder = await _helper.CreateSubFolderAsync(folder, ct);
+                                var subFolder = await _helper.CreateChildAsync(folder, global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, ct: ct);
                                 await _helper.RenameEntity(subFolder.Id, "Subfolder 1-1", ct);
                                 await LogSeedEntityCreatedAsync("folder", "under='Folder 1'", "Subfolder 1-1", subFolder);
                                 // _webLogger?.Information($"[Seed] Created subfolder under Folder 1: Id={subFolder.Id}");
 
                                 var subText = await _dataFill.GetNextLineAsync(ct);
-                                var subPage = await _helper.CreateDocumentAsync(subFolder, subText, ct);
+                                var subPage = await _helper.CreateChildAsync(subFolder, global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, subText, ct);
                                 await _helper.RenameEntity(subPage.Id, "Sub-document 1-1-1", ct);
                                 await LogSeedEntityCreatedAsync("document", "folder='Subfolder 1-1'", "Sub-document 1-1-1", subPage, subText.Length);
                                 // _webLogger?.Information($"[Seed] Created sub document under Subfolder 1-1: Id={subPage.Id}");
@@ -158,12 +158,12 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                     {
                         // _webLogger?.Information("[Seed] Creating direct pages in 'Новости' space");
                         var newsDirect1Text = await _dataFill.GetNextLineAsync(ct);
-                        var newsDirect1 = await _helper.CreateDocumentAsync(newsSpace, newsDirect1Text, ct);
+                        var newsDirect1 = await _helper.CreateChildAsync(newsSpace, global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, newsDirect1Text, ct);
                         await _helper.RenameEntity(newsDirect1.Id, "Новости дня", ct);
                         await LogSeedEntityCreatedAsync("document", "space='Новости'", "Новости дня", newsDirect1, newsDirect1Text.Length);
                         // _webLogger?.Information($"[Seed] Created 'Новости дня' Id={newsDirect1.Id}");
                         var newsDirect2Text = await _dataFill.GetNextLineAsync(ct);
-                        var newsDirect2 = await _helper.CreateDocumentAsync(newsSpace, newsDirect2Text, ct);
+                        var newsDirect2 = await _helper.CreateChildAsync(newsSpace, global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, newsDirect2Text, ct);
                         await _helper.RenameEntity(newsDirect2.Id, "Аналитика", ct);
                         await LogSeedEntityCreatedAsync("document", "space='Новости'", "Аналитика", newsDirect2, newsDirect2Text.Length);
                         // _webLogger?.Information($"[Seed] Created 'Аналитика' Id={newsDirect2.Id}");
@@ -180,14 +180,14 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                         try
                         {
                             // _webLogger?.Information($"[Seed] Creating 'Рубрика {i}' in 'Новости'");
-                            var newsFolder = await _helper.CreateSubFolderAsync(newsSpace, ct);
+                            var newsFolder = await _helper.CreateChildAsync(newsSpace, global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, ct: ct);
                             await _helper.RenameEntity(newsFolder.Id, $"Рубрика {i}", ct);
                             await LogSeedEntityCreatedAsync("folder", "space='Новости'", $"Рубрика {i}", newsFolder);
 
                             for (int j = 1; j <= 2; j++)
                             {
                                 var newsText = await _dataFill.GetNextLineAsync(ct);
-                                var newsArticle = await _helper.CreateDocumentAsync(newsFolder, newsText, ct);
+                                var newsArticle = await _helper.CreateChildAsync(newsFolder, global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, newsText, ct);
                                 await _helper.RenameEntity(newsArticle.Id, $"Новость {i}-{j}", ct);
                                 await LogSeedEntityCreatedAsync("document", $"folder='Рубрика {i}'", $"Новость {i}-{j}", newsArticle, newsText.Length);
                                 // _webLogger?.Information($"[Seed] Created 'Новость {i}-{j}' Id={newsArticle.Id}");

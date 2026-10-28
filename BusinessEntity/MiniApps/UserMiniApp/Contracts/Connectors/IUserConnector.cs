@@ -1,5 +1,7 @@
-using BusinessEntity.Core.RichText;
-using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.RichText;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Printing;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
@@ -7,6 +9,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
     // Определяет короткий connector для адресного доступа к user mini-app из других модулей.
     public interface IUserConnector
     {
+        // Рассчитывает права по свежей серверной карточке, без metadata из UI.
+        Task<UserContentAccessDecision> GetEntityContentAccessAsync(Guid entityId, CancellationToken cancellationToken = default);
         // Возвращает текущего пользователя приложения через публичный контракт mini-app.
         Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default);
         // Гарантирует локальную учетную запись текущего пользователя и возвращает ее DTO.

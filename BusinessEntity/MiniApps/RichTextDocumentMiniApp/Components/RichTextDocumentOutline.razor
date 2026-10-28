@@ -1,0 +1,90 @@
+@namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
+@using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
+
+<div class="rich-text-outline">
+    <div class="rich-text-outline__header">
+        <div class="rich-text-outline__title">Содержание</div>
+        <div class="rich-text-outline__controls">
+            <fieldset class="rich-text-outline__level-options" aria-label="Количество уровней содержания">
+                @foreach (var level in DisplayLevels)
+                {
+                    <label class="@GetDisplayLevelOptionClass(level)" title="@($"{level} уровень")">
+                        <input type="radio"
+                               name="@DisplayLevelInputName"
+                               value="@level"
+                               checked="@(DisplayLevelCount == level)"
+                               @onchange="@((ChangeEventArgs _) => HandleDisplayLevelCountChangedAsync(level))" />
+                        <span>@level</span>
+                    </label>
+                }
+            </fieldset>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary rich-text-outline__rebuild"
+                    title="@(CanRebuild ? "Обновить содержание загруженного окна" : "Доступно только для последней версии")"
+                    aria-label="@(IsRebuilding ? "Содержание обновляется" : "Обновить содержание")"
+                    disabled="@(IsRebuilding || !CanRebuild)"
+                    @onclick="HandleRebuildRequestedAsync">
+                <span class="material-icons rich-text-outline__rebuild-icon" aria-hidden="true">refresh</span>
+            </button>
+        </div>
+    </div>
+
+    @if (Nodes != null && Nodes.Count > 0)
+    {
+        <div id="@TreeElementId"
+             class="@TreeClass"
+             data-rich-text-bottom-reserve-px="@BottomReserveAttributeValue"
+             tabindex="0">
+            @foreach (var node in Nodes)
+            {
+                <RichTextDocumentOutlineItem Node="node" OnHeadingSelected="OnHeadingSelected" />
+            }
+        </div>
+    }
+    else if (IsLoading)
+    {
+        <div class="rich-text-outline__loading">Загрузка содержания...</div>
+    }
+</div>
+
+@code {
+    private readonly string DisplayLevelInputName = $"rich-text-outline-level-{Guid.NewGuid():N}";
+    private static readonly int[] DisplayLevels = { 1, 2, 3 };
+
+    [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode> Nodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
+    [Parameter] public string TreeElementId { get; set; } = string.Empty;
+    [Parameter] public int DisplayLevelCount { get; set; } = 1;
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool IsRebuilding { get; set; }
+    [Parameter] public bool CanRebuild { get; set; } = true;
+    [Parameter] public bool HideScrollbar { get; set; } = true;
+    [Parameter] public int BottomReservePx { get; set; }
+    [Parameter] public EventCallback<RichTextDocumentOutlineNode> OnHeadingSelected { get; set; }
+    [Parameter] public EventCallback<int> OnDisplayLevelCountChanged { get; set; }
+    [Parameter] public EventCallback OnRebuildRequested { get; set; }
+
+    private string BottomReserveAttributeValue => Math.Max(BottomReservePx, 0).ToString();
+
+    private string TreeClass =>
+        HideScrollbar
+            ? "rich-text-outline__tree rich-text-outline__tree--hide-scrollbar"
+            : "rich-text-outline__tree";
+
+    private Task HandleDisplayLevelCountChangedAsync(int value)
+    {
+        value = Math.Clamp(value, 1, 3);
+        return OnDisplayLevelCountChanged.InvokeAsync(value);
+    }
+
+    private string GetDisplayLevelOptionClass(int level)
+    {
+        return DisplayLevelCount == level
+            ? "rich-text-outline__level-option rich-text-outline__level-option--active"
+            : "rich-text-outline__level-option";
+    }
+
+    private Task HandleRebuildRequestedAsync()
+    {
+        return OnRebuildRequested.InvokeAsync();
+    }
+}

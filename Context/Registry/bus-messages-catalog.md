@@ -1,6 +1,6 @@
 # Каталог сообщений общей шины
 
-Фактическое состояние этапа 5 TASK_ARCH_001, 2026-10-28.
+Фактическое состояние этапа 6 TASK_ARCH_001, 2026-10-28.
 Один singleton ReactiveUI.IMessageBus; регистрации маршрутов находятся в Registration владельцев.
 
 Все предметные Request/Response наследуют BusRequest/BusResponse.
@@ -196,3 +196,26 @@ Endpoint scoped проверяет окно, module/edit/context, живой non
 и актуальное право. Runtime binding снимается вместе с компонентом/меню.
 
 [Фактические UI-модули и маршруты](modules-and-routes.md).
+
+## Предметные границы этапа 6
+
+- Spaces: GetSpaceById/GetSpaces/GetGenericSpaceProperties Request/Response
+  в Contracts/SpacesMessages.cs; scoped endpoint/connector.
+- BackupRestore: RunManualBackup/RunBackupCycle/ClearSpaceBackup/
+  GetDisplaySpaceBackupFolder/RestoreSpace Request/Response в Contracts/BackupRestoreMessages.cs.
+- Media: MediaLibraryGetVideos Request/Response, только значения списка.
+- Sample: ForceReseed Request/Response с серверной проверкой администратора.
+- Tree: DeleteTreeEntities Request/Response; внешние страницы не вызывают Internal.
+- User: GetEntityContentAccess Request/Response рассчитывает права по свежей карточке.
+  Endpoint-ы разделены по accounts, preferences, roles, groups, assignments,
+  assignment directory, access и session. Их жизни и адреса scoped.
+
+BusRequestContext содержит также HasApplicationAdminAuthority: значение задаёт
+серверный владелец identity, Scope сбрасывает его при смене UserId, BusRequestClient
+перезаписывает входной Context целиком. Полномочия admin/akadmin/Authentik admin
+согласованы с существующей политикой; локальные роли проверяются в SQL отдельно.
+
+EntitySaveBatch.OwnedServiceChanges — техническое исключение служебных таблиц
+User. Пакет содержит только value JSON своих DTO; writer зарегистрирован владельцем.
+Канонический writer DataProvider вызывает его в своей SQL-транзакции и пишет
+durable outcome там же. Пароли и callbacks в сообщениях отсутствуют.

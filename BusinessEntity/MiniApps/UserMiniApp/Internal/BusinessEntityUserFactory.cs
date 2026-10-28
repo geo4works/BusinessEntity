@@ -1,7 +1,7 @@
+using BusinessEntity.Services;
 using System.Security.Claims;
 using System.Text.Json;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
-using BusinessEntity.Services;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Internal
 {

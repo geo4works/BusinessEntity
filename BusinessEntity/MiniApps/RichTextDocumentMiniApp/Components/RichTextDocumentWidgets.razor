@@ -1,0 +1,275 @@
+@namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
+@using BusinessEntity.Core.Chunks
+@using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.RichText
+
+<aside class="rich-text-document-widgets" aria-label="Rich-text document widgets">
+    <section class="rich-text-document-widget rich-text-document-tabs">
+        <div class="rich-text-document-tabs__list" role="tablist" aria-label="Инструменты rich-text документа">
+            <button type="button"
+                    class="@GetTabButtonClass(RichTextDocumentWidgetTab.Search)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Search)"
+                    @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Search))">
+                Поиск
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(RichTextDocumentWidgetTab.Bookmarks)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Bookmarks)"
+                    @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Bookmarks))">
+                Закл.
+                <span class="rich-text-document-tabs__badge">@Bookmarks.Count</span>
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(RichTextDocumentWidgetTab.Versions)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Versions)"
+                    @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Versions))">
+                Верс.
+                <span class="rich-text-document-tabs__badge">@Versions.Count</span>
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(RichTextDocumentWidgetTab.Statistics)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Statistics)"
+                    @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Statistics))">
+                Стат.
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(RichTextDocumentWidgetTab.Comments)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Comments)"
+                    @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Comments))">
+                Комм.
+                <span class="rich-text-document-tabs__badge">@CommentsCount</span>
+            </button>
+        </div>
+
+        <div class="rich-text-document-tabs__panel" role="tabpanel">
+            @if (ActiveTab == RichTextDocumentWidgetTab.Search)
+            {
+                <div class="rich-text-document-search">
+                    <input class="form-control form-control-sm rich-text-document-search__input"
+                           value="@SearchQuery"
+                           @oninput="HandleSearchInput"
+                           placeholder="Слово или фраза" />
+                    <div class="rich-text-document-search__buttons">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                title="Искать вверх"
+                                disabled="@IsSearchDisabled"
+                                @onclick="HandleSearchPreviousAsync">
+                            ↑
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                title="Искать вниз"
+                                disabled="@IsSearchDisabled"
+                                @onclick="HandleSearchNextAsync">
+                            ↓
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (ActiveTab == RichTextDocumentWidgetTab.Bookmarks)
+            {
+                <div class="rich-text-document-bookmarks__actions">
+                    <button type="button"
+                            class="btn btn-sm btn-primary"
+                            title="Создать закладку из выделенного текста"
+                            @onclick="HandleCreateBookmarkAsync">
+                        Создать
+                    </button>
+                    <div class="rich-text-document-bookmarks__nav">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                title="Предыдущая закладка"
+                                disabled="@(!CanNavigateBookmarks)"
+                                @onclick="HandlePreviousBookmarkAsync">
+                            ↑
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                title="Следующая закладка"
+                                disabled="@(!CanNavigateBookmarks)"
+                                @onclick="HandleNextBookmarkAsync">
+                            ↓
+                        </button>
+                    </div>
+                </div>
+
+                @if (Bookmarks.Count == 0)
+                {
+                    <div class="rich-text-document-bookmarks__empty">Нет закладок</div>
+                }
+                else
+                {
+                    <div class="rich-text-document-bookmarks__list">
+                        @foreach (var bookmark in Bookmarks)
+                        {
+                            <button type="button"
+                                    class="@GetBookmarkButtonClass(bookmark)"
+                                    title="@bookmark.SelectedText"
+                                    @onclick="@(() => SelectBookmarkAsync(bookmark))">
+                                <span class="rich-text-document-bookmarks__label">@bookmark.Label</span>
+                                <span class="rich-text-document-bookmarks__position">chunk @bookmark.ChunkSortOrder, block @bookmark.BlockIndex</span>
+                            </button>
+                        }
+                    </div>
+                }
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger rich-text-document-bookmarks__delete"
+                        disabled="@(!SelectedBookmarkId.HasValue)"
+                        @onclick="HandleDeleteBookmarkAsync">
+                    Удалить выбранную
+                </button>
+            }
+            else if (ActiveTab == RichTextDocumentWidgetTab.Versions)
+            {
+                @if (CanEditVersionDescription)
+                {
+                    <div class="rich-text-document-versions__description">
+                        <label class="rich-text-document-versions__description-label" for="rich-doc-version-description-@BusinessEntityId">
+                            Описание версии
+                        </label>
+                        <textarea id="rich-doc-version-description-@BusinessEntityId"
+                                  class="form-control form-control-sm rich-text-document-versions__description-input"
+                                  value="@VersionDescription"
+                                  @oninput="HandleVersionDescriptionInputAsync"
+                                  rows="2"
+                                  maxlength="500"
+                                  placeholder="Комментарий к сохраняемой версии"></textarea>
+                    </div>
+                }
+
+                @if (IsVersionsLoading)
+                {
+                    <div class="rich-text-document-versions__empty">Загрузка версий...</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(VersionsError))
+                {
+                    <div class="rich-text-document-versions__error">@VersionsError</div>
+                }
+                else if (Versions.Count == 0)
+                {
+                    <div class="rich-text-document-versions__empty">Версий нет</div>
+                }
+                else
+                {
+                    <div class="rich-text-document-versions__table-wrap">
+                        <table class="rich-text-document-versions__table">
+                            <thead>
+                                <tr>
+                                    <th>Версия</th>
+                                    <th>Дата / автор</th>
+                                    <th>Описание</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var version in Versions)
+                                {
+                                    var normalizedVersion = version.Version;
+                                    var isDraftVersion = IsVersionDraft(normalizedVersion);
+                                    var isPublishedVersion = IsVersionPublished(normalizedVersion);
+                                    <tr class="@GetVersionRowClass(version)"
+                                        @onclick="@(() => SelectVersionAsync(normalizedVersion))">
+                                        <td>
+                                            @normalizedVersion
+                                            @if (isDraftVersion || isPublishedVersion)
+                                            {
+                                                <span class="rich-text-document-versions__markers">
+                                                    @if (isDraftVersion)
+                                                    {
+                                                        <span class="rich-text-document-versions__marker rich-text-document-versions__marker--draft">драфт</span>
+                                                    }
+                                                    @if (isPublishedVersion)
+                                                    {
+                                                        <span class="rich-text-document-versions__marker rich-text-document-versions__marker--published">опубликовано</span>
+                                                    }
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div>@FormatVersionDate(version.CreatedDate)</div>
+                                            <small class="rich-text-document-versions__author">@(version.SavedByUserId?.ToString("D") ?? "Система")</small>
+                                        </td>
+                                        <td>
+                                            <div>@version.VersionDescription</div>
+                                            @if (CanRestoreVersion)
+                                            {
+                                                <button class="btn btn-sm btn-outline-secondary mt-1" @onclick:stopPropagation="true"
+                                                    @onclick="@(() => RestoreVersionAsync(version.Version))">Восстановить версию</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+            else if (ActiveTab == RichTextDocumentWidgetTab.Comments)
+            {
+                <div class="rich-text-document-comments-widget">
+                    <PageModuleHost DefinitionKey="ActivityMiniApp:Activity.Comments" ContextId="BusinessEntityId"
+                                    Parameters="CommentModuleParameters" />
+                </div>
+            }
+            else
+            {
+                <div class="rich-text-document-statistics__header">
+                    <span>Статистика</span>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary rich-text-document-statistics__refresh"
+                            title="Обновить статистику"
+                            aria-label="Обновить статистику"
+                            disabled="@IsStatisticsLoading"
+                            @onclick="RefreshStatisticsAsync">
+                        <span aria-hidden="true">&#8635;</span>
+                    </button>
+                </div>
+
+                @if (IsStatisticsLoading && Statistics == null)
+                {
+                    <div class="rich-text-document-statistics__empty">Загрузка статистики...</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(StatisticsError))
+                {
+                    <div class="rich-text-document-statistics__error">@StatisticsError</div>
+                }
+                else if (Statistics == null || Statistics.IsEmpty)
+                {
+                    <div class="rich-text-document-statistics__empty">Нет данных</div>
+                }
+                else
+                {
+                    <dl class="rich-text-document-statistics__list">
+                        <div class="rich-text-document-statistics__row">
+                            <dt>Чанков</dt>
+                            <dd>@FormatInteger(Statistics.TotalChunkCount)</dd>
+                        </div>
+                        <div class="rich-text-document-statistics__row">
+                            <dt>Среднее символов</dt>
+                            <dd>@FormatAverage(Statistics.AverageCharCount)</dd>
+                        </div>
+                        <div class="rich-text-document-statistics__row">
+                            <dt>Минимум символов</dt>
+                            <dd>@FormatInteger(Statistics.MinCharCount)</dd>
+                        </div>
+                        <div class="rich-text-document-statistics__row">
+                            <dt>Максимум символов</dt>
+                            <dd>@FormatInteger(Statistics.MaxCharCount)</dd>
+                        </div>
+                    </dl>
+
+                    @if (IsStatisticsLoading)
+                    {
+                        <div class="rich-text-document-statistics__hint">Обновление...</div>
+                    }
+                }
+            }
+        </div>
+    </section>
+</aside>

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.JSInterop;
-using BusinessEntity.Contracts;
+using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using RouteData = Microsoft.AspNetCore.Components.RouteData;
 
 namespace BusinessEntity

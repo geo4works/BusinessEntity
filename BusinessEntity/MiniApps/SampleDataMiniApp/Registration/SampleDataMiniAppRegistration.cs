@@ -1,6 +1,7 @@
+using BusinessEntity.Infrastructure.Bus;
+using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
-using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Internal;
 
 namespace BusinessEntity.MiniApps.SampleDataMiniApp.Registration
@@ -11,9 +12,11 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Registration
         // Подключает mini-app тестовой заливки и все его внутренние зависимости.
         public static IServiceCollection AddSampleDataMiniApp(this IServiceCollection services)
         {
-            services.AddScoped<ISampleDataService, SampleDataService>();
+            services.AddScoped<BusinessEntity.MiniApps.SampleDataMiniApp.Internal.SampleDataMessageHandler>();
+        services.AddScoped<BusinessEntity.MiniApps.SampleDataMiniApp.Contracts.ISampleDataConnector, BusinessEntity.MiniApps.SampleDataMiniApp.Connectors.SampleDataConnector>();
+        services.AddBusEndpoint<BusinessEntity.MiniApps.SampleDataMiniApp.Internal.SampleDataMessageHandler>(typeof(SampleDataForceReseedRequest));
+        services.AddScoped<ISampleDataService, SampleDataService>();
             services.AddScoped<IDataFillLineProvider, DataFillLineProvider>();
-            services.AddScoped<ISampleDataMiniApp, Facade.SampleDataMiniApp>();
 
             services.AddMiniAppHost("SampleDataMiniApp", new ModuleDefinition("SampleDataMiniApp", "seed", "Начальные данные", null,
                 ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 40, OpenOnStartup: true),

@@ -6,6 +6,7 @@ public sealed class BusRequestScope
     public Guid Id { get; } = Guid.NewGuid();
     public Guid? UserId { get; private set; }
     public bool IsSystem { get; private set; }
+    public bool HasApplicationAdminAuthority { get; private set; }
     public Guid LogicalWindowId => Id;
     private readonly AsyncLocal<SourceAddress?> _source = new();
     public Guid? ModuleId => _source.Value?.ModuleId;
@@ -31,10 +32,13 @@ public sealed class BusRequestScope
     }
 
     // Создаёт неизменяемый адрес запроса с установленным сервером автором.
-    public BusRequestContext Snapshot() => new(Id, UserId, LogicalWindowId, ModuleId, EditSessionId, ContextId, IsSystem);
+    public BusRequestContext Snapshot() => new(Id, UserId, LogicalWindowId, ModuleId, EditSessionId, ContextId, IsSystem, HasApplicationAdminAuthority);
 
     // Запоминает материализованного пользователя только в текущем scope.
-    public void SetUser(Guid? userId) => UserId = userId;
+    public void SetUser(Guid? userId)
+    { if (UserId != userId) HasApplicationAdminAuthority = false; UserId = userId; }
+    // Только серверный владелец identity подтверждает полномочие; данные браузера сюда не копируются.
+    public void SetApplicationAdminAuthority(bool value) => HasApplicationAdminAuthority = UserId.HasValue && value;
 
     // Помечает явный стартовый/системный контекст без пользователя браузера.
     public void MarkSystem() => IsSystem = true;

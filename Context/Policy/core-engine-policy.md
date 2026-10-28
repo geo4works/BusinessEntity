@@ -1,6 +1,6 @@
 # Общий слой движка
 
-Норма TASK_ARCH_001 v2.2, К-1. Реорганизация кода завершается на этапе 6.
+Норма TASK_ARCH_001 v2.2, К-1. Реорганизация реализована этапом 6.
 
 ## Общая модель
 
@@ -36,3 +36,19 @@ Document, RichTextDocument, MediaVideo, Space, Folder и SysParameters.
 Удаление всего хелпера ради уменьшения общего слоя запрещено.
 
 Источник: [ТЗ §3.1](../Tasks/TASK_ARCH_001_miniapp-bus-architecture-migration.md#31-общий-слой-и-границы-миниаппов).
+
+## Реализованный контракт
+
+IEntityTypeDescriptor и EntityTypeRegistry находятся в Core/Types. Общая фабрика
+использует metadata владельца; Core не содержит предметных enum-членов.
+Initial payload/chunks, clone и type-specific правила объявляет Registration владельца.
+Дубликат/неизвестный тип даёт явный отказ. Required singleton читается без создания;
+инициализацию выполняет startup runtime владельца.
+
+Общие BusinessEntityDataChunk/Block находятся в Core/Chunks. JSON kind физического
+чанка остаётся RichTextDocumentChunk. Его envelope/codec — публичный технический
+контракт DataProvider. Payload-модели и конкретные converters — у владельцев.
+
+Move/Delete набора готовит одну транзакцию. Save использует независимые копии до
+await. Архитектурные тесты проверяют CLR-сигнатуры, тела исходников и Razor, включая
+чужие Internal/Components/Storage/Repositories/Facade.

@@ -20,4 +20,10 @@ public sealed class TreeConnector : ITreeConnector
             new GetTreeForSpaceRequest(Guid.NewGuid(), spaceId), cancellationToken);
         return response.Snapshot;
     }
+    // Внешний владелец вызывает дерево только типизированным сообщением.
+    public async Task DeleteEntitiesAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken = default)
+    {
+        await _user.EnsureCurrentUserAsync(cancellationToken);
+        await _client.SendAsync<DeleteTreeEntitiesRequest, DeleteTreeEntitiesResponse>(new(Guid.NewGuid(), entityIds.ToArray()), cancellationToken);
+    }
 }

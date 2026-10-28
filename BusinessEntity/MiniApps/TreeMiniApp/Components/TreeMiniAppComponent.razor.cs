@@ -1,17 +1,19 @@
+using BusinessEntity.MiniApps.TreeMiniApp.Internal;
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
+using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Bus;
 using Microsoft.AspNetCore.Components;
-using BusinessEntity.Models;
+using BusinessEntity.MiniApps.TreeMiniApp.Internal.Models;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.WebLogger.Services;
 using System.Linq;
-using BusinessEntity.Contracts;
-using BusinessEntity.Services;
+using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
-using BusinessEntity.MiniApps.TreeMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using Radzen;
@@ -27,6 +29,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 {
     public partial class TreeMiniAppComponent : BusinessEntity.Infrastructure.Modularity.ModuleComponentBase, IDisposable
     {
+        [Inject] private BusinessEntity.Core.Types.EntityTypeRegistry EntityTypes { get; set; } = default!;
         [Inject] public ButtonCatalog Buttons { get; set; } = default!;
         [Inject] public ModuleCommandRegistry Commands { get; set; } = default!;
         [Inject] public BusRequestClient CommandClient { get; set; } = default!;
@@ -198,7 +201,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 Title = snapshot.Space.Name,
                 Icon = GetEntityIcon(snapshot.Space.EntityType),
                 Entity = snapshot.Space,
-                EntityType = snapshot.Space.EntityType.ToString(),
+                EntityType = EntityTypes.Get(snapshot.Space.EntityType).TypeKey,
                 Expanded = true
             };
             var childNodes = new List<TreeNodeItemViewModelBase>();
@@ -221,7 +224,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             var icon = GetEntityIcon(entityData.EntityType);
               // Создаем соответствующий тип наследника в зависимости от типа сущности
             // Space не обрабатываем здесь, так как он создается через BuildSpaceRootAsync
-            TreeNodeItemViewModelBase treeNodeVm = entityData.EntityType.ToString() switch
+            TreeNodeItemViewModelBase treeNodeVm = EntityTypes.Get(entityData.EntityType).TypeKey switch
             {
                 "Folder" => new FolderTreeNodeItemViewModel(entityData, WebLogger),
                 "Document" => new DocumentTreeNodeItemViewModel(WebLogger),
@@ -231,11 +234,11 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             };
 
             // Заполняем общие свойства (некоторые уже заполнены в конструкторе для Folder)
-            if (entityData.EntityType.ToString() != "Folder")
+            if (EntityTypes.Get(entityData.EntityType).TypeKey != "Folder")
             {
                 treeNodeVm.Title = entityData.Name;
                 treeNodeVm.Entity = entityData;
-                treeNodeVm.EntityType = entityData.EntityType.ToString();
+                treeNodeVm.EntityType = EntityTypes.Get(entityData.EntityType).TypeKey;
             }
             treeNodeVm.Icon = icon;
             treeNodeVm.Expanded = ResolveInitialExpandedState(entityData);
@@ -243,7 +246,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             _nodeById[entityData.Id] = treeNodeVm;
 
             // Устанавливаем обратный вызов для создания сущностей у папок
-            if (entityData.EntityType.ToString() == "Folder")
+            if (EntityTypes.Get(entityData.EntityType).TypeKey == "Folder")
             {
 
             }
@@ -278,7 +281,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
         private static int GetTreeNodeSortGroup(TreeNodeItemViewModelBase node)
         {
-            return node.Entity?.EntityType == BusinessEntityTypeEnum.Folder ? 0 : 1;
+            return node.Entity?.EntityType == global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id ? 0 : 1;
         }
 
         private static string GetTreeNodeSortTitle(TreeNodeItemViewModelBase node)
@@ -320,7 +323,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
         private string GetNodeIcon(TreeNodeItemViewModelBase? node)
         {
-            if (node?.Entity?.EntityType == BusinessEntityTypeEnum.Folder)
+            if (node?.Entity?.EntityType == global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id)
             {
                 return node.Expanded ? "folder_open" : "folder";
             }
@@ -332,7 +335,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
         private bool CanToggleNodeExpansion(TreeNodeItemViewModelBase? node)
         {
-            return node?.Entity?.EntityType == BusinessEntityTypeEnum.Folder;
+            return node?.Entity?.EntityType == global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id;
         }
 
         private async void OnEntitySelectionRequested(Guid? entityId)
@@ -398,8 +401,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         {
             return entity.EntityType switch
             {
-                BusinessEntityTypeEnum.Space => true,
-                BusinessEntityTypeEnum.Folder => !CollapsedFolderIds.Contains(entity.Id),
+                global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id => true,
+                global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id => !CollapsedFolderIds.Contains(entity.Id),
                 _ => true
             };
         }
@@ -641,10 +644,10 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
                 switch (entity.EntityType)
                 {
-                    case BusinessEntityTypeEnum.Document:
+                    case global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id:
                         OpenEntityPage(entity.Id, entity.EntityType, editMode: IsAuthenticated);
                         break;
-                    case BusinessEntityTypeEnum.RichTextDocument:
+                    case global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id:
                         OpenEntityPage(entity.Id, entity.EntityType, editMode: false);
                         break;
                     // В будущем можно добавить другие типы
@@ -704,8 +707,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         {
             var uri = entityType switch
             {
-                BusinessEntityTypeEnum.Document => editMode ? $"/document/{entityId}?edit=1" : $"/document/{entityId}",
-                BusinessEntityTypeEnum.RichTextDocument => editMode ? $"/rich-document/{entityId}?edit=1" : $"/rich-document/{entityId}",
+                global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id => editMode ? $"/document/{entityId}?edit=1" : $"/document/{entityId}",
+                global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id => editMode ? $"/rich-document/{entityId}?edit=1" : $"/rich-document/{entityId}",
                 _ => $"/document/{entityId}"
             };
             NavigationManager.NavigateTo(uri);
@@ -714,7 +717,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         // Проверяет, является ли тип открываемым документным узлом дерева.
         private static bool IsOpenableDocumentType(BusinessEntityTypeEnum? entityType)
         {
-            return entityType == BusinessEntityTypeEnum.Document || entityType == BusinessEntityTypeEnum.RichTextDocument;
+            return entityType == global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id || entityType == global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id;
         }
 
         // Обработка выбора узла с учетом модификаторов клавиш
@@ -777,7 +780,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             IsMultiSelectMode = SelectedNodes.Count > 1;
 
             // Обновляем сервис выделения
-            TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
+            TreeSelectionService.SetSelectedNodes(SelectedNodes.Select(n => new TreeSelectedItem(n.Title, n.EntityType, n.Entity)).ToList());
 
             // Принудительно обновляем UI
             await InvokeAsync(StateHasChanged);
@@ -898,7 +901,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             SelectedNodes = new List<TreeNodeItemViewModelBase> { node };
             IsMultiSelectMode = false;
             IsCtrlGroupSelectionActive = false;
-            TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
+            TreeSelectionService.SetSelectedNodes(SelectedNodes.Select(n => new TreeSelectedItem(n.Title, n.EntityType, n.Entity)).ToList());
             await InvokeAsync(StateHasChanged);
             await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
         }
@@ -927,7 +930,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             var items = new List<ContextMenuItem>();
             foreach (var definition in Buttons.GetForHost("Tree.ContextMenu"))
             {
-                if (definition.EntityTypes?.Contains(node.Entity.EntityType.ToString()) != true) continue;
+                if (definition.EntityTypes?.Contains(EntityTypes.Get(node.Entity.EntityType).TypeKey) != true) continue;
                 if (!await ModuleManager.CanExecuteAsync(Module.ModuleId, definition.RequiredPermission, node.Entity.Id)) continue;
                 if (revision != _menuRevision) return;
                 var bindingId = Guid.NewGuid();
@@ -1009,8 +1012,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 return Task.CompletedTask;
             }
 
-            if (node.Entity?.EntityType == BusinessEntityTypeEnum.Document ||
-                node.Entity?.EntityType == BusinessEntityTypeEnum.RichTextDocument)
+            if (node.Entity?.EntityType == global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id ||
+                node.Entity?.EntityType == global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id)
             {
                 CancelPendingOpenEntityOpen();
                 OpenEntityPage(node.Entity.Id, node.Entity.EntityType, editMode: true);
@@ -1028,13 +1031,13 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             try
             {
                 if (parentNode?.Entity == null) throw new InvalidOperationException("Не выбран родитель.");
-                if (!Enum.TryParse<BusinessEntityTypeEnum>(entityType, out var type)) throw new ArgumentException("Неизвестный тип узла.");
+                var type = EntityTypes.Get(entityType).EntityType;
                 _isCreatingEntity = true;
                 ContextMenu.Close();
                 var created = await TreeMiniAppService.CreateEntityAsync(parentNode.Entity.Id, type);
                 await SetFolderExpandedAsync(parentNode, true);
                 await DrawTreeForCurrentSpace();
-                if (type == BusinessEntityTypeEnum.RichTextDocument)
+                if (type == global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id)
                 {
                     await SelectNodeAfterTreeRefresh(created.Id);
                     CancelPendingOpenEntityOpen();
@@ -1173,7 +1176,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             }
             else
             {
-                TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
+                TreeSelectionService.SetSelectedNodes(SelectedNodes.Select(n => new TreeSelectedItem(n.Title, n.EntityType, n.Entity)).ToList());
             }
 
             await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
@@ -1241,7 +1244,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             if (data is TreeNodeItemViewModelBase node)
             {
                 // Узлы пространства всегда развернуты
-                if (node.Entity?.EntityType.ToString() == "Space")
+                if ((node.Entity is null ? null : EntityTypes.Get(node.Entity.EntityType).TypeKey) == "Space")
                 {
                     return true;
                 }
@@ -1274,7 +1277,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                     await ClearAllSelections();
                     draggedNode.SetSelected(true);
                     SelectedNodes.Add(draggedNode);
-                    TreeSelectionService.SetSelectedNodes(SelectedNodes);
+                    TreeSelectionService.SetSelectedNodes(SelectedNodes.Select(n => new TreeSelectedItem(n.Title, n.EntityType, n.Entity)).ToList());
                 }
 
                 // Помечаем все выбранные узлы как перетаскиваемые

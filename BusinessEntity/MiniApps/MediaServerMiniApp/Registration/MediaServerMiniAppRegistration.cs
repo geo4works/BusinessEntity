@@ -1,8 +1,12 @@
+using BusinessEntity.Infrastructure.Bus;
+using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
+using BusinessEntity.Core.Types;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
+using BusinessEntity.MiniApps.MediaServerMiniApp.Internal.Serialization;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Internal;
 
 namespace BusinessEntity.MiniApps.MediaServerMiniApp.Registration;
@@ -12,19 +16,27 @@ public static class MediaServerMiniAppRegistration
 {
     public static IServiceCollection AddMediaServerMiniApp(this IServiceCollection services)
     {
+        services.AddScoped<BusinessEntity.MiniApps.MediaServerMiniApp.Internal.MediaLibraryMessageHandler>();
+        services.AddScoped<BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.IMediaLibraryConnector, BusinessEntity.MiniApps.MediaServerMiniApp.Connectors.MediaLibraryConnector>();
+        services.AddBusEndpoint<BusinessEntity.MiniApps.MediaServerMiniApp.Internal.MediaLibraryMessageHandler>(typeof(MediaLibraryGetVideosRequest));
         services.AddSingleton<MediaServerUploadJobRegistry>();
         services.AddSingleton<IMediaServerUploadJobTracker>(provider => provider.GetRequiredService<MediaServerUploadJobRegistry>());
         services.AddSingleton<MediaServerUploadManager>();
         services.AddSingleton<IMediaServerUploadManager>(provider => provider.GetRequiredService<MediaServerUploadManager>());
         services.AddScoped<MediaServerService>();
+        services.AddScoped<MediaVideoWorkingSetFactory>();
         services.AddScoped<IMediaServerService>(provider => provider.GetRequiredService<MediaServerService>());
 
-        services.AddSingleton(new EntityTypeOwnership(BusinessEntityTypeEnum.MediaVideo, "MediaServerMiniApp"));
-        services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(BusinessEntityTypeEnum.MediaVideo, true));
+        // Владелец объявляет тип; общий Core не перечисляет предметные классы.
+        services.AddSingleton<IEntityTypeDescriptor>(new EntityTypeDescriptor<global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.Entities.MediaVideo>(
+            global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Id, "MediaServerMiniApp", global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Key, false, true, "MediaVideo",
+            (id, name, text) => new EntityInitialContent(new global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.Entities.MediaVideo { Id = id, Name = name, Tag = global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Key })));
+        services.AddSingleton<IEntityDataStorageConverter, MediaVideoEntityDataStorageConverter>();
+        services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Id, true));
         services.AddSingleton(new EntityUrlPattern("/media-server-files/videos/"));
         services.AddMiniAppHost("MediaServerMiniApp", new ModuleDefinition("MediaServerMiniApp", "uploads", "Загрузки", null,
                 ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 50, OpenOnStartup: true),
-            new ModuleDefinition("MediaServerMiniApp", "MediaServer.Library", "Мультимедиа", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "media.library", RequiredPermission: "Authenticated"),
+            new ModuleDefinition("MediaServerMiniApp", "MediaServer.Library", "Мультимедиа", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "media.library", RequiredPermission: "Authenticated", HasSaveContext: true),
             new ModuleDefinition("MediaServerMiniApp", "MediaServer.Uploads", "Загрузки", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "media.uploads", "RightPanel", Order: 10, OpenOnStartup: true, RequiredPermission: "Authenticated"));
             services.AddSingleton(new ModuleRuntimeRegistration("MediaServerMiniApp:uploads", provider =>
                 new HostedModuleRuntime(provider.GetRequiredService<MediaServerUploadManager>())));

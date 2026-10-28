@@ -1,8 +1,8 @@
-using BusinessEntity.Services.BackupRestore;
+using BusinessEntity.MiniApps.BackupRestoreMiniApp.Internal;
 using System.Text;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.DomainEntities;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities;
+using BusinessEntity.Core.Chunks;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 using BusinessEntity.Infrastructure.Bus;
@@ -24,17 +24,17 @@ public sealed class ArchiveTransactionTests
         await using var source = await PostgresTestDatabase.CreateAsync();
         await using var target = await PostgresTestDatabase.CreateAsync();
         var actor = Actor(); var other = Actor();
-        var root = new Entity { Name = "space", EntityType = BusinessEntityTypeEnum.Space };
-        var article = new Entity { Name = "article", EntityType = BusinessEntityTypeEnum.RichTextDocument };
-        var chunk = new RichTextDocumentChunk { BusinessEntityId = article.Id, Blocks = [new RichTextBlock { Kind = "paragraph", Html = "<p>first</p>" }] };
+        var root = new Entity { Name = "space", EntityType = global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id };
+        var article = new Entity { Name = "article", EntityType = global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id };
+        var chunk = new BusinessEntityDataChunk { BusinessEntityId = article.Id, Blocks = [new BusinessEntityDataBlock { Kind = "paragraph", Html = "<p>first</p>" }] };
         var comment = Guid.NewGuid();
         await source.Writer.SaveAsync(Batch() with { Entities = [root, article], Relations = [new() { ObjectAId = root.Id, ObjectBId = article.Id, RelationType = "Contains" }],
             Payloads = [new(article.Id, 0, new RichTextDocument { Name = article.Name }, [chunk], [chunk.Id])],
             Comments = [new(comment, article.Id, null, "comment", DateTime.UtcNow)],
             Properties = [new(Guid.NewGuid(), root.Id, EntityPropertyOwner.Entity, 1, "{}", "metadata")],
             Files = [new(article.Id, "image", "original", "image.png", "image/png", Encoding.UTF8.GetBytes("image bytes"))] }, actor);
-        var changed = new RichTextDocumentChunk { Id = chunk.Id, BusinessEntityId = article.Id,
-            Blocks = [new RichTextBlock { Kind = "paragraph", Html = $"<p><a href=\"/rich-document/{article.Id:D}\">article</a></p>" }] };
+        var changed = new BusinessEntityDataChunk { Id = chunk.Id, BusinessEntityId = article.Id,
+            Blocks = [new BusinessEntityDataBlock { Kind = "paragraph", Html = $"<p><a href=\"/rich-document/{article.Id:D}\">article</a></p>" }] };
         await source.Writer.SaveAsync(Batch() with { Payloads = [new(article.Id, 1, new RichTextDocument { Name = "new title" }, [changed])], Publications = [new(article.Id, 1)] }, other);
         var exported = await source.Writer.ExportAsync(new(root.Id, ["Contains"], []), actor, source.Leases);
         try
@@ -75,7 +75,7 @@ public sealed class ArchiveTransactionTests
     {
         await using var source = await PostgresTestDatabase.CreateAsync();
         await using var target = await PostgresTestDatabase.CreateAsync();
-        var actor = Actor(); var root = new Entity { Name = "space", EntityType = BusinessEntityTypeEnum.Space };
+        var actor = Actor(); var root = new Entity { Name = "space", EntityType = global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id };
         await source.Writer.SaveAsync(Batch() with { Entities = [root], Files = [new(root.Id, "file", "original", "file", "text/plain", [1, 2, 3])] }, actor);
         var export = await source.Writer.ExportAsync(new(root.Id, [], []), actor, source.Leases);
         try

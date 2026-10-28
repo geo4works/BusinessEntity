@@ -1,3 +1,4 @@
+using BusinessEntity.MiniApps.BackupRestoreMiniApp.Internal;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Security.Cryptography;
@@ -5,7 +6,6 @@ using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Saving;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Archives;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions;
-using BusinessEntity.Services.BackupRestore;
 using Xunit;
 using Entity = BusinessEntity.Core.Classes.BusinessEntity;
 
@@ -63,7 +63,7 @@ public sealed class ArchiveDirectoryTests
     public void MissingCardMetadataCannotBecomeFreshDefaultDate()
     {
         var options = GraphArchiveJson.CreateOptions();
-        var card = JsonNode.Parse(JsonSerializer.Serialize(new Entity { Name = "card", EntityType = BusinessEntityTypeEnum.Folder }, options))!;
+        var card = JsonNode.Parse(JsonSerializer.Serialize(new Entity { Name = "card", EntityType = global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id }, options))!;
         card.AsObject().Remove("createdDate");
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Entity>(card.ToJsonString(), options));
     }
@@ -92,7 +92,7 @@ public sealed class ArchiveDirectoryTests
     // Создаёт минимальный полный снимок пространства для файловых проверок.
     private static SubgraphExportResult Export()
     {
-        var card = new Entity { Name = "space", EntityType = BusinessEntityTypeEnum.Space };
+        var card = new Entity { Name = "space", EntityType = global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id };
         return new(Guid.NewGuid(), new(GraphArchiveFormat.CurrentVersion, card.Id, [new(card, [], [], [], [], [], [])], []), []);
     }
 }

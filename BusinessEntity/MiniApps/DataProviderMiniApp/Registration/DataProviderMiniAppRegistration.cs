@@ -38,12 +38,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.TryAddSingleton<GraphArchiveRemapper>();
             services.AddSingleton<ExportFileLeases>();
             // Регистрируем поэкземплярные payload-конвертеры для всех поддерживаемых typed business-data объектов.
-            services.AddSingleton<IEntityDataStorageConverter, DocumentEntityDataStorageConverter>();
-            services.AddSingleton<IEntityDataStorageConverter, FolderEntityDataStorageConverter>();
-            services.AddSingleton<IEntityDataStorageConverter, MediaVideoEntityDataStorageConverter>();
-            services.AddSingleton<IEntityDataStorageConverter, RichTextDocumentEntityDataStorageConverter>();
-            services.AddSingleton<IEntityDataStorageConverter, SpaceEntityDataStorageConverter>();
-            services.AddSingleton<IEntityDataStorageConverter, SysParametersEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverterFactory, EntityDataStorageConverterFactory>();
             services.AddSingleton<EntityDataStorageCodec>();
             services.AddSingleton<DataProviderMessageHandler>();
@@ -52,6 +46,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.AddSingleton<DataProviderSchema>();
             services.AddSingleton<DataProviderReadService>();
             services.AddSingleton<DataProviderCommitPublisher>();
+            services.AddSingleton<EntityPersistencePolicies>();
+            services.AddSingleton<CommittedGraphCoordinator>();
             services.AddSingleton<DataProviderTransactionService>();
             services.AddSingleton<DataProviderTransactionHandler>();
             services.AddBusEndpoint<DataProviderTransactionHandler>(typeof(ExportSubgraphRequest), typeof(ReleaseExportRequest), typeof(SaveEntityBatchRequest), typeof(GetOperationOutcomeRequest), typeof(GetStoredCommentsRequest), typeof(GetStoredPropertiesRequest), typeof(GetVersionChunkWindowRequest), typeof(GetStoredFileRequest), typeof(GetVersionChunkMembershipRequest));

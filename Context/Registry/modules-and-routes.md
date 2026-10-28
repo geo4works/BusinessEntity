@@ -1,6 +1,6 @@
 # Модули и маршруты
 
-Фактическая регистрация этапа 5 TASK_ARCH_001. ModuleCatalog singleton получает
+Фактическая регистрация этапа 6 TASK_ARCH_001. ModuleCatalog singleton получает
 декларации host-service; WindowModularityManager scoped создаёт UI-адреса.
 Декларации с AppSingleton — только Headless; внутренних вкладочных placement нет.
 
@@ -55,11 +55,14 @@ TestRemoveRelation и часы удалены. HTTP file/auth adapters сохр�
 
 ## Контексты сохранения
 
-Documents.Document и RichText.Document объявляют HasSaveContext. Менеджер
-создаёт EditSessionId в пределах (окно, владелец, ContextId), а несколько
-представлений могут использовать общий EditSessionId явно. На этапе 5 API
-подготовлен, предметные SaveParticipant редакторов подключаются этапом 6;
-пользовательский guard/dirty UX — этап 8. Пространство не имеет общего dirty.
+HasSaveContext объявляют Documents.Document, RichText.Document, User.Profile,
+User.Administration, SysParameters.Administration, Spaces.Administration и
+MediaServer.Library. Участники рабочих наборов живут в MiniAppSaveContext,
+а не в компонентах. Менеджер создаёт EditSessionId в пределах окна/владельца/
+ContextId; несколько представлений могут явно использовать один edit session.
+Возврат dirty статьи читает базовую версию её автора; новые версии других окон
+не подменяют содержимое этого черновика. Навигационный guard — этап 8.
+У пространства нет aggregate dirty или общей версии.
 
 ## Команды
 

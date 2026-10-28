@@ -1,5 +1,7 @@
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Conversion;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Caching;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Conversion;
@@ -69,7 +71,7 @@ internal sealed partial class DataProviderReadService
         return new RichTextDocumentChunkWindow
         {
             BusinessEntityId = entityId, DocumentVersion = version, StartSortOrder = start, TotalChunkCount = total,
-            Chunks = rows.Select(x => new RichTextDocumentChunk
+            Chunks = rows.Select(x => new BusinessEntityDataChunk
             {
                 Id = x.Chunk.Id, BusinessEntityId = entityId, Version = x.Chunk.Version, SortOrder = x.Reference.Position,
                 Blocks = RichTextChunkStorageSerializer.DeserializeChunkData(x.Chunk.Data),

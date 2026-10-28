@@ -17,7 +17,7 @@ internal sealed class EntityDataStorageConverterFactory : IEntityDataStorageConv
         var converterList = converters.ToList();
         _convertersByType = converterList.ToDictionary(x => x.SupportedType);
         _convertersByKind = converterList.ToDictionary(
-            x => DataPayloadEnvelopeSerializer.GetStorageKind(x.SupportedType),
+            x => x.StorageKind,
             StringComparer.Ordinal);
     }
 

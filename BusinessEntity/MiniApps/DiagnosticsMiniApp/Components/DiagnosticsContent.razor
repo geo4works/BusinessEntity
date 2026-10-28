@@ -9,7 +9,7 @@
 @using global::BusinessEntity.Core.Classes
 @inject global::BusinessEntity.Core.Services.BusinessEntityHelper Helper
 @inject IDataProviderConnector DataProviderConnector
-@inject ISampleDataMiniApp SampleDataMiniApp
+@inject ISampleDataConnector Samples
 @inject IUserConnector UserConnector
 
 
@@ -95,7 +95,7 @@ else
                                 <span class="badge bg-success me-2">Doc</span>
                                 @e.Name
                                 <small class="text-muted ms-2">@e.Id</small>
-                                @if (e.EntityType == BusinessEntityTypeEnum.Document)
+                                @if (e.EntityType == global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id)
                                 {
                                     <a class="ms-2" href="/document/@e.Id">Открыть</a>
                                 }
@@ -193,7 +193,7 @@ else
             await DataProviderConnector.SaveAsync(new global::BusinessEntity.Core.Saving.EntitySaveBatch(Guid.NewGuid(), "Administration", null)
                 { DeleteEntities = (await DataProviderConnector.GetAllAsync()).Select(entity => entity.Id).ToArray() });
             var userDeleted = await UserConnector.DeleteCurrentUserAsync();
-            await SampleDataMiniApp.ForceReseedAsync();
+            await Samples.ForceReseedAsync();
             await LoadDiagnosticsAsync();
             var userStatus = userDeleted
                 ? "Текущий локальный пользователь удален."
@@ -224,9 +224,9 @@ else
             Entities = allEntities.OrderBy(e => e.CreatedDate).ToList();
             Relations = allRelations.OrderBy(r => r.RelationType).ToList();
 
-            Spaces = Entities.Where(e => e.EntityType == BusinessEntityTypeEnum.Space).ToList();
-            Folders = Entities.Where(e => e.EntityType == BusinessEntityTypeEnum.Folder).ToList();
-            Documents = Entities.Where(e => e.EntityType == BusinessEntityTypeEnum.Document).ToList();
+            Spaces = Entities.Where(e => e.EntityType == global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id).ToList();
+            Folders = Entities.Where(e => e.EntityType == global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id).ToList();
+            Documents = Entities.Where(e => e.EntityType == global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id).ToList();
 
             EntityById = Entities.ToDictionary(e => e.Id);
         }

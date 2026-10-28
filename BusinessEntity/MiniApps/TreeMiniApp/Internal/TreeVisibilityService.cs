@@ -1,8 +1,9 @@
+using BusinessEntity.Services;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
-using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using System.Globalization;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
@@ -79,7 +80,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
 
         private static bool IsFolderEntity(BusinessEntityTypeEnum entityType)
         {
-            return entityType == BusinessEntityTypeEnum.Folder;
+            return entityType == global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id;
         }
 
         private static IReadOnlyList<TreeNodeSnapshot> SortTreeSnapshots(IEnumerable<TreeNodeSnapshot> snapshots)

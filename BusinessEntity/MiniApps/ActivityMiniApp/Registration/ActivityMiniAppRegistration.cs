@@ -18,7 +18,6 @@ public static class ActivityMiniAppRegistration
     public static IServiceCollection AddActivityMiniApp(this IServiceCollection services)
     {
         services.AddScoped<ActivityCommentService>();
-        services.AddScoped<IActivityMiniApp, Facade.ActivityMiniApp>();
         services.AddScoped<IActivityConnector, ActivityConnector>();
 
         services.AddScoped<ActivityMiniAppMessageHandler>();

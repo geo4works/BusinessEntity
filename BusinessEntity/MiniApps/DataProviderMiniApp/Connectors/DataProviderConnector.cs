@@ -1,7 +1,8 @@
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Chunks;
+using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;

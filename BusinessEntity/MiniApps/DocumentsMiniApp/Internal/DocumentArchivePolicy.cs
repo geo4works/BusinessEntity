@@ -8,7 +8,7 @@ namespace BusinessEntity.MiniApps.DocumentsMiniApp.Internal;
 internal sealed class DocumentArchivePolicy : IEntityArchivePolicy
 {
     private readonly EntityUrlRewriter _links;
-    public BusinessEntityTypeEnum EntityType => BusinessEntityTypeEnum.Document;
+    public BusinessEntityTypeEnum EntityType => global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id;
     public bool RequiresPayload => true;
     // Получает общий алгоритм и объявления маршрутов через DI.
     public DocumentArchivePolicy(EntityUrlRewriter links) => _links = links;

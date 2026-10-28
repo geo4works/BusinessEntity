@@ -16,6 +16,9 @@ public sealed class EntityDataStorageCodec
         _converterFactory = converterFactory;
     }
 
+    // Kind сохраняется независимо от CLR namespace и значения Enum.ToString.
+    public string GetStorageKind(BusinessEntityTypeEnum type) => _converterFactory.GetRequiredConverter(type).StorageKind;
+
     // Сериализует typed payload в raw JSON body без envelope.
     public string SerializePayload(IBusinessEntityData data)
     {

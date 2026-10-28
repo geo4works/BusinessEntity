@@ -1,11 +1,12 @@
 @namespace BusinessEntity.MiniApps.MediaServerMiniApp.Components
 @inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
-@using BusinessEntity.Contracts
+@using BusinessEntity.MiniApps.SpacesMiniApp.Contracts
 @using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts
 @using Microsoft.JSInterop
 @attribute [Authorize]
 @implements IDisposable
 @inject IMediaServerService MediaServerService
+@inject MediaVideoWorkingSetFactory WorkingSets
 @inject IMediaServerUploadJobTracker UploadJobTracker
 @inject IJSRuntime JSRuntime
 @inject IUserContextService UserContext
@@ -123,6 +124,7 @@
 </div>
 
 @code {
+    private MediaVideoWorkingSet Working => WorkingSets.Get(Module!);
     private readonly string UploadInputId = $"media-video-upload-{Guid.NewGuid():N}";
     private readonly CancellationTokenSource UploadRefreshCancellation = new();
     private Task? UploadRefreshTask;
@@ -130,8 +132,6 @@
 
     private List<MediaVideoInfo> Videos { get; set; } = new();
     private List<MediaVideoUploadJobInfo> UploadJobs { get; set; } = new();
-    private Dictionary<Guid, string> DraftNames { get; } = new();
-    private Dictionary<Guid, string> DraftComments { get; } = new();
     private bool IsLoading { get; set; }
     private bool IsStartingUploadBatch { get; set; }
     private string Message { get; set; } = string.Empty;
@@ -155,13 +155,7 @@
         try
         {
             Videos = (await MediaServerService.GetVideosAsync(UserContext.CurrentSpaceId, FilterText)).ToList();
-            DraftNames.Clear();
-            DraftComments.Clear();
-            foreach (var video in Videos)
-            {
-                DraftNames[video.Id] = video.DisplayName;
-                DraftComments[video.Id] = video.Comment;
-            }
+            await Working.OpenAsync(Videos);
 
             if (ExpandedVideoId.HasValue && Videos.All(x => x.Id != ExpandedVideoId.Value))
             {
@@ -292,22 +286,22 @@
 
     private string GetDraftName(MediaVideoInfo video)
     {
-        return DraftNames.TryGetValue(video.Id, out var value) ? value : video.DisplayName;
+        return Working.Get(video.Id).DisplayName;
     }
 
     private void SetDraftName(Guid id, string? value)
     {
-        DraftNames[id] = value ?? string.Empty;
+        Working.SetName(id, value ?? string.Empty);
     }
 
     private string GetDraftComment(MediaVideoInfo video)
     {
-        return DraftComments.TryGetValue(video.Id, out var value) ? value : video.Comment;
+        return Working.Get(video.Id).Comment;
     }
 
     private void SetDraftComment(Guid id, string? value)
     {
-        DraftComments[id] = value ?? string.Empty;
+        Working.SetComment(id, value ?? string.Empty);
     }
 
     private async Task HandleNameKeyDownAsync(MediaVideoInfo video, KeyboardEventArgs eventArgs)
@@ -322,16 +316,9 @@
     {
         try
         {
-            var updated = await MediaServerService.RenameVideoAsync(video.Id, GetDraftName(video));
-            updated = await MediaServerService.UpdateVideoCommentAsync(video.Id, GetDraftComment(video));
-            var index = Videos.FindIndex(x => x.Id == video.Id);
-            if (index >= 0)
-            {
-                Videos[index] = updated;
-            }
-
-            DraftNames[updated.Id] = updated.DisplayName;
-            DraftComments[updated.Id] = updated.Comment;
+            var attempt = await Module!.SaveContext!.SaveAsync(Module.ModuleId);
+            if (!attempt.Success) throw new InvalidOperationException(attempt.Error);
+            await LoadVideosAsync(clearMessage: false);
             Message = "Видео сохранено.";
         }
         catch (Exception ex)
@@ -346,8 +333,7 @@
         {
             await MediaServerService.DeleteVideoAsync(video.Id);
             Videos.RemoveAll(x => x.Id == video.Id);
-            DraftNames.Remove(video.Id);
-            DraftComments.Remove(video.Id);
+            Working.Forget(video.Id);
             if (ExpandedVideoId == video.Id)
             {
                 ExpandedVideoId = null;

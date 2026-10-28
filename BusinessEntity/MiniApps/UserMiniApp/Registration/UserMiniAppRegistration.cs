@@ -1,3 +1,4 @@
+using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,6 @@ using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Repositories;
-using BusinessEntity.MiniApps.UserMiniApp.Facade;
 using BusinessEntity.MiniApps.UserMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMiniApp.Repositories.EfPostgres;
 
@@ -36,13 +36,37 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.AddScoped<IUserMiniAppRepository<UserGroupMemberDto>, UserGroupMemberDtoEfRepository>();
             services.AddScoped<IUserMiniAppRepository<UserRoleAssignmentDto>, UserRoleAssignmentDtoEfRepository>();
             services.AddScoped<UserSpaceContentAccessHelper>();
+            services.AddScoped<UserBootstrapLocalStore>();
             services.AddScoped<UserMiniAppStartupAdminBootstrapper>();
-            services.AddScoped<UserMiniAppService>();
-            services.AddScoped<UserMiniAppMessageHandler>();
-            services.AddScoped<IUserMiniApp, Facade.UserMiniApp>();
+            services.AddScoped<UserIdentityService>();
+            services.AddScoped<UserDefaultsService>();
+            services.AddScoped<UserRoleCatalogService>();
+            services.AddScoped<UserGroupService>();
+            services.AddScoped<UserRoleAssignmentDirectory>();
+            services.AddScoped<UserRoleAssignmentService>();
+            services.AddScoped<UserAccessGuard>();
+            services.AddScoped<UserAccessService>();
+            services.AddScoped<UserPreferencesService>();
+            services.AddScoped<UserAccountsService>();
+            services.AddScoped<UserAccountRemoval>();
+            services.AddScoped<UserFormsWorkingSetFactory>();
+            services.AddSingleton<BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.IOwnedServiceStorageWriter, UserOwnedStorageWriter>();
             services.AddScoped<IUserConnector, UserConnector>();
 
-            services.AddBusEndpoint<UserMiniAppMessageHandler>(typeof(DeleteCurrentUserRequest), typeof(GetAdministrationUsersRequest), typeof(ReadAdministrationUsersFromAuthentikRequest), typeof(CreateAdministrationUserRequest), typeof(UpdateAdministrationUserRequest), typeof(DeleteAdministrationUserRequest), typeof(GetRolesRequest), typeof(CreateRoleRequest), typeof(UpdateRoleRequest), typeof(DeleteRoleRequest), typeof(GetUserGroupsRequest), typeof(CreateUserGroupRequest), typeof(UpdateUserGroupRequest), typeof(DeleteUserGroupRequest), typeof(GetUserGroupMembershipsRequest), typeof(UpdateUserGroupMembershipsRequest), typeof(GetRoleAssignmentSpacesRequest), typeof(GetRoleAssignmentsRequest), typeof(CreateRoleAssignmentRequest), typeof(DeleteRoleAssignmentRequest), typeof(GetProfileRequest), typeof(UpdateProfileRequest), typeof(GetRichDocBookmarksRequest), typeof(AddRichDocBookmarkRequest), typeof(DeleteRichDocBookmarkRequest), typeof(GetRichDocDisplayedLevelRequest), typeof(SaveRichDocDisplayedLevelRequest), typeof(GetCurrentUserPropertiesRequest), typeof(UpsertCurrentUserPropertyRequest), typeof(DeleteCurrentUserPropertyRequest), typeof(GetDocPrintPresetsRequest), typeof(SaveDocPrintPresetRequest), typeof(DeleteDocPrintPresetRequest), typeof(GetCurrentUserPermissionsForSpaceRequest), typeof(GetCurrentUserPermissionsForEntityRequest), typeof(GetCurrentUserContentAccessForEntityRequest), typeof(GetAnonymousPermissionsForSpaceRequest), typeof(GetAnonymousAccessibleSpacesRequest), typeof(GetAnonymousAccessibleDocumentsRequest));
+            services.AddScoped<UserAccountsServiceMessageHandler>();
+            services.AddBusEndpoint<UserAccountsServiceMessageHandler>(typeof(DeleteCurrentUserRequest), typeof(GetAdministrationUsersRequest), typeof(ReadAdministrationUsersFromAuthentikRequest), typeof(CreateAdministrationUserRequest), typeof(UpdateAdministrationUserRequest), typeof(DeleteAdministrationUserRequest), typeof(GetProfileRequest), typeof(UpdateProfileRequest));
+            services.AddScoped<UserRoleCatalogServiceMessageHandler>();
+            services.AddBusEndpoint<UserRoleCatalogServiceMessageHandler>(typeof(GetRolesRequest), typeof(CreateRoleRequest), typeof(UpdateRoleRequest), typeof(DeleteRoleRequest));
+            services.AddScoped<UserGroupServiceMessageHandler>();
+            services.AddBusEndpoint<UserGroupServiceMessageHandler>(typeof(GetUserGroupsRequest), typeof(CreateUserGroupRequest), typeof(UpdateUserGroupRequest), typeof(DeleteUserGroupRequest), typeof(GetUserGroupMembershipsRequest), typeof(UpdateUserGroupMembershipsRequest));
+            services.AddScoped<UserRoleAssignmentDirectoryMessageHandler>();
+            services.AddBusEndpoint<UserRoleAssignmentDirectoryMessageHandler>(typeof(GetRoleAssignmentSpacesRequest));
+            services.AddScoped<UserRoleAssignmentServiceMessageHandler>();
+            services.AddBusEndpoint<UserRoleAssignmentServiceMessageHandler>(typeof(GetRoleAssignmentsRequest), typeof(CreateRoleAssignmentRequest), typeof(DeleteRoleAssignmentRequest));
+            services.AddScoped<UserPreferencesServiceMessageHandler>();
+            services.AddBusEndpoint<UserPreferencesServiceMessageHandler>(typeof(GetRichDocBookmarksRequest), typeof(AddRichDocBookmarkRequest), typeof(DeleteRichDocBookmarkRequest), typeof(GetRichDocDisplayedLevelRequest), typeof(SaveRichDocDisplayedLevelRequest), typeof(GetCurrentUserPropertiesRequest), typeof(UpsertCurrentUserPropertyRequest), typeof(DeleteCurrentUserPropertyRequest), typeof(GetDocPrintPresetsRequest), typeof(SaveDocPrintPresetRequest), typeof(DeleteDocPrintPresetRequest));
+            services.AddScoped<UserAccessServiceMessageHandler>();
+            services.AddBusEndpoint<UserAccessServiceMessageHandler>(typeof(GetEntityContentAccessRequest), typeof(GetCurrentUserPermissionsForSpaceRequest), typeof(GetCurrentUserPermissionsForEntityRequest), typeof(GetCurrentUserContentAccessForEntityRequest), typeof(GetAnonymousPermissionsForSpaceRequest), typeof(GetAnonymousAccessibleSpacesRequest), typeof(GetAnonymousAccessibleDocumentsRequest));
 
             services.AddScoped<UserSessionMessageHandler>();
 
@@ -51,9 +75,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.AddMiniAppHost("UserMiniApp",
                 new ModuleDefinition("UserMiniApp", "identity-bootstrap", "Identity", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 10, OpenOnStartup: true),
                 new ModuleDefinition("UserMiniApp", "defaults", "Пользователи", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 20, OpenOnStartup: true),
-            new ModuleDefinition("UserMiniApp", "User.Profile", "Профиль", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.profile", RequiredPermission: "Authenticated"),
+            new ModuleDefinition("UserMiniApp", "User.Profile", "Профиль", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.profile", RequiredPermission: "Authenticated", HasSaveContext: true),
             new ModuleDefinition("UserMiniApp", "User.AuthInfo", "Авторизация", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.authinfo", RequiredPermission: "Authenticated"),
-            new ModuleDefinition("UserMiniApp", "User.Administration", "Пользователи", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.administration", RequiredPermission: "GlobalAdmin"),
+            new ModuleDefinition("UserMiniApp", "User.Administration", "Пользователи", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.administration", RequiredPermission: "GlobalAdmin", HasSaveContext: true),
             new ModuleDefinition("UserMiniApp", "User.Header", "Пользователь", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "user.header", "TopBar", Order: 20, OpenOnStartup: true));
             services.AddModuleRuntime<IdentityStartupRuntime>("UserMiniApp:identity-bootstrap");
             services.AddModuleRuntime<UserStartupRuntime>("UserMiniApp:defaults");

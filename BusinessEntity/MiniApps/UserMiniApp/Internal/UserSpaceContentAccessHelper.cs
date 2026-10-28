@@ -1,11 +1,12 @@
+using BusinessEntity.Services;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
-using BusinessEntity.Contracts;
+using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using BusinessEntity.Core.BaseClasses.Relations;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Repositories;
-using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using Entity = BusinessEntity.Core.Classes.BusinessEntity;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Internal;
@@ -105,7 +106,7 @@ internal sealed class UserSpaceContentAccessHelper
         var permissions = await GetEffectivePermissionsForSpaceAsync(userId, spaceId, isAnonymous, cancellationToken);
         var projection = await _data.QueryGraphAsync(GraphQueryKind.All, cancellationToken: cancellationToken);
         var entities = projection.Entities.ToDictionary(entity => entity.Id);
-        if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != BusinessEntityTypeEnum.Space)
+        if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id)
         {
             return Array.Empty<UserAccessibleDocumentRecord>();
         }
@@ -192,7 +193,7 @@ internal sealed class UserSpaceContentAccessHelper
             return Array.Empty<UserSpaceRecord>();
         }
 
-        var spaces = (await _data.GetAllAsync(cancellationToken)).Where(entity => entity.EntityType == BusinessEntityTypeEnum.Space).ToArray();
+        var spaces = (await _data.GetAllAsync(cancellationToken)).Where(entity => entity.EntityType == global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id).ToArray();
         var records = new List<UserSpaceRecord>();
 
         foreach (var space in spaces
@@ -231,7 +232,7 @@ internal sealed class UserSpaceContentAccessHelper
             return null;
         }
 
-        if (entity.EntityType == BusinessEntityTypeEnum.Space)
+        if (entity.EntityType == global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id)
         {
             return entity.Id;
         }
@@ -249,7 +250,7 @@ internal sealed class UserSpaceContentAccessHelper
                 return null;
             }
 
-            if (parent.EntityType == BusinessEntityTypeEnum.Space)
+            if (parent.EntityType == global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id)
             {
                 return parent.Id;
             }
@@ -319,7 +320,7 @@ internal sealed class UserSpaceContentAccessHelper
     {
         var entities = (await _data.GetAllAsync(cancellationToken))
             .ToDictionary(entity => entity.Id);
-        if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != BusinessEntityTypeEnum.Space)
+        if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != global::BusinessEntity.MiniApps.SpacesMiniApp.Contracts.SpaceType.Id)
         {
             return false;
         }

@@ -5,7 +5,7 @@ using System.Text.Json;
 using BusinessEntity.Core.BaseClasses.Relations;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.Entities;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
@@ -27,6 +27,8 @@ public sealed class MediaServerService : IMediaServerService
     private readonly BusRequestScope _scope;
     private readonly ILogger<MediaServerService> _logger;
 
+    // Шесть зависимостей обслуживают поток загрузки: storage, factory, события, адрес, identity и журнал очистки.
+    // Очередь/прогресс вынесены в UploadManager, рабочие metadata — в MediaVideoWorkingSet.
     // Владеет предметной моделью видео; постоянные файлы и метаданные записывает DataProvider.
     public MediaServerService(IDataProviderConnector dataProviderConnector, IBusinessEntityFactory businessEntityFactory,
         IMessageBus messageBus, BusRequestScope scope, IUserConnector userConnector, ILogger<MediaServerService> logger)
@@ -57,15 +59,12 @@ public sealed class MediaServerService : IMediaServerService
         var normalizedFilter = (filter ?? string.Empty).Trim();
 
         foreach (var entity in entities
-                     .Where(x => x.EntityType == BusinessEntityTypeEnum.MediaVideo)
+                     .Where(x => x.EntityType == global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Id)
                      .Where(x => allowedVideoIds == null || allowedVideoIds.Contains(x.Id))
                      .OrderByDescending(x => x.CreatedDate))
         {
             var data = await _dataProviderConnector.GetDataAsync<MediaVideo>(entity.Id, cancellationToken);
-            if (data == null)
-            {
-                continue;
-            }
+            if (data == null) throw new InvalidDataException("Отсутствует обязательный payload видео.");
 
             var info = ToInfo(entity.Id, data);
             if (!MatchesFilter(info, normalizedFilter))
@@ -114,8 +113,8 @@ public sealed class MediaServerService : IMediaServerService
             var actualLength = new FileInfo(temporary).Length;
             if (actualLength > MaxVideoBytes) throw new InvalidOperationException("Видео слишком большое для загрузки.");
             var name = Path.GetFileNameWithoutExtension(safeName);
-            var entity = _businessEntityFactory.Create<MediaVideo>(BusinessEntityTypeEnum.MediaVideo, name);
-            var data = new MediaVideo { Id = entity.Id, Name = name, Tag = BusinessEntityTypeEnum.MediaVideo.ToString(),
+            var entity = _businessEntityFactory.Create<MediaVideo>(global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Id, name);
+            var data = new MediaVideo { Id = entity.Id, Name = name, Tag = global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Key,
                 FileName = safeName, DisplayName = name, ContentType = mime, OriginalSizeBytes = actualLength,
                 UploadedByUserId = actor, UploadedDate = DateTime.UtcNow };
             var relations = spaceId.HasValue && spaceId.Value != Guid.Empty
@@ -138,39 +137,9 @@ public sealed class MediaServerService : IMediaServerService
         }
     }
 
-    public async Task<MediaVideoInfo> RenameVideoAsync(Guid videoId, string displayName, CancellationToken cancellationToken = default)
-    {
-        var trimmed = (displayName ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-        {
-            throw new InvalidOperationException("Отображаемое имя видео не должно быть пустым.");
-        }
-
-        var entity = await _dataProviderConnector.GetByIdAsync(videoId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Видео '{videoId}' не найдено.");
-        var data = await _dataProviderConnector.GetDataAsync<MediaVideo>(videoId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Payload видео '{videoId}' не найден.");
-
-        entity.Name = trimmed;
-        entity.LastModifiedDate = DateTime.UtcNow;
-        data.Name = trimmed;
-        data.DisplayName = trimmed;
-
-        await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "MediaServerMiniApp", null)
-            { Entities = [entity], Payloads = [new(videoId, data.Version, data)] }, cancellationToken);
-        return ToInfo(videoId, data);
-    }
-
-    public async Task<MediaVideoInfo> UpdateVideoCommentAsync(Guid videoId, string comment, CancellationToken cancellationToken = default)
-    {
-        var data = await _dataProviderConnector.GetDataAsync<MediaVideo>(videoId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Payload видео '{videoId}' не найден.");
-
-        data.Comment = comment ?? string.Empty;
-        await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "MediaServerMiniApp", null)
-            { Payloads = [new(videoId, data.Version, data)] }, cancellationToken);
-        return ToInfo(videoId, data);
-    }
+    // Полный payload для рабочего экземпляра библиотеки читает только владелец через DataProvider.
+    public async Task<MediaVideo> GetEditableVideoDataAsync(Guid videoId, CancellationToken ct = default) =>
+        await _dataProviderConnector.GetDataAsync<MediaVideo>(videoId, ct) ?? throw new InvalidDataException("Отсутствует payload видео.");
 
     // Удаляет связанные SQL-записи пакетом; уборка постоянного файла происходит после commit у DataProvider.
     public async Task DeleteVideoAsync(Guid videoId, CancellationToken cancellationToken = default)
@@ -224,7 +193,7 @@ public sealed class MediaServerService : IMediaServerService
         }
     }
 
-    private static MediaVideoInfo ToInfo(Guid id, MediaVideo data)
+    internal static MediaVideoInfo ToInfo(Guid id, MediaVideo data)
     {
         return new MediaVideoInfo
         {

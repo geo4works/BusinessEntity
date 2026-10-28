@@ -1,7 +1,9 @@
+@using BusinessEntity.MiniApps.SpacesMiniApp.Contracts
+@using BusinessEntity.MiniApps.SpacesMiniApp.Internal
 @namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
 @inherits ModuleComponentBase
-@inject BusinessEntity.Services.SpaceHelper SpacesHelper
-@inject BusinessEntity.Contracts.IUserContextService CurrentSpace
+@inject BusinessEntity.MiniApps.SpacesMiniApp.Internal.SpaceHelper SpacesHelper
+@inject BusinessEntity.MiniApps.SpacesMiniApp.Contracts.IUserContextService CurrentSpace
 @inject BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors.IUserConnector Users
 @inject NavigationManager Navigation
 

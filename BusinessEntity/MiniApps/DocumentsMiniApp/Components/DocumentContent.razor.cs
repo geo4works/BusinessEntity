@@ -1,3 +1,5 @@
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
+using BusinessEntity.Services;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.Core.Saving;
 using System;
@@ -6,14 +8,13 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
-using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
-using BusinessEntity.MiniApps.TreeMiniApp.Internal;
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
-using BusinessEntity.Services;
 using Microsoft.JSInterop;
 using ReactiveUI;
 
@@ -47,13 +48,13 @@ namespace BusinessEntity.MiniApps.DocumentsMiniApp.Components
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
-        [Inject] private TreeMiniAppService TreeMiniAppService { get; set; } = default!;
+        [Inject] private ITreeConnector TreeConnector { get; set; } = default!;
         [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] public NavigationManager NavigationManager { get; set; } = default!;
 
-        private global::BusinessEntity.Components.Document? DocumentView;
+        private global::BusinessEntity.MiniApps.DocumentsMiniApp.Components.Document? DocumentView;
         private IDisposable? _dataSubscription;
         private bool _disposed;
         protected override void OnInitialized()
@@ -83,13 +84,13 @@ namespace BusinessEntity.MiniApps.DocumentsMiniApp.Components
                     Error = "Документ не найден.";
                     return;
                 }
-                if (Entity.EntityType != global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Document && Entity.EntityType != global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Document)
+                if (Entity.EntityType != global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id && Entity.EntityType != global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id)
                 {
                     Error = "Сущность не является документом или страницей.";
                     return;
                 }
 
-                var latestDocument = await DataProviderConnector.GetDataAsync<global::BusinessEntity.Core.DomainEntities.Document>(Id);
+                var latestDocument = await DataProviderConnector.GetDataAsync<global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities.Document>(Id);
                 await ResolveAccessAsync();
                 if (!HasFullDocumentAccess && !CanViewPublishedDocument)
                 {
@@ -138,7 +139,7 @@ namespace BusinessEntity.MiniApps.DocumentsMiniApp.Components
         {
             return data switch
             {
-                global::BusinessEntity.Core.DomainEntities.Document document => document.Text ?? string.Empty,
+                global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities.Document document => document.Text ?? string.Empty,
                 _ => string.Empty
             };
         }
@@ -209,7 +210,7 @@ namespace BusinessEntity.MiniApps.DocumentsMiniApp.Components
 
             try
             {
-                await TreeMiniAppService.DeleteEntitiesAsync(new[] { entityId });
+                await TreeConnector.DeleteEntitiesAsync(new[] { entityId });
 
                 TreeSelectionService.RequestEntitySelection(null);
                 NavigationManager.NavigateTo("/", replace: true);

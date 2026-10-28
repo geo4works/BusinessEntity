@@ -9,6 +9,9 @@ public interface IEntityDataStorageConverter
     // Тип business-объекта, для которого предназначен конвертер.
     BusinessEntityTypeEnum SupportedType { get; }
 
+    // Стабильное имя wire-формата объявляет владелец типа.
+    string StorageKind { get; }
+
     // Сериализует typed payload-объект в raw JSON тела payload без envelope.
     string SerializePayload(IBusinessEntityData data);
 
