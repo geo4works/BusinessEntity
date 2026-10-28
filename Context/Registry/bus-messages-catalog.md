@@ -159,12 +159,11 @@ Login передаёт уведомление новому circuit однора�
 | DataProviderMiniApp | SaveEntityBatchRequest | Request | `Guid RequestId, EntitySaveBatch Batch` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
 | DataProviderMiniApp | SaveEntityBatchResponse | Response | `Guid RequestId, SaveBatchResult? Result, BusError? Error = null` | [код](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Messages/DataProviderTransactionMessages.cs) |
 
-## Следующие этапы
+## Состояние раскатки
 
-Транзакции, исход OperationId и события DataProvider реализованы на этапе 2;
-Services/EntityMessages удалён. Этапы 4–8: декларации, жизненный цикл,
-контексты сохранения, команды и выделение. Запланированные сообщения здесь
-не выдаются за реализованные.
+Этапы 0–7 завершены: транзакции/outcome, кэш, декларации, lifecycle, рабочие
+контексты, UI-команды, предметные границы и master/helper реализованы.
+Навигационный guard и beforeunload подключаются этапом 8.
 
 ## Проекции и статистика этапа 3
 
@@ -219,3 +218,20 @@ EntitySaveBatch.OwnedServiceChanges — техническое исключен�
 User. Пакет содержит только value JSON своих DTO; writer зарегистрирован владельцем.
 Канонический writer DataProvider вызывает его в своей SQL-транзакции и пишет
 durable outcome там же. Пароли и callbacks в сообщениях отсутствуют.
+
+
+## Выделение этапа 7
+
+ObjectInContextSelected: LogicalWindowId, OriginModuleId, SelectionRevision,
+SourceRevision, ImmutableArray<SelectedObjectSnapshot>. Значения объекта — ID,
+заголовок, ключ типа и даты; mutable Entity/VM не передаются.
+SelectionSourceChanged объявляет поколение текущего master. Менеджер окна хранит
+только его адрес, без выделенных объектов. Закрытие/деактивация снимает источник.
+GiveMeCurrentSelection(RequestId, LogicalWindowId, RequesterModuleId) /
+HereIsCurrentSelection(RequestId, Snapshot) обслуживают поздний helper.
+Проверяются окно, живые module IDs, текущий источник/поколение, ревизия и корреляция.
+
+RevealTreeEntity Request/Response — адресное намерение страницы показать узел;
+Tree connector использует общий BusRequestClient. Собственный TreeRevealService
+связывает намерение с renderer Tree; он не содержит контекста выбранных объектов.
+ITreeSelectionService/TreeSelectionService/TreeSelectedItem удалены.

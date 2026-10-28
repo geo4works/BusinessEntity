@@ -41,7 +41,6 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
-        [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] public NavigationManager NavigationManager { get; set; } = default!;
         [Inject] private ITreeConnector TreeConnector { get; set; } = default!;
@@ -153,7 +152,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
                     return;
                 }
 
-                TreeSelectionService.RequestEntitySelection(Entity.Id);
+                using (EnterModuleAddress()) await TreeConnector.RevealEntityAsync(Entity.Id);
 
                 await RefreshVersionsAsync(cancellationToken);
                 if (HasRetainedEdit) ViewedVersion = Working.BaseVersion;
@@ -567,7 +566,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
                 LoadCancellationTokenSource?.Cancel();
                 await TreeConnector.DeleteEntitiesAsync(new[] { entityId });
 
-                TreeSelectionService.RequestEntitySelection(null);
+                using (EnterModuleAddress()) await TreeConnector.RevealEntityAsync(null);
                 NavigationManager.NavigateTo("/", replace: true);
             }
             catch (Exception ex)

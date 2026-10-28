@@ -1,6 +1,6 @@
 # Модули и маршруты
 
-Фактическая регистрация этапа 6 TASK_ARCH_001. ModuleCatalog singleton получает
+Фактическая регистрация этапа 7 TASK_ARCH_001. ModuleCatalog singleton получает
 декларации host-service; WindowModularityManager scoped создаёт UI-адреса.
 Декларации с AppSingleton — только Headless; внутренних вкладочных placement нет.
 
@@ -14,7 +14,7 @@
 | User.HeaderSpaces (в меню пользователя) | SpacesMiniApp:Spaces.Header | spaces.header | публичный, собственные варианты authenticated/anonymous |
 | LeftTree | TreeMiniApp:tree | tree.main | пользовательская проекция с правами |
 | RightPanel | MediaServerMiniApp:MediaServer.Uploads | media.uploads | Authenticated |
-| RightPanel | TreeMiniApp:Tree.SelectionInfo | tree.selection | сведения своего окна; адресный selection — этап 7 |
+| RightPanel | TreeMiniApp:Tree.SelectionInfo | tree.selection | immutable сведения своего окна по протоколу master/helper |
 | RightPanel | UserMessagesMiniApp:UserMessages.Panel | messages.panel | Authenticated |
 
 Политика UI оболочки — WindowSingleton. Постоянная геометрия, CSS frame и @Body

@@ -12,6 +12,9 @@ public sealed class TreeConnector : ITreeConnector
     private readonly IUserConnector _user;
     // Получает общий клиент текущего scope.
     public TreeConnector(BusRequestClient client, IUserConnector user) { _client = client; _user = user; }
+    // Передаёт намерение страницы через ту же адресную шину.
+    public async Task RevealEntityAsync(Guid? entityId, CancellationToken cancellationToken = default)
+        => await _client.SendAsync<RevealTreeEntityRequest, RevealTreeEntityResponse>(new(Guid.NewGuid(), entityId), cancellationToken);
     // Запрашивает видимое пользователю дерево своего окна.
     public async Task<TreeSpaceSnapshot?> GetTreeForSpaceAsync(Guid spaceId, CancellationToken cancellationToken = default)
     {

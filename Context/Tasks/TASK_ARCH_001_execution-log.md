@@ -544,4 +544,56 @@ CHK-18/27 — рабочие наборы проверены, navigation UX эт
 CHK-17 — старый selection API пока оставлен строго для этапа 7.
 Данные и восстановление: схема 2/archive 2 сохранены; БД, storage и volumes
 не сбрасывались. Документы текущей схемы и их история читаются после переноса.
-Версия и коммит: CMMTP 3 — 0.16.9; hash/push записываются после команды git.
+Версия и коммит: CMMTP 3 — 0.16.9, af1f2da, push main выполнен.
+
+
+## Этап 7 — Выделение master/helper (2026-10-29)
+
+- ObjectInContextSelected содержит LogicalWindowId, OriginModuleId, SelectionRevision,
+  SourceRevision и ImmutableArray value records. Модели графа и Tree VM не разделяются.
+- Дерево сначала меняет локальное выделение и планирует render, затем публикует снимок.
+  Менеджер хранит только адрес активного master и его поколение. Смена/закрытие/
+  деактивация источника очищает helper; данные старой ревизии/окна/поколения отвергаются.
+- Поздний helper получает снимок по GiveMeCurrentSelection/HereIsCurrentSelection
+  с корреляцией и проверкой живого requester. Все подписки освобождаются владельцем.
+- Прямой TreeSelectionService/ITreeSelectionService и TreeSelectedItem удалены.
+  Внешняя страница использует RevealTreeEntity через connector/общий bus client;
+  собственный TreeRevealService хранит только намерение показа и callback своего UI.
+- Быстрый Ctrl-click выявил старую гонку JS-опроса после keyup: модификаторы теперь
+  приходят из MouseEventArgs; отложенное открытие предыдущего узла отменяется.
+  Неиспользуемые глобальные keydown/keyup/blur listeners удалены. Завершение UI при
+  Reveal возвращает operation.cancelled, не маскируя storage/validation ошибки.
+
+### Проверки и аудит
+
+Release build решения: 0 ошибок. Полный test с отдельным Postgres: 113 passed,
+0 failed/0 skipped; PostgreSQL 35. Четыре новых unit-сценария: поздний helper и
+копирование значений, ревизии/смена источника и поколения, закрытие/disposal,
+два окна одного пользователя. Смена master до первого нового снимка даёт пустой helper.
+
+RSTT: оба образа собраны и оба контейнера пересозданы. Image ID приложения
+479b18600282250faa75926cabd9f1e56f9312578043dc1cad3a4226e44d07a0 совпал с образом.
+На окончательном образе все 25 browser сценариев прошли (basic 9 + selection 2
++ storage 6 + anonymous 3 + system/media 2 + routes 3), runner exit 0.
+Приложение/логгер/Authentik 200; в конечном журнале нет fail/unhandled/circuit
+exceptions. SQL подтвердил 0 тестовых smoke-guard users и 0 Smoke guests groups.
+Поиск удалённого selection API в C#/Razor пуст. CHK-32 в изменённых областях пуст;
+архитектурные проверки границ/Core зелёные. git diff --check без ошибок.
+
+Промежуточные отказы не засчитаны: тестовая декларация без обязательного UI-ключа,
+быстрый Ctrl-click и штатный TaskCanceled при снятии UI. После исправлений
+повторены build/tests/RSTT и полный smoke окончательного образа.
+
+### Отчёт по §8
+
+Этап 7 — Выделение master/helper: готово.
+Сделано: immutable адресный протокол, актуальность по lifecycle/ревизии/поколению,
+поздний запрос, освобождение подписок и удаление общего selection API.
+Отклонения от ТЗ и почему: нет; SourceRevision дополнительно защищает повторное
+возвращение к прежнему источнику от его старых сообщений.
+Вопросы к пользователю: нет.
+Проверки: build ✓, tests ✓ (113; PostgreSQL 35), RSTT ✓, smoke ✓ (25).
+Чек-лист §6: CHK-01/13/14/17/27/32 ✓; остальные действующие инварианты
+шины/хранения/кэша/версий сохранены полным тестовым и browser прогоном.
+Данные и восстановление: схема 2/archive 2 не менялись, БД/storage/volumes не очищались.
+Версия и коммит: CMMTP 3 — 0.16.10; hash/push записываются после команды git.

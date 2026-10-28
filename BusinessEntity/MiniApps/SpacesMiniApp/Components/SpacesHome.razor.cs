@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Selection;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
 using BusinessEntity.Services;
 using BusinessEntity.Core.Classes;
@@ -11,13 +12,15 @@ using BusinessEntity.Core.BaseClasses.Relations;
 
 namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
 {    // Главная страница и публичный вход в пространства.
-    public partial class SpacesHome
+    public partial class SpacesHome : IDisposable
     {
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public IUserContextService UserContext { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<SpacesHome> Logger { get; set; } = default!;
-        [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
+        [Inject] public ReactiveUI.IMessageBus SelectionBus { get; set; } = default!;
+        private SelectionObserver? _selection;
+        private bool _disposed;
 
         private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }
@@ -29,7 +32,7 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
             : null;
 
         // Состояние выбранных узлов дерева через сервис
-        private bool IsMultiSelectActive => TreeSelectionService.IsMultiSelectActive;
+        private bool IsMultiSelectActive => _selection?.Snapshot?.Objects.Length > 1;
 
         protected override async Task OnInitializedAsync()
         {
@@ -52,7 +55,8 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
                 }
 
                 // Подписываемся на изменения выбора в дереве
-                TreeSelectionService.SelectionChanged += OnTreeSelectionChanged;
+                _selection = new(SelectionBus, ModuleManager, Module!.ModuleId);
+                _selection.Changed += OnTreeSelectionChanged;
             }
             catch (Exception ex)
             {
@@ -60,18 +64,10 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
             }
         }
 
-        private void OnTreeSelectionChanged(List<TreeSelectedItem> selectedNodes)
-        {
-            try
-            {
-                Logger.LogInformation("Tree selection changed: {Count} nodes selected", selectedNodes.Count);
-                StateHasChanged(); // Обновляем UI при изменении выбора
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error handling tree selection change");
-            }
-        }
+        // Выделение обновляет owning renderer страницы и освобождается вместе с ним.
+        private void OnTreeSelectionChanged() { if (!_disposed) _ = InvokeAsync(() => { if (!_disposed) StateHasChanged(); }); }
+        // Закрытие страницы снимает все master/helper подписки.
+        public void Dispose() { _disposed = true; _selection?.Dispose(); }
 
         // Открывает локальную форму входа и возвращает пользователя на главную после авторизации.
         private void OpenLoginForm()
@@ -157,10 +153,5 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Components
             Navigation.NavigateTo(route);
         }
 
-        // Вспомогательные методы для работы с выбранными узлами
-        private string GetSelectedNodesInfo()
-        {
-            return TreeSelectionService.GetSelectedNodesInfo();
-        }
     }
 }

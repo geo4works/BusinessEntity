@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Selection;
 using BusinessEntity.MiniApps.TreeMiniApp.Internal;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
 using BusinessEntity.Services;
@@ -40,7 +41,9 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         [Inject] IWebLoggerService? WebLogger { get; set; }
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
         [Inject] public ContextMenuService ContextMenu { get; set; } = default!;
-        [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
+        [Inject] private TreeRevealService Reveal { get; set; } = default!;
+        private SelectionPublisher? _selectionPublisher;
+        private IDisposable? _revealBinding;
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] public NavigationManager NavigationManager { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
@@ -88,7 +91,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
                 // Подписываемся на изменения выбранного пространства
                 UserContextService.SelectedSpaceChanged += OnSelectedSpaceChanged;
-                TreeSelectionService.EntitySelectionRequested += OnEntitySelectionRequested;
+                _selectionPublisher = new SelectionPublisher(MessageBus, ModuleManager, Module!.ModuleId);
+                _revealBinding = Reveal.Attach(id => InvokeAsync(() => ApplyRequestedEntitySelectionAsync(id)));
 
                 // Общее событие хранит только ID; проекция заново проверяет права текущего окна.
                 _graphChangedSubscription = MessageBus.Listen<BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages.EntityBatchCommitted>()
@@ -163,6 +167,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 CollapsedFolderIds = new HashSet<Guid>();
                 TreeExpansionStateSpaceId = Guid.Empty;
                 TreeExpansionStatePropertyId = null;
+                SelectedNodes.Clear(); await PublishSelectionAsync();
                 return;
             }
 
@@ -188,10 +193,11 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             TreeData = new[] { rootSpaceNode };
             Visible = true;
             IsLoading = false;
-            if (TreeSelectionService.RequestedEntityId.HasValue)
+            if (Reveal.GetLiveRequestedEntityId().HasValue)
             {
                 await ApplyRequestedEntitySelectionAsync();
             }
+            else await PublishSelectionAsync();
         }
 
         private SpaceTreeNodeItemViewModel BuildSpaceRoot(TreeSpaceSnapshot snapshot)
@@ -338,21 +344,18 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             return node?.Entity?.EntityType == global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id;
         }
 
-        private async void OnEntitySelectionRequested(Guid? entityId)
+        // Локальная проекция и запланированная отрисовка предшествуют внешнему снимку master/helper.
+        private async Task PublishSelectionAsync()
         {
-            try
-            {
-                await ApplyRequestedEntitySelectionAsync(entityId);
-            }
-            catch (Exception ex)
-            {
-                WebLogger?.Error(ex);
-            }
+            await InvokeAsync(StateHasChanged);
+            _selectionPublisher?.Publish(SelectedNodes.Where(node => node.Entity != null).Select(node =>
+                new SelectedObjectSnapshot(node.Entity!.Id, node.Title, node.EntityType,
+                    node.Entity.CreatedDate, node.Entity.LastModifiedDate)));
         }
 
         private Task ApplyRequestedEntitySelectionAsync()
         {
-            return ApplyRequestedEntitySelectionAsync(TreeSelectionService.RequestedEntityId);
+            return ApplyRequestedEntitySelectionAsync(Reveal.GetLiveRequestedEntityId());
         }
 
         private async Task ApplyRequestedEntitySelectionAsync(Guid? entityId)
@@ -597,28 +600,16 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         }
 
         // Публичный метод для обработки кликов по узлам (вызывается из razor)
-        public async Task OnNodeClicked(TreeNodeItemViewModelBase? node)
+        public async Task OnNodeClicked(TreeNodeItemViewModelBase? node, MouseEventArgs? mouse = null)
         {
             //WebLogger?.Information($"[OnNodeClicked]--Enter");
             Console.WriteLine($"[OnNodeClicked]--Enter");
             if (node == null) return;
 
-            // Получаем состояние клавиш из JavaScript
-            var keyState = await JSRuntime.InvokeAsync<System.Text.Json.JsonElement>("TreeMultiSelect.getKeyState");
-
-            bool ctrlPressed = false;
-            bool shiftPressed = false;
-
-            // Правильно парсим JsonElement
-            if (keyState.TryGetProperty("ctrl", out var ctrlProperty))
-            {
-                ctrlPressed = ctrlProperty.GetBoolean();
-            }
-
-            if (keyState.TryGetProperty("shift", out var shiftProperty))
-            {
-                shiftPressed = shiftProperty.GetBoolean();
-            }
+            // Состояние модификаторов фиксируется самим click, а не поздним JS round-trip после keyup.
+            var ctrlPressed = mouse?.CtrlKey == true || mouse?.MetaKey == true;
+            var shiftPressed = mouse?.ShiftKey == true;
+            CancelPendingOpenEntityOpen();
 
             await HandleNodeSelection(node, ctrlPressed, shiftPressed);
 
@@ -768,7 +759,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             }
 
             // Синхронизируем список выбранных узлов с реальным состоянием дерева,
-            // чтобы в сервис всегда попадал фактический набор выделенных элементов.
+            // чтобы helpers получали фактический набор выделенных элементов.
             SyncSelectedNodesFromTree();
 
             if (!SelectedNodes.Any())
@@ -779,8 +770,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             // Обновляем состояние мульти-селекта
             IsMultiSelectMode = SelectedNodes.Count > 1;
 
-            // Обновляем сервис выделения
-            TreeSelectionService.SetSelectedNodes(SelectedNodes.Select(n => new TreeSelectedItem(n.Title, n.EntityType, n.Entity)).ToList());
+            // Передаём неизменяемый снимок выделения через общую шину
+            await PublishSelectionAsync();
 
             // Принудительно обновляем UI
             await InvokeAsync(StateHasChanged);
@@ -808,13 +799,13 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 }
             }
             IsMultiSelectMode = false;
-            TreeSelectionService.ClearSelection();
 
             if (refreshUi)
             {
                 await InvokeAsync(StateHasChanged);
                 // Принудительно обновляем CSS-классы через JavaScript
                 await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
+                await PublishSelectionAsync();
             }
         }
 
@@ -901,7 +892,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             SelectedNodes = new List<TreeNodeItemViewModelBase> { node };
             IsMultiSelectMode = false;
             IsCtrlGroupSelectionActive = false;
-            TreeSelectionService.SetSelectedNodes(SelectedNodes.Select(n => new TreeSelectedItem(n.Title, n.EntityType, n.Entity)).ToList());
+            await PublishSelectionAsync();
             await InvokeAsync(StateHasChanged);
             await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
         }
@@ -987,10 +978,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             {
                 UserContextService.SelectedSpaceChanged -= OnSelectedSpaceChanged;
             }
-            if (TreeSelectionService != null)
-            {
-                TreeSelectionService.EntitySelectionRequested -= OnEntitySelectionRequested;
-            }
+            _revealBinding?.Dispose(); _selectionPublisher?.Dispose();
             _graphChangedSubscription?.Dispose();
        }
 
@@ -1176,7 +1164,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             }
             else
             {
-                TreeSelectionService.SetSelectedNodes(SelectedNodes.Select(n => new TreeSelectedItem(n.Title, n.EntityType, n.Entity)).ToList());
+                await PublishSelectionAsync();
             }
 
             await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
@@ -1277,7 +1265,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                     await ClearAllSelections();
                     draggedNode.SetSelected(true);
                     SelectedNodes.Add(draggedNode);
-                    TreeSelectionService.SetSelectedNodes(SelectedNodes.Select(n => new TreeSelectedItem(n.Title, n.EntityType, n.Entity)).ToList());
+                    await PublishSelectionAsync();
                 }
 
                 // Помечаем все выбранные узлы как перетаскиваемые

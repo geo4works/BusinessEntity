@@ -282,7 +282,7 @@
                                       draggable="true"
                                       @onmouseover="async (e) => await ShowTreeNodeTooltipAsync(e, node)"
                                       @onmouseleave="async () => await HideTreeNodeTooltipAsync()"
-                                      @onclick="async () => await OnNodeClicked(node)"
+                                      @onclick="async (MouseEventArgs args) => await OnNodeClicked(node, args)"
                                       @onclick:stopPropagation="true"
                                       @onclick:preventDefault="true"
                                       @ondblclick="async () => await OnNodeDoubleClicked(node)"

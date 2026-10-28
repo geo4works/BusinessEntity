@@ -1,3 +1,4 @@
+using BusinessEntity.Infrastructure.Selection;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.Infrastructure.Saving;
 using BusinessEntity.WebLogger.Services;
@@ -19,6 +20,24 @@ public sealed class WindowModularityManager : IAsyncDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _disposed;
     private readonly HashSet<Guid> _inactive = [];
+    private long _selectionSourceRevision;
+    public SelectionSourceAddress? CurrentSelectionSource { get; private set; }
+    // Менеджер хранит только адрес master; предметные снимки передаются исключительно по шине.
+    public SelectionSourceAddress ActivateSelectionSource(Guid moduleId)
+    {
+        GetLive(moduleId);
+        if (CurrentSelectionSource?.OriginModuleId == moduleId) return CurrentSelectionSource;
+        CurrentSelectionSource = new(moduleId, ++_selectionSourceRevision);
+        _bus.SendMessage(new SelectionSourceChanged(LogicalWindowId, CurrentSelectionSource));
+        return CurrentSelectionSource;
+    }
+    // Старый master не может очистить адрес уже выбранного нового источника.
+    public void ClearSelectionSource(Guid moduleId)
+    {
+        if (CurrentSelectionSource?.OriginModuleId != moduleId) return;
+        CurrentSelectionSource = null; ++_selectionSourceRevision;
+        _bus.SendMessage(new SelectionSourceChanged(LogicalWindowId, null));
+    }
     public event Action? Changed;
     public Guid LogicalWindowId => _scope.LogicalWindowId;
     public IReadOnlyList<MiniAppModule> Modules => _modules.ToArray();
@@ -92,7 +111,7 @@ public sealed class WindowModularityManager : IAsyncDisposable
         var module = _modules.SingleOrDefault(x => x.ModuleId == moduleId);
         if (module == null) return;
         if (module.IsDirty && !_modules.Any(x => x.ModuleId != moduleId && x.SaveContext == module.SaveContext))
-        { if (_inactive.Add(moduleId)) Publish(module, ModuleLifecycle.Deactivated); return; }
+        { if (_inactive.Add(moduleId)) { ClearSelectionSource(moduleId); Publish(module, ModuleLifecycle.Deactivated); } return; }
         await CloseAsync(moduleId);
     }
     // Закрытие вспомогательного компонента не удаляет общий черновик; последний dirty-владелец требует guard.
@@ -104,6 +123,7 @@ public sealed class WindowModularityManager : IAsyncDisposable
             var module = _modules.SingleOrDefault(x => x.ModuleId == moduleId); if (module == null) return;
             var last = module.SaveContext != null && !_modules.Any(x => x.ModuleId != moduleId && x.SaveContext == module.SaveContext);
             if (last && module.IsDirty && !windowDisposal) throw new InvalidOperationException("Несохранённый рабочий экземпляр требует Save/Discard/Cancel.");
+            ClearSelectionSource(moduleId);
             if (!_inactive.Remove(moduleId)) Publish(module, ModuleLifecycle.Deactivated);
             _modules.Remove(module); Publish(module, ModuleLifecycle.Closed);
             if (last && module.SaveContext != null)

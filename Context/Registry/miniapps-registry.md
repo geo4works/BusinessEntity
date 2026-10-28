@@ -1,6 +1,6 @@
 # Реестр миниаппов
 
-Фактическое состояние этапа 6 TASK_ARCH_001, 2026-10-29.
+Фактическое состояние этапа 7 TASK_ARCH_001, 2026-10-29.
 15 логических владельцев внутри одного проекта. Каждый AddXxxMiniApp регистрирует
 один декларативный singleton MiniAppHostService. Core/Infrastructure — общие слои.
 
@@ -67,7 +67,7 @@ DataProvider; outcome и строки User коммитятся вместе. Wr
 
 Выбранное пространство — scoped контекст окружения из Contracts Spaces; его
 значения читают другие владельцы. Предметные операции Spaces/Backup/Media/Sample
-передаются через шину. Старый selection API пока принадлежит Tree; этап 7 удаляет его.
+передаются через шину. Выделение передаётся immutable событиями master/helper с адресом окна, источником, поколением и ревизией. Старый selection API удалён.
 
 [Маршруты, размещения и компоненты](modules-and-routes.md).
 [Каталог сообщений](bus-messages-catalog.md). [ТЗ](../Tasks/TASK_ARCH_001_miniapp-bus-architecture-migration.md).

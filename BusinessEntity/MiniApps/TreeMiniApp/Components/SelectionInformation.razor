@@ -1,30 +1,32 @@
-@using BusinessEntity.MiniApps.TreeMiniApp.Contracts
+@using BusinessEntity.Infrastructure.Selection
 @namespace BusinessEntity.MiniApps.TreeMiniApp.Components
-@inject BusinessEntity.MiniApps.TreeMiniApp.Contracts.ITreeSelectionService Selection
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@inject ReactiveUI.IMessageBus Bus
 @implements IDisposable
 
-<div class="widget">
+<div class="widget selection-information">
     <div class="widget-title">Информация</div>
     <div class="widget-body">
-        @if (Selection.IsMultiSelectActive) { @Selection.GetSelectedNodesInfo() }
-        else if (Selection.SingleSelectedNode is { } selected)
+        @if (_observer?.Snapshot?.Objects is { Length: > 1 } objects) { <span>Выбрано @objects.Length элементов</span> }
+        else if (_observer?.Snapshot?.Objects is { Length: 1 } single)
         {
-            <div>@selected.Title</div>
-            <div>Тип: @selected.EntityType</div>
-            @if (selected.Entity != null)
-            {
-                <div>Создан: @selected.Entity.CreatedDate.ToLocalTime().ToString("g")</div>
-                <div>Изменён: @selected.Entity.LastModifiedDate.ToLocalTime().ToString("g")</div>
-            }
+            var selected = single[0];
+            <div class="selection-information__title" data-entity-id="@selected.EntityId">@selected.Title</div>
+            <div>Тип: @selected.TypeKey</div>
+            @if (selected.CreatedDate.HasValue) { <div>Создан: @selected.CreatedDate.Value.ToLocalTime().ToString("g")</div> }
+            @if (selected.ModifiedDate.HasValue) { <div>Изменён: @selected.ModifiedDate.Value.ToLocalTime().ToString("g")</div> }
         }
         else { <span>Ничего не выбрано</span> }
     </div>
 </div>
 @code {
-    // На этапе 7 источник заменяется адресным протоколом master/helper.
-    protected override void OnInitialized() => Selection.SelectionChanged += OnSelectionChanged;
-    // Переводит уведомление в renderer текущего окна.
-    private void OnSelectionChanged(List<BusinessEntity.MiniApps.TreeMiniApp.Contracts.TreeSelectedItem> nodes) => _ = InvokeAsync(StateHasChanged);
-    // Не удерживает компонент после смены страницы/circuit.
-    public void Dispose() => Selection.SelectionChanged -= OnSelectionChanged;
+    private SelectionObserver? _observer;
+    private bool _disposed;
+    // Helper подписывается на общую шину и запрашивает снимок, если дерево создано раньше.
+    protected override void OnInitialized()
+    { _observer = new(Bus, ModuleManager, Module!.ModuleId); _observer.Changed += OnSelectionChanged; }
+    // Обновляется только owning renderer; callback после снятия UI не выполняется.
+    private void OnSelectionChanged() { if (!_disposed) _ = InvokeAsync(() => { if (!_disposed) StateHasChanged(); }); }
+    // Никаких scoped selection подписок после завершения компонента не остаётся.
+    public void Dispose() { _disposed = true; _observer?.Dispose(); }
 }
