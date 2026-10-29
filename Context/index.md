@@ -152,7 +152,8 @@ UserMiniApp владеет локальными пользователями, р
 последний сохранённый payload по своей политике.
 
 Прежняя раздача файлов по прямым HTTP-ссылкам не получила полного ACL-контроля;
-это отдельная развилка [итогового аудита](Tasks/TASK_ARCH_001_final-audit.md).
+по решению пользователя это отдельная
+[задача TASK_SECURITY_001](Tasks/TASK_SECURITY_001_file-download-authorization.md).
 
 [Права](Policy/Users/content-access-rights-policy.md),
 [миниаппы и старт](Registry/miniapps-registry.md).
