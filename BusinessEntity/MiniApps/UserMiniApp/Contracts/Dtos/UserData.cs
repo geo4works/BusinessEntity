@@ -1,11 +1,8 @@
 namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 
-// Сериализуемый payload локальной учетной записи пользователя.
+// Локальный профиль пользователя не содержит идентификаторов конкретного провайдера.
 public sealed class UserData
 {
-    public int AuthentikUserPk { get; set; }
-    public string AuthentikUserUuid { get; set; } = string.Empty;
-    public string AuthentikLogin { get; set; } = string.Empty;
     public string DisplayedName { get; set; } = string.Empty;
-    public string ExtId { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
 }

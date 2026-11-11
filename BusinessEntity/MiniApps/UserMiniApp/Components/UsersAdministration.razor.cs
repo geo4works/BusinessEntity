@@ -10,6 +10,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
     // Компонент административного CRUD локальных пользователей UserMiniApp.
     public partial class UsersAdministration
     {
+        [Inject] private Microsoft.Extensions.Configuration.IConfiguration Configuration { get; set; } = default!;
+        private string? UserHubUrl => UserHubNavigation.Resolve(Configuration["UserHub:Url"]);
         [Inject] private UserFormsWorkingSetFactory WorkingSets { get; set; } = default!;
         private UserFormsWorkingSet Working => WorkingSets.Get(Module!);
         // Save всегда охватывает весь рабочий экземпляр, а не только видимую строку.
@@ -57,7 +59,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         private bool IsGroupsLoading { get; set; }
         private bool IsGroupMembershipsLoading { get; set; }
         private bool IsAccessRightsLoading { get; set; }
-        private bool IsReadingAuthentik { get; set; }
+        private bool IsReadingпровайдера { get; set; }
         private bool IsRolesLoaded { get; set; }
         private bool IsGroupsLoaded { get; set; }
         private bool IsGroupMembershipsLoaded { get; set; }
@@ -113,7 +115,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             IsGroupsLoading ||
             IsGroupMembershipsLoading ||
             IsAccessRightsLoading ||
-            IsReadingAuthentik ||
+            IsReadingпровайдера ||
             IsCreating ||
             IsRoleCreating ||
             IsGroupCreating ||
@@ -210,16 +212,16 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             return LoadUsersCoreAsync(null);
         }
 
-        // Явно читает пользователей из Authentik и обновляет локальную таблицу Users.
-        private async Task ReadUsersFromAuthentikAsync()
+        // Явно читает пользователей из провайдера и обновляет локальную таблицу Users.
+        private async Task ReadUsersFromпровайдераAsync()
         {
-            IsReadingAuthentik = true;
+            IsReadingпровайдера = true;
             ErrorMessage = null;
             StatusMessage = null;
 
             try
             {
-                Users = await UserAccountsService.ReadAdministrationUsersFromAuthentikAsync();
+                Users = await UserAccountsService.RefreshAdministrationUsersAsync();
                 var selectedUser = SelectedUserId.HasValue
                     ? Users.FirstOrDefault(user => user.Id == SelectedUserId.Value)
                     : Users.FirstOrDefault();
@@ -238,7 +240,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                     await LoadGroupMembershipsAsync();
                 }
 
-                StatusMessage = "Пользователи прочитаны из Authentik.";
+                StatusMessage = "Пользователи прочитаны из провайдера.";
             }
             catch (Exception ex)
             {
@@ -246,7 +248,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
             finally
             {
-                IsReadingAuthentik = false;
+                IsReadingпровайдера = false;
             }
         }
 
@@ -307,7 +309,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
         }
 
-        // Добавляет или заменяет пользователя в уже загруженном списке без повторного чтения Authentik.
+        // Добавляет или заменяет пользователя в уже загруженном списке без повторного чтения провайдера.
         private void UpsertUserInList(UserAdministrationRecord user)
         {
             Users = SortUsers(
@@ -335,9 +337,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             IEnumerable<UserAdministrationRecord> users)
         {
             return users
-                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayedName) ? user.AuthentikLogin : user.DisplayedName)
-                .ThenBy(user => user.AuthentikLogin)
-                .ThenBy(user => user.ExternalId)
+                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayedName) ? user.Login : user.DisplayedName)
+                .ThenBy(user => user.Login)
+                .ThenBy(user => user.Id)
                 .ToList();
         }
 
@@ -519,7 +521,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 .ToList();
         }
 
-        // Создает нового Authentik-пользователя приложения и выбирает его в списке.
+        // Создает нового провайдера-пользователя приложения и выбирает его в списке.
         private async Task CreateUserAsync()
         {
             IsCreating = true;
@@ -536,7 +538,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                     await LoadGroupMembershipsAsync();
                 }
 
-                StatusMessage = $"Пользователь {createdUser.AuthentikLogin} создан в Authentik.";
+                var initialPassword = UserAccountsService.ConsumeCreatedPassword();
+                StatusMessage = $"Пользователь {createdUser.Login} создан. Временный пароль (показан один раз): {initialPassword}";
             }
             catch (Exception ex)
             {
@@ -608,8 +611,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             ErrorMessage = null;
             EditModel = new UserAdministrationSaveRequest
             {
-                ExternalId = user.ExternalId,
-                AuthentikLogin = user.AuthentikLogin,
+                Login = user.Login,
                 DisplayedName = user.DisplayedName
             };
             EditModel = Working.Open(UserFormKind.Account, user.Id, EditModel, user);
@@ -650,7 +652,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             GroupEditModel = Working.Open(UserFormKind.Group, group.Id, GroupEditModel, group);
         }
 
-        // Обновляет Authentik-логин и локальное отображаемое имя через UserMiniApp connector.
+        // Обновляет провайдера-логин и локальное отображаемое имя через UserMiniApp connector.
         private async Task SaveUserAsync()
         {
             if (!SelectedUserId.HasValue)
@@ -1202,11 +1204,11 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         private static string GetUserListName(UserAdministrationRecord user)
         {
             return string.IsNullOrWhiteSpace(user.DisplayedName)
-                ? user.AuthentikLogin
+                ? user.Login
                 : user.DisplayedName;
         }
 
-        // Очищает форму, когда в Authentik нет пользователей приложения.
+        // Очищает форму, когда в провайдера нет пользователей приложения.
         private void ClearSelection()
         {
             SelectedUserId = null;

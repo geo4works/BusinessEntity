@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Printing;
@@ -33,10 +32,10 @@ public sealed record GetAdministrationUsersRequest(Guid RequestId) : BusRequest(
 // Результат операции GetAdministrationUsers или явный отказ.
 public sealed record GetAdministrationUsersResponse(Guid RequestId, IReadOnlyList<UserAdministrationRecord>? Result, BusError? Error = null) : BusResponse(RequestId, Error);
 
-// Запрос операции ReadAdministrationUsersFromAuthentik.
-public sealed record ReadAdministrationUsersFromAuthentikRequest(Guid RequestId) : BusRequest(RequestId);
-// Результат операции ReadAdministrationUsersFromAuthentik или явный отказ.
-public sealed record ReadAdministrationUsersFromAuthentikResponse(Guid RequestId, IReadOnlyList<UserAdministrationRecord>? Result, BusError? Error = null) : BusResponse(RequestId, Error);
+// Запрос операции RefreshAdministrationUsers.
+public sealed record RefreshAdministrationUsersRequest(Guid RequestId) : BusRequest(RequestId);
+// Результат операции RefreshAdministrationUsers или явный отказ.
+public sealed record RefreshAdministrationUsersResponse(Guid RequestId, IReadOnlyList<UserAdministrationRecord>? Result, BusError? Error = null) : BusResponse(RequestId, Error);
 
 // Запрос операции CreateAdministrationUser.
 public sealed record CreateAdministrationUserRequest(Guid RequestId) : BusRequest(RequestId);

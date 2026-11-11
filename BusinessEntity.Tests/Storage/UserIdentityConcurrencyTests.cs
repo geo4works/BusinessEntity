@@ -15,13 +15,14 @@ public sealed class UserIdentityConcurrencyTests
         await using var fixture = await PostgresTestDatabase.CreateAsync();
         var options = await UserOwnedTransactionTests.InitializeUserAsync(fixture);
         var externalId = Guid.NewGuid().ToString();
+        var localId = Guid.NewGuid();
         var records = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
             new UserIdentityService(null!, new UserDtoEfRepository(options)).AddIdentityAsync(new UserDto
             {
-                Id = Guid.NewGuid(), ExternalId = externalId, Payload = "{}",
+                Id = localId, Login = externalId, Payload = "{}",
                 DateCreated = DateTime.UtcNow, DateLastModified = DateTime.UtcNow
             }, default)));
         Assert.Single(records.Select(x => x.Id).Distinct());
-        Assert.Single(await new UserDtoEfRepository(options).GetAllAsync(x => x.ExternalId == externalId));
+        Assert.Single(await new UserDtoEfRepository(options).GetAllAsync(x => x.Login == externalId));
     }
 }

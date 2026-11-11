@@ -232,35 +232,8 @@
             StatusMessage = null;
             ErrorMessage = null;
 
-            SysParametersEntity.Name = "SysParameters";
-            SysParametersEntity.Data.Name = "SysParameters";
-            SysParametersEntity.Data.Tag = global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.SysParametersTpType.Key;
-            SysParametersEntity.Data.CompanyName = CompanyName?.Trim() ?? string.Empty;
-            SysParametersEntity.Data.RichTextChunkCharLimit = RichTextChunkCharLimit < 1000
-                ? 1000
-                : RichTextChunkCharLimit;
-            SysParametersEntity.Data.RichTextInitialChunkCount = RichTextInitialChunkCount <= 0
-                ? 1
-                : RichTextInitialChunkCount;
-            SysParametersEntity.Data.RichTextTableOfContentsBeforeBuffer = RichTextTableOfContentsBeforeBuffer < 0
-                ? 0
-                : RichTextTableOfContentsBeforeBuffer;
-            SysParametersEntity.Data.RichTextTableOfContentsAfterBuffer = RichTextTableOfContentsAfterBuffer < 0
-                ? 0
-                : RichTextTableOfContentsAfterBuffer;
-            SysParametersEntity.Data.RichTextScrollPreviousChunkCount = RichTextScrollPreviousChunkCount < 0
-                ? 0
-                : RichTextScrollPreviousChunkCount;
-            SysParametersEntity.Data.RichTextHideTableOfContentsScrollbar = RichTextHideTableOfContentsScrollbar;
-            SysParametersEntity.Data.RichTextEditChunksBeforeFocused = RichTextEditChunksBeforeFocused < 0
-                ? 0
-                : RichTextEditChunksBeforeFocused;
-            SysParametersEntity.Data.RichTextEditChunksAfterFocused = RichTextEditChunksAfterFocused < 0
-                ? 0
-                : RichTextEditChunksAfterFocused;
-            SysParametersEntity.Data.RichTextEditChunksOnOpen = RichTextEditChunksOnOpen <= 0
-                ? 1
-                : RichTextEditChunksOnOpen;
+            SysParametersEntity.Name="SysParameters";
+            global::BusinessEntity.MiniApps.SysParametersMiniApp.Internal.SystemSettingsRules.Apply(SysParametersEntity.Data,new(CompanyName,RichTextChunkCharLimit,RichTextInitialChunkCount,RichTextTableOfContentsBeforeBuffer,RichTextTableOfContentsAfterBuffer,RichTextScrollPreviousChunkCount,RichTextHideTableOfContentsScrollbar,RichTextEditChunksBeforeFocused,RichTextEditChunksAfterFocused,RichTextEditChunksOnOpen));
 
             Working!.MarkChanged();
             var result = await Module!.SaveContext!.SaveAsync(Module.ModuleId);

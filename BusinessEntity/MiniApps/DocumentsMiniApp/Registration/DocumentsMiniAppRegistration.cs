@@ -15,6 +15,7 @@ public static class DocumentsMiniAppRegistration
     // Владелец типа передаёт движку правило версии через общий контракт.
     public static IServiceCollection AddDocumentsMiniApp(this IServiceCollection services)
     {
+        services.AddDocumentApi();
         // Владелец объявляет тип; общий Core не перечисляет предметные классы.
         services.AddSingleton<IEntityTypeDescriptor>(new EntityTypeDescriptor<global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.Entities.Document>(
             global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Id, "DocumentsMiniApp", global::BusinessEntity.MiniApps.DocumentsMiniApp.Contracts.DocumentType.Key, true, true, "NewDocument",

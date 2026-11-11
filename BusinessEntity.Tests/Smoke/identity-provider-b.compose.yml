@@ -1,0 +1,63 @@
+name: businessentity-identity-b
+services:
+  be-identity-b-db:
+    image: postgres:16-alpine
+    container_name: be-identity-b-db
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${IDENTITY_B_DATABASE_PASSWORD:?initialize fixture secrets}
+    volumes:
+      - identity-b-database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik -d authentik"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [common]
+    restart: unless-stopped
+  be-identity-b-server:
+    image: ghcr.io/goauthentik/server:2026.2.1
+    container_name: be-identity-b-server
+    command: server
+    environment: &identity-b-env
+      AUTHENTIK_POSTGRESQL__HOST: be-identity-b-db
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${IDENTITY_B_DATABASE_PASSWORD}
+      AUTHENTIK_SECRET_KEY: ${IDENTITY_B_SECRET_KEY:?initialize fixture secrets}
+    depends_on:
+      be-identity-b-db: {condition: service_healthy}
+    ports: ["127.0.0.1:9002:9000"]
+    volumes: ["identity-b-data:/data"]
+    shm_size: 512mb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/-/health/live/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks: [common]
+    restart: unless-stopped
+  be-identity-b-worker:
+    image: ghcr.io/goauthentik/server:2026.2.1
+    container_name: be-identity-b-worker
+    command: worker
+    environment:
+      <<: *identity-b-env
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${IDENTITY_B_MANAGEMENT_TOKEN:?initialize fixture secrets}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${IDENTITY_B_INITIAL_PASSWORD:?initialize fixture secrets}
+      AUTHENTIK_BOOTSTRAP_EMAIL: operator@identity-b.local
+    depends_on:
+      be-identity-b-db: {condition: service_healthy}
+    volumes: ["identity-b-data:/data"]
+    shm_size: 512mb
+    networks: [common]
+    restart: unless-stopped
+volumes:
+  identity-b-database:
+  identity-b-data:
+networks:
+  common:
+    name: docker-business-entity-common-bridge
+    external: true

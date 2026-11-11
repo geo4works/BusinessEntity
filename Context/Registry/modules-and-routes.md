@@ -84,3 +84,27 @@ UI bindings переводят выполнение на dispatcher владел
 фоновую доставку и независимые bindings одной команды в одном модуле.
 
 [Подробный реестр рабочих наборов и Save](save-contexts.md).
+
+## Подключаемая identity
+
+UserMiniApp:User.IdentityProviders — Page, WindowSingleton, GlobalAdmin, SaveContext,
+component key user.identity-providers, route /administration/identity-providers.
+Глобальная страница доступна до выбора пространства. Headless runtimes: defaults10,
+identity-bootstrap20, identity-sync25. /auth/login, callback точной ревизии, logout
+и /auth/probe/{planId} — протокольные HTTP adapters; probe не выдаёт target cookie.
+
+## AUTH_001 / API_001 / API_002
+
+User.IdentityProviders (`user.identity-providers`) и User.ApiIntegrations
+(`user.api-integrations`) — Page, WindowSingleton, GlobalAdmin, собственные
+HasSaveContext/фиксированные ContextId. URL: `/administration/identity-providers`
+и `/administration/api-integrations`. Их рабочие наборы не разделяют один Save.
+ExternalApiMiniApp:catalog — Headless/AppSingleton, startup order70.
+HTTP `/api/v1` не зависит от UI module/window/выбранного browser space.
+[Действительные API routes](api-capabilities.md).
+
+API_002 не добавляет UI-вкладок/глобального Save. Space/Tree/Document/RichText/Media/
+SysParameters/User публикуют toolsets декларативно. HTTP CRUD, потоковые uploads/
+downloads, deferred jobs и настройки перечислены в [каталоге](api-capabilities.md).
+Библиотечный и потоковый импорт используют общий парсер владельца RichTextDocument;
+общая настройка размера чанка действует на UI и API.

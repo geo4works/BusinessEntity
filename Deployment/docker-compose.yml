@@ -1,78 +1,7 @@
 name: businessentity-stack
 
 services:
-  authentic_postgresql:
-    image: ${AUTHENTIK_POSTGRES_IMAGE:-postgres:16-alpine}
-    environment:
-      POSTGRES_DB: ${AUTHENTIK_PG_DB:-authentik}
-      POSTGRES_PASSWORD: ${AUTHENTIK_PG_PASS:?AUTHENTIK_PG_PASS is required}
-      POSTGRES_USER: ${AUTHENTIK_PG_USER:-authentik}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    restart: unless-stopped
-    volumes:
-      - authentic_database:/var/lib/postgresql/data
-    networks:
-      - common
-
-  authentic_server:
-    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.1}
-    command: server
-    depends_on:
-      authentic_postgresql:
-        condition: service_healthy
-    environment:
-      AUTHENTIK_POSTGRESQL__HOST: authentic_postgresql
-      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_PG_DB:-authentik}
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_PG_PASS:?AUTHENTIK_PG_PASS is required}
-      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_PG_USER:-authentik}
-      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY is required}
-      AUTHENTIK_DEFAULT_LOCALE: ${AUTHENTIK_DEFAULT_LOCALE:-en}
-    ports:
-      - "${AUTHENTIK_HTTP_PORT:-9000}:9000"
-      - "${AUTHENTIK_HTTPS_PORT:-9443}:9443"
-    restart: unless-stopped
-    shm_size: 512mb
-    volumes:
-      - ./runtime/authentik/data:/data
-      - ./runtime/authentik/custom-templates:/templates
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/-/health/live/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-    networks:
-      - common
-
-  authentic_worker:
-    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.1}
-    command: worker
-    depends_on:
-      authentic_postgresql:
-        condition: service_healthy
-    environment:
-      AUTHENTIK_POSTGRESQL__HOST: authentic_postgresql
-      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_PG_DB:-authentik}
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_PG_PASS:?AUTHENTIK_PG_PASS is required}
-      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_PG_USER:-authentik}
-      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY is required}
-      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:?bootstrap token required; initialize the environment first}
-      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-akadmin}
-      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-akadmin@businessentity.local}
-    restart: unless-stopped
-    shm_size: 512mb
-    volumes:
-      - ./runtime/authentik/data:/data
-      - ./runtime/authentik/certs:/certs
-      - ./runtime/authentik/custom-templates:/templates
-    networks:
-      - common
-
+  # Identity is provided by the separately installed User Hub / external OIDC.
   postgres-production-db:
     container_name: postgres-production-db
     image: ${POSTGRES_PRODUCTION_IMAGE:?POSTGRES_PRODUCTION_IMAGE is required}
@@ -112,6 +41,7 @@ services:
   business-entity:
     container_name: business-entity-container
     image: ${BE_IMAGE:?BE_IMAGE is required}
+    env_file: [./identity-secrets.env]
     ports:
       - "${BUSINESSENTITY_HTTP_PORT:-7000}:80"
     environment:
@@ -119,28 +49,18 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       IS_DOCKER: "true"
       ConnectionStrings__DockerConnection: Host=postgres-production-db;Port=5432;Database=${BE_DB_NAME:-business_entity};Username=${BE_DB_USER:-adm01};Password=${BE_DB_PASSWORD:?BE_DB_PASSWORD is required}
-      AUTHENTIK_BASE_URL: http://authentic_server:9000
-      AUTHENTIK_BASE_URL_FOR_BROWSER: ${AUTHENTIK_BASE_URL_FOR_BROWSER:-http://localhost:9000}
-      # The worker creates this token before application bootstrap uses the Admin API.
-      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-${AUTHENTIK_BOOTSTRAP_TOKEN:?bootstrap token required}}
-      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID:-business-entity}
-      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:?OIDC client secret required; initialize the environment first}
-      AUTHENTIK_APPLICATION_NAME: ${AUTHENTIK_APPLICATION_NAME:-BusinessEntity}
-      AUTHENTIK_APPLICATION_USERS_GROUP: ${AUTHENTIK_APPLICATION_USERS_GROUP:-GeoUsers}
-      AUTHENTIK_GENERAL_ADMINS_GROUP: ${AUTHENTIK_GENERAL_ADMINS_GROUP:-BusinessEntityAdmins}
-      AUTHENTIK_REDIRECT_URIS: ${AUTHENTIK_REDIRECT_URIS:-http://localhost:7000/auth/callback}
-      EnsureAuthentikOnStartup: ${ENSURE_AUTHENTIK_ON_STARTUP:-true}
+      IdentityConfigurationFile: /app/identity.initial.json
+      Identity__KeyDirectory: /app/identity-keys
+      UserHub__Url: ${USER_HUB_URL:-}
       Storage__RootPath: /app/storage
       Storage__HostRootPath: ${STORAGE_HOST_ROOT_PATH:-./storage}
     volumes:
       - ./storage:/app/storage
+      - ./runtime/identity-keys:/app/identity-keys
+      - ./identity.initial.json:/app/identity.initial.json:ro
     depends_on:
       postgres-production-db:
         condition: service_healthy
-      authentic_server:
-        condition: service_healthy
-      authentic_worker:
-        condition: service_started
     restart: unless-stopped
     networks:
       - common
@@ -152,6 +72,4 @@ networks:
 
 volumes:
   pgdata:
-    driver: local
-  authentic_database:
     driver: local

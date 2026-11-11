@@ -4,27 +4,15 @@
 @using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
 @using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts
 @using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
-@inject IConfiguration Configuration
 @inject IDataProviderConnector DataProviderConnector
 @inject ISampleDataService Samples
 @inject IUserConnector UserConnector
 
 <div class="card mt-3">
     <div class="card-body">
-        <h5 class="card-title">Пользователи Authentik</h5>
-        <p class="card-text">
-            Пользователи текущего приложения редактируются в разделе <strong>Пользователи</strong>.
-            Пароли, роли и группы редактируются в разделе <strong>Пользователи</strong>.
-        </p>
-        <p class="card-text">
-            После открытия страницы перейдите в меню <strong>Directory -> Users</strong>.
-        </p>
-        <a class="btn btn-primary"
-           href="@AuthentikAdminUrl"
-           target="_blank"
-           rel="noopener noreferrer">
-            Открыть управление пользователями в Authentik
-        </a>
+        <h5 class="card-title">Пользователи</h5>
+        <p class="card-text">Пользователи, локальные группы и права приложения настраиваются в пользовательском разделе.</p>
+        <a class="btn btn-primary" href="/administration/users">Управление пользователями</a>
     </div>
 </div>
 
@@ -56,14 +44,6 @@
     private bool IsReseeding { get; set; }
     private string? ReSeedStatus { get; set; }
     private string? ReSeedError { get; set; }
-
-    private string AuthentikAdminUrl =>
-        (
-            Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL_FOR_BROWSER")
-            ?? Configuration["AuthentikAuth:BaseUrlForBrowser"]
-            ?? Configuration["AuthentikAuth:BaseUrl"]
-            ?? "http://localhost:9000"
-        ).TrimEnd('/') + "/if/admin/";
 
     private async Task ReSeedAsync()
     {

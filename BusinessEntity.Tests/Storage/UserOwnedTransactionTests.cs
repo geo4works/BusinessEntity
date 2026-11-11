@@ -16,6 +16,14 @@ namespace BusinessEntity.Tests.Storage;
 // Служебное исключение User имеет те же атомарность и durable outcome, что и бизнес-граф.
 public sealed class UserOwnedTransactionTests
 {
+    [PostgresFact]
+    public async Task OwnAllowlistedPreferencesDoNotRequireAdminAndCannotChangeAnotherOwnerOrType()
+    {
+        await using var fixture=await PostgresTestDatabase.CreateAsync();var options=await InitializeUserAsync(fixture);var me=Guid.NewGuid();var other=Guid.NewGuid();var property=new UserPropertyDto{Id=Guid.NewGuid(),ParentEntityId=me,PropertyType=(int)UserPropertyTypeEnum.DocPrintPresets,Data="{}"};var actor=new BusRequestContext(Guid.NewGuid(),me);
+        EntitySaveBatch Batch(UserPropertyDto value)=>new(Guid.NewGuid(),"UserMiniApp",null){OwnedServiceChanges=[new("UserMiniApp","UserFormsV1",JsonSerializer.Serialize(new[]{new UserTableMutation(nameof(UserPropertyDto),value.Id,JsonSerializer.Serialize(value,GraphArchiveJson.CreateOptions()))},GraphArchiveJson.CreateOptions()))]};
+        await fixture.Writer.SaveAsync(Batch(property),actor);property.ParentEntityId=other;await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>fixture.Writer.SaveAsync(Batch(property),actor));property.ParentEntityId=me;property.PropertyType=(int)UserPropertyTypeEnum.RichDocBookmarks;await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>fixture.Writer.SaveAsync(Batch(property),actor));
+        property.PropertyType=(int)UserPropertyTypeEnum.DocPrintPresets;await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>fixture.Writer.SaveAsync(Batch(property),actor with{UserId=other}));await using var db=new UserMiniAppDbContext(options);Assert.Equal(me,(await db.UserProperties.SingleAsync()).ParentEntityId);
+    }
     // Откат после подготовки строк User не оставляет ни строку, ни исход операции.
     [PostgresFact]
     public async Task UserWriteAndOutcomeRollBackTogether()

@@ -1,0 +1,26 @@
+{
+  "Identity": {
+    "InitialProvider": {
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "OIDC provider",
+      "Revision": 1,
+      "Enabled": true,
+      "Issuer": "https://identity.example.invalid/application/o/business-entity/",
+      "MetadataAddress": "https://identity.example.invalid/application/o/business-entity/.well-known/openid-configuration",
+      "ClientId": "business-entity",
+      "ClientSecretRef": "primary",
+      "Scopes": [
+        "openid",
+        "profile",
+        "email"
+      ],
+      "ProvisioningKind": "None",
+      "ManagedLocal": false,
+      "ApiTokenProfiles": []
+    },
+    "Bootstrap": {
+      "AdministratorIssuer": "https://identity.example.invalid/application/o/business-entity/",
+      "AdministratorSubject": "REPLACE_WITH_VERIFIED_SUBJECT"
+    }
+  }
+}

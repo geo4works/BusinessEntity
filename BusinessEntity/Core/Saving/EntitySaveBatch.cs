@@ -7,6 +7,7 @@ namespace BusinessEntity.Core.Saving;
 // Снимок связанных правок рабочего экземпляра; не содержит EF, SQL или исполняемых callback.
 public sealed record EntitySaveBatch(Guid OperationId, string MiniAppId, Guid? EditSessionId)
 {
+    public BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.ApiOperationCommit? ApiOperation {get;init;}
     public BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Archives.GraphArchive? ImportSnapshot { get; init; }
     public IReadOnlyList<BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.OwnedServiceStorageChange> OwnedServiceChanges { get; init; } = [];
     public IReadOnlyList<Classes.BusinessEntity> Entities { get; init; } = [];
@@ -27,7 +28,7 @@ public sealed record EntitySaveBatch(Guid OperationId, string MiniAppId, Guid? E
 // ChunkOrder задаёт весь порядок автора; null сохраняет порядок базовой версии.
 public sealed record EntityPayloadChange(Guid EntityId, int BaseVersion, IBusinessEntityData Data,
     IReadOnlyList<BusinessEntityDataChunk>? ChangedChunks = null, IReadOnlyList<Guid>? ChunkOrder = null,
-    string VersionDescription = "");
+    string VersionDescription = "",Guid? PreparedChunkSetId=null);
 
 // Свойства адресуются своему уровню без передачи storage DTO.
 public enum EntityPropertyOwner { Entity, Data, Chunk }
@@ -41,7 +42,7 @@ public sealed record EntityCommentChange(Guid Id, Guid EntityId, Guid? ParentId,
     DateTime CreatedDate);
 // Неизменяемый постоянный файл и его логический адрес у сущности.
 public sealed record EntityFileChange(Guid EntityId, string FileId, string Variant,
-    string FileName, string ContentType, byte[] Content, string? TemporaryFilePath = null);
+    string FileName, string ContentType, byte[] Content, string? TemporaryFilePath = null,Guid? UploadId=null);
 // Публикация выбирает существующий снимок вне payload истории.
 public sealed record EntityPublicationChange(Guid EntityId, int Version);
 // Описание является метаданными версии, а не новым содержимым.

@@ -1,0 +1,19 @@
+@using BusinessEntity.Infrastructure.Identity
+@inject IIdentityProviderRegistry Identity
+@inject NavigationManager Navigation
+
+<section class="auth-gate p-4" aria-label="Вход в систему">
+    <h1>Business Entity</h1>
+    @if (IsCheckingSession) { <p>Проверяем сессию…</p> }
+    else
+    {
+        <p>Войдите через @Identity.Current.Profile.Name</p>
+        <a class="btn btn-primary" href="@LoginUrl">Войти</a>
+    }
+</section>
+
+@code {
+    [Parameter] public bool IsCheckingSession { get; set; }
+    [Parameter] public string? ReturnUrlOverride { get; set; }
+    private string LoginUrl => "/auth/login?returnUrl=" + Uri.EscapeDataString(ReturnUrlOverride ?? "/" + Navigation.ToBaseRelativePath(Navigation.Uri));
+}

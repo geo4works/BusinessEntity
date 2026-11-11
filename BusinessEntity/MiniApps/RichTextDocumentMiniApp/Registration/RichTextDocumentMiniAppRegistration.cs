@@ -18,6 +18,7 @@ public static class RichTextDocumentMiniAppRegistration
     // Передаёт DataProvider объявление истории от владельца статьи.
     public static IServiceCollection AddRichTextDocumentMiniApp(this IServiceCollection services)
     {
+        services.AddRichApi();
         // Владелец объявляет тип; общий Core не перечисляет предметные классы.
         services.AddSingleton<IEntityTypeDescriptor>(new EntityTypeDescriptor<global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Entities.RichTextDocument>(
             global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Id, "RichTextDocumentMiniApp", global::BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichTextDocumentType.Key, true, true, "NewRichTextDocument",

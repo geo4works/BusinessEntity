@@ -8,8 +8,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
         string UserName,
         string? Email,
         bool IsAuthenticated,
-        bool IsAkadmin,
-        bool IsGeneralAdmin,
+        bool IsGlobalAdmin,
         IReadOnlyList<string> Groups,
         IReadOnlyList<BusinessEntityClaim> Claims)
     {

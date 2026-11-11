@@ -1,0 +1,56 @@
+@namespace BusinessEntity.MiniApps.UserMiniApp.Components
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@using BusinessEntity.MiniApps.UserMiniApp.Internal
+@using BusinessEntity.MiniApps.UserMiniApp.Storage
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos
+@using BusinessEntity.Infrastructure.Identity
+@inject ApiIntegrationAdministration Administration
+@inject IIdentityProviderRegistry Identity
+
+<h1>Интеграции API</h1>
+@if(Error!=null){<p role="alert">@Error</p>}
+@if(Message!=null){<p role="status">@Message</p>}
+<table class="table"><thead><tr><th>Пользователь</th><th>OAuth client</th><th>Состояние</th><th></th></tr></thead><tbody>
+@foreach(var grant in Grants){<tr data-grant-id="@grant.Id"><td>@Users.FirstOrDefault(x=>x.Id==grant.UserId)?.Login</td><td>@grant.ClientId</td><td>@(grant.Enabled?"Разрешён":"Отозван")</td>
+    <td><button type="button" @onclick="()=>Run(()=>{Working.Load(ApiGrantForm.From(grant));return Task.CompletedTask;})">Настроить</button></td></tr>}
+</tbody></table>
+<button type="button" disabled="@Busy" @onclick="()=>Run(()=>{Working.Load(new());return Task.CompletedTask;})">Новый допуск</button>
+<EditForm Model="@Form" OnValidSubmit="Save">
+<fieldset disabled="@Busy" data-grant-revision="@Form.Revision" data-edit-grant-id="@Form.Id">
+    <label>Локальный пользователь<InputSelect @bind-Value="Form.UserId" @bind-Value:after="Working.Changed"><option value="@Guid.Empty">Выберите пользователя</option>
+        @foreach(var user in Users){<option value="@user.Id">@user.Login (@user.Kind)</option>}</InputSelect></label>
+    <label>OAuth client<InputSelect @bind-Value="Form.ClientId" @bind-Value:after="Working.Changed"><option value="">Выберите клиент</option>
+        @foreach(var client in Identity.Current.Profile.ApiTokenProfiles.SelectMany(x=>x.AllowedClientIds).Distinct()){<option value="@client">@client</option>}</InputSelect></label>
+    <label><InputCheckbox @bind-Value="Form.Enabled" @bind-Value:after="Working.Changed" /> Допуск включён</label>
+    <label>Разрешённые возможности<InputTextArea class="form-control" @bind-Value="Form.Capabilities" @bind-Value:after="Working.Changed" /></label>
+    <label><InputCheckbox @bind-Value="Form.AllSpaces" @bind-Value:after="Working.Changed" /> Все пространства</label>
+    <label>Идентификаторы разрешённых пространств<InputTextArea class="form-control" @bind-Value="Form.SpaceIds" @bind-Value:after="Working.Changed" /></label>
+    <p>Допуск ограничивает текущие права пользователя. Сам по себе он не назначает роли.</p>
+    <button type="submit">Сохранить допуск</button><button type="button" @onclick="()=>Run(async()=>await Module!.SaveContext!.DiscardAsync())">Отменить правки</button>
+</fieldset>
+</EditForm>
+<section><h2>Связать служебную учётную запись</h2>
+<p>Создайте service account и его app password у провайдера. Здесь указывается только логин; соответствие identity проверяет адаптер.</p>
+<label>Логин служебной учётной записи<input @bind="ServiceLogin" /></label>
+<button type="button" disabled="@Busy" @onclick="Link">Проверить и связать</button>
+</section>
+
+@code {
+    private ApiAccessGrantRow[] Grants=[];
+    private UserDto[] Users=[];
+    private string ServiceLogin=string.Empty;
+    private string? Error,Message;
+    private bool Busy;
+    private ApiGrantWorkingSet Working=>Module!.SaveContext!.GetOrCreateParticipant(()=>new ApiGrantWorkingSet(Module.SaveContext,Administration));
+    private ApiGrantForm Form=>Working.Form;
+    // Открытие не создаёт SQL grant до подтверждённого Save.
+    protected override async Task OnInitializedAsync()=>await Reload();
+    // Свежие списки показывают committed security metadata.
+    private async Task Reload(){Grants=await Administration.ListAsync();Users=await Administration.UsersAsync();}
+    // Общий SaveContext сохраняет frozen snapshot и не очищает поздний ввод.
+    private Task Save()=>Run(async()=>{var result=await Module!.SaveContext!.SaveAsync(Module.ModuleId);if(!result.Success)throw new InvalidOperationException(result.Error);await Reload();Message="Допуск сохранён. Старые сессии изменённого допуска требуют нового открытия.";});
+    // Действие связывания не выполняется поверх несохранённой формы допуска.
+    private Task Link()=>Run(async()=>{if(Module!.IsDirty)throw new InvalidOperationException("Сначала сохраните или отмените правки.");await Administration.LinkServiceAsync(ServiceLogin);await Reload();Message="Служебная identity связана. API доступ требует отдельного допуска и локальных предметных прав.";});
+    // Ожидаемый отказ остаётся на странице; credentials сюда не поступают.
+    private async Task Run(Func<Task> action){Busy=true;Error=null;Message=null;try{await action();}catch(Exception ex){Error=ex.Message;}finally{Busy=false;}}
+}

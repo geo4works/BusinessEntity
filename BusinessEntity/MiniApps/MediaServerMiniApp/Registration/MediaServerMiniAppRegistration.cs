@@ -23,7 +23,7 @@ public static class MediaServerMiniAppRegistration
         services.AddSingleton<IMediaServerUploadJobTracker>(provider => provider.GetRequiredService<MediaServerUploadJobRegistry>());
         services.AddSingleton<MediaServerUploadManager>();
         services.AddSingleton<IMediaServerUploadManager>(provider => provider.GetRequiredService<MediaServerUploadManager>());
-        services.AddScoped<MediaServerService>();
+        services.AddScoped<MediaServerService>();services.AddMediaApi();
         services.AddScoped<MediaVideoWorkingSetFactory>();
         services.AddScoped<IMediaServerService>(provider => provider.GetRequiredService<MediaServerService>());
 

@@ -112,19 +112,9 @@ public sealed class MediaServerService : IMediaServerService
                     await CopyWithProgressAsync(content, output, progress, cancellationToken);
             var actualLength = new FileInfo(temporary).Length;
             if (actualLength > MaxVideoBytes) throw new InvalidOperationException("Видео слишком большое для загрузки.");
-            var name = Path.GetFileNameWithoutExtension(safeName);
-            var entity = _businessEntityFactory.Create<MediaVideo>(global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Id, name);
-            var data = new MediaVideo { Id = entity.Id, Name = name, Tag = global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaVideoType.Key,
-                FileName = safeName, DisplayName = name, ContentType = mime, OriginalSizeBytes = actualLength,
-                UploadedByUserId = actor, UploadedDate = DateTime.UtcNow };
-            var relations = spaceId.HasValue && spaceId.Value != Guid.Empty
-                ? new[] { new BusinessEntityRelation { ObjectAId = spaceId.Value, ObjectBId = entity.Id,
-                    RelationType = BusinessEntityRelationTypeEnum.RelatesTo.ToString(), RelationParams = "media-video-space" } } : [];
-            await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), "MediaServerMiniApp", null)
-            {
-                Entities = [entity], Payloads = [new(entity.Id, 0, data)], Relations = relations,
-                Files = [new(entity.Id, "video", "original", safeName, mime, [], temporary)]
-            }, cancellationToken);
+            var batch=PrepareUploadedBatch(Guid.NewGuid(),Guid.NewGuid(),Guid.NewGuid(),spaceId,safeName,mime,actualLength,actor,temporary);
+            await _dataProviderConnector.SaveAsync(batch,cancellationToken);
+            var entity=batch.Entities.Single();var data=(MediaVideo)batch.Payloads.Single().Data;
             var result = ToInfo(entity.Id, data);
             _messageBus.SendMessage(new MediaVideoUploadedMessage(clientUploadToken, result, spaceId));
             return result;
@@ -136,6 +126,18 @@ public sealed class MediaServerService : IMediaServerService
                 catch (Exception exception) { _logger.LogWarning(exception, "Temporary media preparation cleanup failed"); }
         }
     }
+
+    // Общая подготовка UI/API: metadata, логический файл и связь пространства — один пакет.
+    internal EntitySaveBatch PrepareUploadedBatch(Guid operation,Guid entityId,Guid relationId,Guid? spaceId,string fileName,string mime,long length,Guid actor,string? temporary=null,Guid? uploadId=null)
+    {
+        var safeName=SanitizeFileName(Path.GetFileName(fileName));if(safeName.Length==0||!IsSupportedVideo(safeName,mime)||length<=0||length>MaxVideoBytes)throw new ArgumentException("Неправильное видео.");
+        var name=Path.GetFileNameWithoutExtension(safeName);var entity=_businessEntityFactory.Create<MediaVideo>(MediaVideoType.Id,name);entity.Id=entityId;
+        var data=new MediaVideo{Id=entityId,Name=name,Tag=MediaVideoType.Key,FileName=safeName,DisplayName=name,ContentType=mime,OriginalSizeBytes=length,UploadedByUserId=actor,UploadedDate=DateTime.UtcNow};
+        var relations=spaceId is {} space&&space!=Guid.Empty?new[]{new BusinessEntityRelation{Id=relationId,ObjectAId=space,ObjectBId=entityId,RelationType=BusinessEntityRelationTypeEnum.RelatesTo.ToString(),RelationParams=MediaSpaceRelation.Parameters}}:[];
+        return new(operation,"MediaServerMiniApp",null){Entities=[entity],Payloads=[new(entityId,0,data)],Relations=relations,Files=[new(entityId,"video","original",safeName,mime,[],temporary,uploadId)]};
+    }
+    internal static void NormalizeMetadata(MediaVideo data)
+    {if(string.IsNullOrWhiteSpace(data.DisplayName)||data.DisplayName.Length>240||data.Comment==null||data.Comment.Length>8000)throw new ArgumentException("Неверные название/комментарий видео.");data.Name=data.DisplayName=data.DisplayName.Trim();}
 
     // Полный payload для рабочего экземпляра библиотеки читает только владелец через DataProvider.
     public async Task<MediaVideo> GetEditableVideoDataAsync(Guid videoId, CancellationToken ct = default) =>

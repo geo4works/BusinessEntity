@@ -1,13 +1,14 @@
 # Реестр миниаппов
 
-Фактическое состояние итогового пакета TASK_ARCH_001, 0.17.0, 2026-10-29.
-15 логических владельцев внутри одного проекта. Каждый AddXxxMiniApp регистрирует
+Фактическое состояние AUTH_001 / API_001 / API_002 поверх TASK_ARCH_001; версия репозитория 0.17.0.
+16 логических владельцев внутри одного проекта. Каждый AddXxxMiniApp регистрирует
 один декларативный singleton MiniAppHostService. Core/Infrastructure — общие слои.
 
 | Владелец | Сценарии и состояние | Транспорт и storage |
 |---|---|---|
+| ExternalApiMiniApp | Headless каталог API, HTTP transport/session adapters | Bearer + ApiSession; предметные capabilities публикуют владельцы на общей шине |
 | DataProviderMiniApp | Singleton writer, graph snapshot и bounded payload LRU, история, файлы | Все canonical записи пакетами; scoped connector → общая шина |
-| UserMiniApp | Scoped identity, accounts/profile, roles, groups, assignments, permissions, preferences | Внешние клиенты — IUserConnector; собственные вызовы прямые; свои служебные таблицы — исключение |
+| UserMiniApp | Scoped identity, accounts/profile, roles, groups, assignments, permissions, preferences | Внешние клиенты — IUserConnector; собственные вызовы прямые; служебные DTO применяет UserOwnedStorageWriter внутри транзакции DataProvider |
 | TreeMiniApp | Scoped дерево, внутренние VM узлов и операции над выделенным набором | ITreeConnector; создание через общий Core и описатели; Move/Delete всего набора атомарны |
 | DocumentsMiniApp | Модель документа, редактор и DocumentsWorkingSet в edit session | Общий SaveContext → DataProvider; версия по имени/тексту |
 | RichTextDocumentMiniApp | Модель статьи, вложенные компоненты и client source, reader/edit/search/outline/import/files/print | RichTextWorkingSet фиксирует HTML до await; подготовка файлов и один Save пакет |
@@ -47,7 +48,7 @@ DataProvider хранит общий codec/envelope/chunk contract и техни
 ## Запуск и рабочие экземпляры
 
 ModuleCatalog запускает headless runtime по порядку: DataProvider storage 0,
-User identity 10, User schema/defaults 20, SysParameters defaults 30, Sample seed 40,
+User schema/defaults 10, User identity 20, identity reconciliation 25, SysParameters defaults 30, Sample seed 40,
 Media queue 50, Backup scheduler 60. Остановка — в обратном порядке.
 Host-service не создаёт UI и не исполняет сценарии.
 
@@ -71,3 +72,30 @@ DataProvider; outcome и строки User коммитятся вместе. Wr
 
 [Маршруты, размещения и компоненты](modules-and-routes.md).
 [Каталог сообщений](bus-messages-catalog.md). [ТЗ](../Tasks/TASK_ARCH_001_miniapp-bus-architecture-migration.md).
+
+## Identity (AUTH_001)
+
+User владеет профилями, immutable revisions, привязками и планами. OIDC protocol
+реализует Infrastructure/Identity; Authentik adapter изолирован. HTTP login/probe
+и offline recovery не создают вторую шину. Проверка сессий выполняется на HTTP и
+в circuit, canonical writes проходят admission/drain по AuthEpoch.
+
+## External API (API_001 / API_002)
+
+Infrastructure/Api содержит typed bindings, immutable каталог и обработку ошибок/повторов.
+User владеет API identity, локальными допусками и SQL security sessions. DataProvider
+хранит Pending/Committed receipts; committed result и business outcome атомарны.
+58 capabilities предоставляют User, Spaces, Tree, Documents, RichTextDocument,
+MediaServer, SysParameters и DataProvider. ExternalApiMiniApp не реализует CRUD.
+
+Uploads/jobs/receipts/prepared chunk sets — служебные записи DataProvider.
+В шине только metadata/opaque lease IDs, байты идут через DataProvider-owned
+IApiStagingDataPlane. Core не знает форматов книги, изображения и видео: purpose
+и typed job bindings регистрируют владельцы. Один общий heavy-work gate,
+одна SQL-транзакция финального Save, outcome и Succeeded job.
+Фоновый владелец получает восстановленного API-пользователя; прекращение сессии
+или смена IdP останавливает допуск до явной повторной авторизации.
+
+System settings и User preferences используют те же модели/нормализаторы, что UI.
+API-запросы независимы от browser working sets и выбранного пространства.
+[Клиент API v1](../Api-v1-client.md). [Каталог capabilities](api-capabilities.md).

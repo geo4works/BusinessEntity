@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
@@ -16,6 +15,7 @@ namespace BusinessEntity.Middleware
         {
             "/space-selection",
             "/profile",
+            "/administration",
             "/diagnostics",
             "/auth",
             "/_blazor",
@@ -35,6 +35,8 @@ namespace BusinessEntity.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
+            // V1 адресует пространство явно; даже UI context/repositories здесь не создаются.
+            if(context.Request.Path.StartsWithSegments("/api/v1")){await _next(context);return;}
             var userContext = context.RequestServices.GetRequiredService<IUserContextService>();
             var spaceHelper = context.RequestServices.GetRequiredService<ISpacesConnector>();
             var webLogger = context.RequestServices.GetService<IWebLoggerService>();

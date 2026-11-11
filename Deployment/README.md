@@ -1,79 +1,65 @@
-# BusinessEntity Release Bundle
+# Установка с подключаемой identity
 
-This folder contains the installation template for a packaged Business Entity release.
+Для адресной установки на `192.168.55.15:7070` через BotFactory подготовлены
+[сценарии подключения к существующему User Hub](botfactory/README.md).
+Они создают отдельный Compose-проект; фактические результаты проверок указаны
+в [журнале сценариев](botfactory/verification.md).
 
-In simple terms: the application itself lives in the main project folders, but this
-folder describes how to deliver it to another machine. The release builder
-`Powershell/Build-ReleaseBundle.ps1` copies these files into a downloadable archive.
-After that, a user can unpack the archive, run `install.ps1` or `install.bat`, and
-get a local Docker-based Business Entity instance without manually assembling the
-Compose stack.
+Перед первым запуском подготовить `identity.initial.json` и `identity-secrets.env`
+из приложенных примеров. install.ps1 сохраняет существующие значения и создаёт
+недостающие секреты, но не регистрирует внешнее OIDC приложение и не сбрасывает
+пароли существующих пользователей. Фиксированных app-логинов/паролей нет.
 
-This folder is useful for deployment and first installation. It is not required for
-day-to-day local development from source.
+В `identity.initial.json`: Issuer/MetadataAddress/ClientId, SecretRef, профильные
+claims/scopes; точные bootstrap issuer/subject первого администратора. В secret
+файле — Identity__Secrets__<ref>. Значения не помещаются в JSON профиля.
+Callback: https://<application>/auth/callback/<ProviderId без дефисов>/<Revision>;
+logout callback добавляет /signed-out. Разрешить точные URL у провайдера. При новой
+ревизии разрешить её callback перед пробным входом/активацией. Для собственного
+Authentik использовать sub_mode user_uuid и асимметричный signing key. Provisioning
+требует management adapter и реального flow обязательной смены временного пароля.
+`PasswordResetFlowVerified` подтверждается настоящим сценарием, а не заменяет flow.
 
-The folder contains:
+Authentik устанавливается отдельным комплектом User Hub. В поставке BusinessEntity
+нет его контейнеров, базы и образов. `USER_HUB_URL` задаёт адрес общего кабинета;
+для этой среды используйте `ProvisioningKind=None` и `ManagedLocal=false`.
+Создание учётных записей и пароли обслуживает User Hub, локальные роли и доступ
+к документам остаются в BusinessEntity. Уже работающие identity-контейнеры и их
+данные установщик не удаляет. Пароли/ключи существующей установки не генерировать заново.
+Production требует HTTPS, в том числе для metadata. HTTP допускается только Development.
 
-- `docker-compose.yml` - the Docker Compose stack used by the release bundle;
-- `.env.example` - a template for local deployment settings and secrets;
-- `install.ps1` / `install.bat` - first-run installer scripts;
-- `deploy.ps1` - helper commands for status, logs, restart and stop;
-- `scripts/bootstrap-initial-data.ps1` - initial data/bootstrap helper;
-- `README.md` - this deployment note.
+Первая установка AUTH_001 использует отдельные пустые БД и storage. Схемы старой
+0.17.0 не мигрируются; не запускать обновлённый image на старой схеме и не очищать её.
+DataProtection keys сохраняются в runtime/identity-keys. Одна установка/БД обслуживается
+одним процессом приложения. Для recovery сначала остановить его.
 
-## Install
+Сохранение профиля не переключает вход. GlobalAdmin проверяет профиль, подготавливает
+план, создаёт отсутствующие Human, передаёт индивидуальные временные пароли и проходит
+пробный вход администратора. Публикация выбора повышает эпоху и завершает старые сессии.
+API имеет отдельные регистрации/аудитории и допуски; UI cookie не является API credential.
+Смена provider не меняет локальные ID и авторство. HTTP bypass восстановления нет;
+на хосте: `dotnet BusinessEntity.dll identity-recover <ProviderId> <Revision>` после
+остановки сервера с той же конфигурацией/БД/storage/keys. Target должен быть известен
+и иметь действительную связанную локальную учётку GlobalAdmin.
 
-Windows:
+## Запуск
 
-```powershell
-.\install.ps1
-```
+1. Проверить Docker/Compose и загрузить образы из images, если используется offline bundle.
+2. Настроить .env по .env.example; сохранить пароли существующих volumes. Создать
+   отдельную пустую БД приложения и отдельный storage для первого ввода AUTH_001.
+3. Подготовить identity.initial.json и identity-secrets.env; зарегистрировать клиент
+   и callback у выбранного внешнего OIDC. Общий комплект User Hub должен быть
+   установлен отдельно. Для HTTPS с корпоративным CA доверие к CA требуется
+   браузеру и контейнеру приложения; проверку сертификатов не отключать.
+4. Выполнить install.ps1. -NoStart подготавливает окружение без запуска.
+5. Проверить HTTP приложения/logger, настоящий вход pinned администратора и локальные
+   права. Healthy Authentik сам по себе не подтверждает работоспособность приложения.
 
-or:
+Обновление выполняет deploy.ps1 с теми же конфигурацией, storage и key directory.
+Откат требует совместимых образа и сохранённой схемы; обратной совместимости со
+старой user identity model нет. Не удалять volumes/storage для исправления startup.
+Версии образов и содержимое offline bundle перечислены в его manifest.
 
-```cmd
-install.bat
-```
-
-The installer:
-
-- creates `.env` from `.env.example`;
-- generates missing secrets;
-- creates local runtime folders;
-- loads offline Docker images from `images/*.tar`, if present;
-- creates the shared Docker network;
-- runs `docker compose up -d`;
-- waits for basic HTTP health checks.
-
-Docker Desktop, Docker Engine, or another Docker-compatible runtime must already be installed.
-
-## Operations
-
-```powershell
-.\deploy.ps1 status
-.\deploy.ps1 logs -Service business-entity
-.\deploy.ps1 restart
-.\deploy.ps1 stop
-```
-
-The installer generates `AUTHENTIK_BOOTSTRAP_TOKEN` and `AUTHENTIK_CLIENT_SECRET` once
-and preserves them on subsequent runs. The Authentik worker receives the bootstrap
-credentials, while the application uses the same token for the Admin API. Application
-startup waits for default Authentik flows and scope mappings, creates/updates the
-`BusinessEntity` application/catalog group and OIDC provider, and then initializes users.
-
-Initial application accounts are `akadmin` / `akadmin` and `admin` / `admin`.
-The existing admin policy restores the technical `akadmin` password to `akadmin`.
-An existing `admin` account retains its password and profile; missing group membership
-and local role assignments are added. No passwords or tokens are stored in local user DTOs.
-
-Keep the generated `.env` with this installation: changing the bootstrap token does not
-rotate an already created Authentik token. For an existing Authentik with a different
-management token, supply that token as `AUTHENTIK_API_TOKEN`. OIDC provisioning is enabled
-by default through `ENSURE_AUTHENTIK_ON_STARTUP=true`; set it to `false` only for an
-externally configured OIDC provider.
-
-Set `AUTHENTIK_BASE_URL_FOR_BROWSER` and `AUTHENTIK_REDIRECT_URIS` to deployment URLs.
-The first redirect URI is also used by the application during authorization-code login.
-Startup fails visibly if required Authentik provisioning cannot complete; check application
-logs instead of treating a running Authentik health endpoint as a completed installation.
+Для API используют отдельный ресурс/аудиторию, access token, локальный допуск
+интеграции и серверную сессию. Текущий реализованный объём и ограничения указывает
+журнал раскатки, а не наличие Swagger или зарезервированных таблиц.

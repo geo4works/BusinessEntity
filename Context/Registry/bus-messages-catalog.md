@@ -217,3 +217,44 @@ EntitySaveBatch.OwnedServiceChanges содержит только value JSON с�
 
 [Правила шины](../Policy/miniapp-reactivebus-architecture-guide.md),
 [модули/маршруты](modules-and-routes.md), [рабочие наборы](save-contexts.md).
+
+## AUTH_001 / API_001: дополнительные протоколы
+
+- `GiveMeApiToolsets` / `HereAreApiToolsets` — metadata capabilities от владельцев.
+- `OpenApiSession`, `ValidateApiSession`, `CloseApiSession`, `ReadApiSelf`
+  Request/Response — [User contract](../../BusinessEntity/MiniApps/UserMiniApp/Contracts/ApiSecurity.cs).
+- `BeginApiOperation`, `ReadApiOperation` Request/Response —
+  [DataProvider contract](../../BusinessEntity/MiniApps/DataProviderMiniApp/Contracts/Transactions/ApiOperationReceipt.cs).
+- Серверный Context дополнен AuthEpoch, ExecutionKind, ApiSessionId, ApiClientId,
+  ApiOperationId/ApiRequestHash. API LogicalWindowId пустой; значение SessionId
+  не подменяет request ScopeId и Bearer identity. ActivationPermit доступен
+  только процессу серверной активации. Credentials отсутствуют в этих сообщениях.
+
+
+## API_002: owner CRUD, streaming и deferred jobs
+
+- Owner request/response DTO: `SpacesMiniApp/Contracts/SpaceApi.cs`, `TreeMiniApp/Contracts/TreeApi.cs`,
+  `DocumentsMiniApp/Contracts/DocumentApi.cs`, RichTextDocument `RichApi*`, MediaServer
+  `MediaApi`, SysParameters `SystemSettingsApi`, User `ApiPreferences`.
+  Точные пути — `MiniApps/*MiniApp/Contracts`; transport привязан только к ним.
+- DataProvider `Contracts/Transactions/ApiUploads.cs`: Create/Read/OpenPart/
+  CompletePart/Complete/Cancel/ReadLease. В DTO нет потоков, массивов байтов,
+  абсолютных путей и клиентских temp paths. `CompleteApiUploadPart.LeaseId` —
+  серверный opaque ID с JsonIgnore; смысл операции — upload/part/length/SHA.
+- `ApiFileLease.cs`: owner после проверки прав/состава версии получает download
+  lease; общий transport читает через DataProvider-owned byte plane и отдаёт Range.
+- `ApiPreparedChunks.cs`: Open/Seal/Abandon ограниченного normalized JSONL набора.
+  В canonical payload передаётся `PreparedChunkSetId`; индекс содержит exact IDs/
+  checksums/order. DataProvider пишет строки/ссылки версии пакетами в одной SQL tx.
+- `ApiJobs.cs`: Create/Read/Claim/Update/Cancel/Reauthorize; typed owner input,
+  original OperationId, прогресс, состояние, ссылки на исходные uploads.
+  Claim имеет лишь технический System bootstrap; owner Save никогда не System.
+- User `ApiJobAuthorization.cs`: Capture/Restore authorization snapshot по JobId.
+  Содержит проверенные identity/session/grant/epoch/deadline, без bearer/password.
+  Восстановление заново проверяет User и устанавливает API principal; конечный
+  writer повторяет свежий допуск. Context дополнен `ApiAccessExpiresAt`.
+- `IApiStagingDataPlane` — общий инфраструктурный интерфейс на реализацию DP;
+  протокольные DTO объявляют только metadata и opaque leases, не байты на шине.
+- RequestId/Context не входят в semantic idempotency hash; original operation,
+  actor/client/capability и исход ввода сохраняются. Succeeded job и outcome
+  фиксируются вместе с canonical rows; unknown не превращается в rollback.

@@ -23,6 +23,7 @@ internal sealed class KmsBusinessEntityDbContext : DbContext
     public DbSet<BusinessEntityDataChunkPropertyDto> BusinessEntityDataChunkProperties => Set<BusinessEntityDataChunkPropertyDto>();
     public DbSet<BusinessEntityCommentDto> BusinessEntityComments => Set<BusinessEntityCommentDto>();
 
+    internal DbSet<TechnicalStateRow> TechnicalStates => Set<TechnicalStateRow>();
     internal DbSet<OperationOutcomeRow> OperationOutcomes => Set<OperationOutcomeRow>();
     internal DbSet<ChunkReferenceRow> ChunkReferences => Set<ChunkReferenceRow>();
     internal DbSet<EntityFileRow> EntityFiles => Set<EntityFileRow>();
@@ -66,6 +67,9 @@ internal sealed class KmsBusinessEntityDbContext : DbContext
         modelBuilder.Entity<BusinessEntityCommentDto>().HasIndex(x => new { x.BusinessEntityId, x.CreatedDate });
         modelBuilder.Entity<BusinessEntityCommentDto>().HasIndex(x => x.ParentId);
 
+        modelBuilder.Entity<TechnicalStateRow>().ToTable("DataProviderTechnicalStates").HasKey(x => x.Id);
+        modelBuilder.Entity<TechnicalStateRow>().HasIndex(x => new { x.OwnerMiniAppId, x.Kind, x.AuthorUserId });
+        modelBuilder.Entity<TechnicalStateRow>().HasIndex(x => x.ExpiresAt);
         modelBuilder.Entity<OperationOutcomeRow>().ToTable("DataProviderOperations");
         modelBuilder.Entity<OperationOutcomeRow>().HasKey(x => x.OperationId);
         modelBuilder.Entity<OperationOutcomeRow>().HasIndex(x => x.CommittedAt);

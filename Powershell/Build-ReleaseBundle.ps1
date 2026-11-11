@@ -1,11 +1,10 @@
-param(
+﻿param(
     [string]$Version = "",
     [ValidateSet("win-x64", "linux-x64", "linux-arm64")]
     [string]$Platform = "win-x64",
     [ValidateSet("Online", "Offline")]
     [string]$BundleMode = "Online",
     [string]$ImageRepository = "businessentity",
-    [string]$AuthentikTag = "2026.2.1",
     [string]$OutputRoot = "",
     [switch]$SkipImageBuild,
     [switch]$SkipArchive,
@@ -68,7 +67,7 @@ function Copy-DeploymentAssets {
         [Parameter(Mandatory = $true)][string]$PostgresImage
     )
 
-    foreach ($item in @("docker-compose.yml", ".env.example", "install.ps1", "deploy.ps1", "install.bat", "README.md")) {
+    foreach ($item in @("docker-compose.yml", ".env.example", "identity.initial.example.json", "identity-secrets.example.env", "install.ps1", "deploy.ps1", "install.bat", "README.md")) {
         Copy-Item -Path (Join-Path $DeploymentRoot $item) -Destination (Join-Path $TargetRoot $item) -Force
     }
 
@@ -78,7 +77,7 @@ function Copy-DeploymentAssets {
         Copy-Item -Path $sourceScripts -Destination $targetScripts -Recurse -Force
     }
 
-    foreach ($dir in @("images", "storage", "backups", "runtime", "runtime\authentik", "runtime\authentik\data", "runtime\authentik\certs", "runtime\authentik\custom-templates")) {
+    foreach ($dir in @("images", "storage", "backups", "runtime")) {
         $path = Join-Path $TargetRoot $dir
         if (-not (Test-Path $path)) {
             New-Item -ItemType Directory -Path $path -Force | Out-Null
@@ -90,7 +89,6 @@ function Copy-DeploymentAssets {
     $envText = $envText.Replace("__BE_IMAGE__", $BusinessEntityImage)
     $envText = $envText.Replace("__WEB_LOGGER_IMAGE__", $WebLoggerImage)
     $envText = $envText.Replace("__POSTGRES_PRODUCTION_IMAGE__", $PostgresImage)
-    $envText = $envText.Replace("AUTHENTIK_TAG=2026.2.1", "AUTHENTIK_TAG=$AuthentikTag")
     Set-Content -Path $envExamplePath -Value $envText -Encoding ASCII
 }
 
@@ -113,8 +111,6 @@ function Write-ReleaseManifest {
             businessEntity = $BusinessEntityImage
             webLogger = $WebLoggerImage
             postgresProduction = $PostgresImage
-            authentik = "ghcr.io/goauthentik/server:$AuthentikTag"
-            authentikPostgres = "postgres:16-alpine"
         }
         entrypoints = @(
             "install.ps1",
@@ -161,8 +157,6 @@ $Version = $Version -replace "[^0-9A-Za-z._-]", "-"
 $BusinessEntityImage = "$ImageRepository/business-entity:$Version"
 $WebLoggerImage = "$ImageRepository/web-logger:$Version"
 $PostgresImage = "$ImageRepository/postgres-production-db:$Version"
-$AuthentikImage = "ghcr.io/goauthentik/server:$AuthentikTag"
-$AuthentikPostgresImage = "postgres:16-alpine"
 
 if (-not (Test-Path $DeploymentRoot)) {
     throw "Deployment assets folder not found: $DeploymentRoot"
@@ -202,14 +196,10 @@ Write-ReleaseManifest `
 
 if ($BundleMode -eq "Offline") {
     Write-Host "Preparing offline Docker image tars" -ForegroundColor Cyan
-    Invoke-RequiredTool -FilePath "docker" -Arguments @("pull", $AuthentikImage)
-    Invoke-RequiredTool -FilePath "docker" -Arguments @("pull", $AuthentikPostgresImage)
     Save-OfflineImages -TargetRoot $BundleRoot -Images @(
         $BusinessEntityImage,
         $WebLoggerImage,
-        $PostgresImage,
-        $AuthentikImage,
-        $AuthentikPostgresImage
+        $PostgresImage
     )
 }
 

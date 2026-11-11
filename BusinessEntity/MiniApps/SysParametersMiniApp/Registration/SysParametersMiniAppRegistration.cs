@@ -14,6 +14,7 @@ public static class SysParametersMiniAppRegistration
     // Регистрирует тип настроек у его логического владельца.
     public static IServiceCollection AddSysParametersMiniApp(this IServiceCollection services)
     {
+        services.AddSystemSettingsApi();
         // Владелец объявляет тип; общий Core не перечисляет предметные классы.
         services.AddSingleton<IEntityTypeDescriptor>(new EntityTypeDescriptor<global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.Entities.SysParameters>(
             global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.SysParametersTpType.Id, "SysParametersMiniApp", global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.SysParametersTpType.Key, false, true, "SysParameters",

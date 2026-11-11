@@ -23,6 +23,12 @@ public sealed class WindowModularityManager : IAsyncDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _disposed;
     private readonly HashSet<Guid> _inactive = [];
+    private readonly Dictionary<Guid, BusError> _executionErrors = [];
+    // Ошибка принадлежит конкретному модулю окна; черновик при отзыве доступа не очищается.
+    public BusError? GetExecutionError(Guid moduleId) => _executionErrors.GetValueOrDefault(moduleId);
+    // Отказ авторизации показывается host-ом, не превращаясь в необработанное исключение circuit.
+    public void ReportAccessDenied(Guid moduleId)
+    { _executionErrors[moduleId]=new("access.denied","Недостаточно прав либо сессия завершена. Войдите снова.");OnChanged(); }
     private long _selectionSourceRevision;
     public SelectionSourceAddress? CurrentSelectionSource { get; private set; }
     // Менеджер хранит только адрес master; предметные снимки передаются исключительно по шине.
@@ -142,6 +148,7 @@ public sealed class WindowModularityManager : IAsyncDisposable
     {
         var module = GetLive(moduleId);
         if (!await _access.CanOpenAsync(module.Definition, module.ContextId, default)) throw new UnauthorizedAccessException();
+        _executionErrors.Remove(moduleId);
         using var address = _scope.Enter(module.ModuleId, module.EditSessionId, module.ContextId);
         await command(module);
     }

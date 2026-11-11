@@ -57,6 +57,7 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
         BusinessEntity.MiniApps.TreeMiniApp.Registration.TreeMiniAppRegistration.AddTreeMiniApp(services);
         BusinessEntity.MiniApps.MediaServerMiniApp.Registration.MediaServerMiniAppRegistration.AddMediaServerMiniApp(services);
         services.AddSingleton(Options); services.AddSingleton<IConfiguration>(_configuration); services.AddSingleton(Metrics);
+        services.AddSingleton<BusinessEntity.Infrastructure.Api.IApiCommitAuthorization,StorageFixtureApiAuthorization>();
         _services = services.BuildServiceProvider();
         Writer = CreateWriter();
     }
@@ -94,6 +95,13 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
         await command.ExecuteNonQueryAsync();
         if (Directory.Exists(StorageRoot)) Directory.Delete(StorageRoot, true);
     }
+}
+
+// Только storage fixture: protocol/permission admission отдельно проверяет настоящий User owner.
+internal sealed class StorageFixtureApiAuthorization:BusinessEntity.Infrastructure.Api.IApiCommitAuthorization
+{
+    public Task ValidateAsync(BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.ApiOperationIdentity identity,
+        BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.ApiOperationCommit commit,BusRequestContext actor,CancellationToken ct)=>Task.CompletedTask;
 }
 
 // Управляемый отказ внутри писателя для проверки отката и потерянного ответа после коммита.

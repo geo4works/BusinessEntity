@@ -15,6 +15,9 @@ internal sealed class UserAccountRemoval(DbContextOptions<UserMiniAppDbContext> 
         await db.Set<UserPropertyDto>().Where(x => x.ParentEntityId == userId).ExecuteDeleteAsync(ct);
         await db.Set<UserGroupMemberDto>().Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
         await db.Set<UserRoleAssignmentDto>().Where(x => x.SubjectId == userId && x.AssignmentType == UserRoleAssignmentTypes.UserToRole).ExecuteDeleteAsync(ct);
+        await db.ApiSessions.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await db.ApiAccessGrants.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await db.ExternalIdentities.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
         await db.Set<UserDto>().Where(x => x.Id == userId).ExecuteDeleteAsync(ct);
         await transaction.CommitAsync(ct);
     }

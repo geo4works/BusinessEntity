@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
 using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using BusinessEntity.Core.BaseClasses.Relations;
@@ -237,7 +236,7 @@ internal sealed class UserSpaceContentAccessHelper
             return entity.Id;
         }
 
-        var parentByChildId = ((await _data.GetAllRelationsAsync(cancellationToken)).Where(relation => relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString()).ToArray())
+        var parentByChildId = ((await _data.GetAllRelationsAsync(cancellationToken)).Where(relation => (relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString()||(relation.RelationType==BusinessEntityRelationTypeEnum.RelatesTo.ToString()&&relation.RelationParams==global::BusinessEntity.MiniApps.MediaServerMiniApp.Contracts.MediaSpaceRelation.Parameters))).ToArray())
             .GroupBy(relation => relation.ObjectBId)
             .ToDictionary(group => group.Key, group => group.First().ObjectAId);
 

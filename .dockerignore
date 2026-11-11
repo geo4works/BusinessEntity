@@ -27,3 +27,9 @@ Job_00604_fpinega@geo-naft.ru.txt
 **/values.dev.yaml
 LICENSE
 README.md
+
+.env.*
+BusinessEntityIdentityStorage
+.identity-keys
+**/identity-secrets.env
+**/identity.initial.json

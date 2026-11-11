@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.Core.Chunks;

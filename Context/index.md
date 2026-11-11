@@ -144,7 +144,9 @@ no-op и публикация — нет. Каждая версия — полн
 
 ## Доступ и владельцы
 
-Identity предоставляет Authentik; локальная cookie-сессия обновляет токены.
+Identity предоставляет подключённый OIDC провайдер; Authentik — отдельный адаптер.
+UI использует code+PKCE и защищённую cookie, API — отдельный access token и ApiSession.
+Bearer/refresh credentials в cookie/сессиях приложения не сохраняются.
 UserMiniApp владеет локальными пользователями, ролями, группами, assignments,
 профилем и правилами доступа. Он предоставляет публичные контракты остальным.
 Скрытие ссылки/кнопки не заменяет серверную проверку. Anonymous получает только
@@ -173,3 +175,28 @@ Postgres-тесты требуют BE_TEST_POSTGRES отдельного тес�
 [capability toolset-ы](Policy/MiniApps/capability-toolsets-policy.md).
 Коммиты/версия/CHANGELOG — по командам пользователя. Тома и пользовательское
 файловое хранилище физически удаляются только по явному разрешению.
+
+## Подключаемая идентификация (AUTH_001)
+
+Вход работает через стандартный OIDC и сохранённый профиль с точной ревизией.
+Профили/постоянные локальные identity/права/переключение принадлежат UserMiniApp.
+Authentik не является обязательным провайдером. Bootstrap администратора однократный
+по pinned issuer/subject; имена не дают ролей. Внешние связи и AuthEpoch отзывают
+старые сессии после переключения. Секреты профилей представлены ссылками.
+[Пользователи](Policy/Users/users-policy.md), [проверки и текущий статус](Tasks/TASK_AUTH_API_execution-log.md).
+
+## External API v1
+
+[Клиент и аутентификация](Api-v1-client.md),
+[каталог capabilities](Registry/api-capabilities.md),
+[журнал проверок AUTH/API](Tasks/TASK_AUTH_API_execution-log.md).
+ExternalApiMiniApp — транспорт; User — identity/grants/security sessions;
+предметные операции предоставляют их владельцы через ту же typed шину.
+
+API_002 предоставляет 58 capabilities: CRUD Space/Folder/Document/RichText/Media,
+полные версии и публикацию/restore, потоковые изображения/видео, resumable uploads,
+durable импорт TXT/Markdown/HTML в одну статью и настройки system/space/self.
+Практические пределы: книга 100 MiB, видео 1 GiB, одна тяжёлая работа одновременно.
+DataProvider остаётся единственным canonical writer; jobs не повышают права.
+Отдельная [SECURITY_001](Tasks/TASK_SECURITY_001_file-download-authorization.md) относится
+к старым UI file URL; новые API download endpoints проверяют owner ACL.

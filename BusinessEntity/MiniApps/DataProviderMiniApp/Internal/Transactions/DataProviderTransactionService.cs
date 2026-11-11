@@ -46,6 +46,8 @@ internal sealed partial class DataProviderTransactionService
         CancellationToken cancellationToken = default)
     {
         if (actor.UserId == null && !actor.IsSystem) throw new UnauthorizedAccessException();
+        using var admission = _committedGraph.EnterWrite(actor);
+        if(batch.Files.Any(x=>x.UploadId.HasValue)&&(actor.ExecutionKind!=BusExecutionKind.Api||actor.IsSystem||batch.ApiOperation==null))throw new UnauthorizedAccessException("Staging upload требует собственного API admission.");
         var prepared = Prepare(batch, actor);
         await _committedGraph.InitializeAsync(cancellationToken);
         var changes = prepared.Supplement;
@@ -55,13 +57,15 @@ internal sealed partial class DataProviderTransactionService
         {
             await using var db = new KmsBusinessEntityDbContext(_options);
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var apiReceipt=await ValidateApiCommitAsync(db,batch,actor,cancellationToken);
             var previous = await db.OperationOutcomes.FindAsync([batch.OperationId], cancellationToken);
             if (previous != null)
             {
-                if (previous.PackageHash != prepared.Hash)
+                if (apiReceipt==null&&previous.PackageHash != prepared.Hash)
                     throw new BusRequestFailedException(new("operation.id_conflict", "OperationId уже использован для другого пакета."));
                 return ReadResult(previous);
             }
+            if(apiReceipt!=null){await ValidateDeferredJobAsync(db,apiReceipt,actor,cancellationToken);await _committedGraph.AuthorizeApiAsync(DeserializeReceipt(apiReceipt).Identity,prepared.ApiOperation!,actor,cancellationToken);await ValidateApiDeletionAsync(db,prepared,actor,cancellationToken);await ValidateApiUploadFilesAsync(db,prepared,actor,cancellationToken);}
             var now = DateTime.UtcNow;
             // PostgreSQL хранит timestamp с точностью микросекунд; JSON исхода получает то же время.
             now = new DateTime(now.Ticks / 10 * 10, DateTimeKind.Utc);
@@ -86,17 +90,18 @@ internal sealed partial class DataProviderTransactionService
                 }
                 // FK гарантирует целостность и для пакетной вставки новых сущностей.
                 await db.SaveChangesAsync(cancellationToken);
+                await _files.PrepareAsync(db, batch.OperationId, prepared.Files, cancellationToken);
                 foreach (var payload in prepared.Payloads)
                     versions.Add(await SavePayloadAsync(db, payload, actor, now, cancellationToken));
                 foreach (var restore in changes.Restores)
                     versions.Add(await RestoreAsync(db, restore, actor, now, cancellationToken));
                 await ApplyRelationsAsync(db, prepared.Relations, changes.DeleteRelations, cancellationToken);
-                await _files.PrepareAsync(db, batch.OperationId, prepared.Files, cancellationToken);
                 await ApplySupplementaryAsync(db, changes, now, cancellationToken);
                 await _files.AssertVersionReferencesAsync(db, cancellationToken);
                 (deleted, deletedRelations) = await DeleteEntitiesAsync(db, changes.DeleteEntities,
                     prepared.Payloads.Select(x => x.EntityId).Concat(changes.Restores.Select(x => x.EntityId)).ToArray(), cancellationToken);
             }
+            await InvalidateUploadTargetsAsync(db,deleted,cancellationToken);
             await _persistenceRules.ApplyOwnedAsync(batch.MiniAppId, changes.OwnedServiceChanges, actor, db.Database.GetDbConnection(), transaction.GetDbTransaction(), cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             _faults.Hit(StorageFaultPoint.AfterBusinessChanges);
@@ -113,6 +118,7 @@ internal sealed partial class DataProviderTransactionService
                 OperationId = batch.OperationId, PackageHash = prepared.Hash, AuthorUserId = actor.UserId,
                 CommittedAt = now, ResultJson = JsonSerializer.Serialize(result, StorageJsonOptions.Default)
             });
+            await CompleteApiReceiptAsync(db,apiReceipt,prepared.ApiOperation,result,cancellationToken);
             await db.OperationOutcomes.Where(o => o.CommittedAt < now - _outcomeRetention)
                 .ExecuteDeleteAsync(cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
@@ -168,7 +174,7 @@ internal sealed partial class DataProviderTransactionService
             // Без истории сравнивается всё каноническое тело; иначе CompanyName/Comment ошибочно считались no-op.
             var content = hasPolicy ? policy!.GetContent(p.Data) : json;
             return new PreparedPayload(p.EntityId, p.BaseVersion, p.Data.Name, p.Data.EntityType, json, content,
-                p.ChangedChunks?.Select(PrepareChunk).ToArray(), p.ChunkOrder?.ToArray(), p.VersionDescription);
+                p.ChangedChunks?.Select(PrepareChunk).ToArray(), p.ChunkOrder?.ToArray(), p.VersionDescription,p.PreparedChunkSetId);
         }).ToArray();
         var frozen = JsonSerializer.Deserialize<FrozenSupplement>(JsonSerializer.Serialize(new FrozenSupplement(
             batch.DeleteEntities, batch.DeleteRelations, batch.Properties, batch.DeleteProperties, batch.Comments,
@@ -186,10 +192,12 @@ internal sealed partial class DataProviderTransactionService
             frozen.Publications, frozen.VersionDescriptions, frozen.Restores, frozen.ImportSnapshot, frozen.OwnedServiceChanges,
             Files = files.Select(f => new { f.Change.EntityId, f.Change.FileId, f.Change.Variant,
                 f.Change.FileName, f.Change.ContentType, f.Hash, f.Length }) }, StorageJsonOptions.Default);
+        var api=batch.ApiOperation is {} metadata?metadata with {PermissionChecks=metadata.PermissionChecks==null?null:Array.AsReadOnly(metadata.PermissionChecks.ToArray()),ConsumeUploads=metadata.ConsumeUploads==null?null:Array.AsReadOnly(metadata.ConsumeUploads.ToArray())}:null;
+        if(api!=null)hashInput=JsonSerializer.Serialize(new {Canonical=hashInput,ApiOperation=api,actor.ApiClientId},StorageJsonOptions.Default);
         if (payloads.Select(p => p.EntityId).Intersect(frozen.Restores.Select(p => p.EntityId)).Any()
             || frozen.Restores.Select(p => p.EntityId).Distinct().Count() != frozen.Restores.Count)
             throw new ArgumentException("Восстановление и редактирование одной сущности нельзя смешивать в пакете.");
-        return new PreparedBatch(Hash(hashInput), entities, payloads, relations, frozen, files);
+        return new PreparedBatch(Hash(hashInput), entities, payloads, relations, frozen, files,api);
     }
 
     // Содержимое чанка фиксируется до первого await; его внешняя Version не определяет новый номер.
@@ -280,10 +288,10 @@ internal sealed partial class DataProviderTransactionService
 
     // Собственный неизменяемый снимок входа после подготовки, без ссылок на изменяемые UI-данные.
     private sealed record PreparedBatch(string Hash, BusinessEntityDto[] Entities, PreparedPayload[] Payloads,
-        BusinessEntityRelationDto[] Relations, FrozenSupplement Supplement, PreparedEntityFile[] Files);
+        BusinessEntityRelationDto[] Relations, FrozenSupplement Supplement, PreparedEntityFile[] Files,ApiOperationCommit? ApiOperation);
     // Подготовленный manifest и точные изменения автора.
     private sealed record PreparedPayload(Guid EntityId, int BaseVersion, string Name, BusinessEntityTypeEnum Type,
-        string Json, string SemanticContent, BusinessEntityDataChunkDto[]? Chunks, Guid[]? Order, string Description);
+        string Json, string SemanticContent, BusinessEntityDataChunkDto[]? Chunks, Guid[]? Order, string Description,Guid? PreparedChunkSetId=null);
     // Дополнительные изменения замораживаются вместе с основным пакетом.
     private sealed record FrozenSupplement(IReadOnlyList<Guid> DeleteEntities, IReadOnlyList<Guid> DeleteRelations,
         IReadOnlyList<EntityPropertyChange> Properties, IReadOnlyList<EntityPropertyKey> DeleteProperties,

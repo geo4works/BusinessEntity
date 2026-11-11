@@ -4,10 +4,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 public sealed class UserAdministrationRecord
 {
     public Guid Id { get; set; }
-    public int AuthentikUserPk { get; set; }
-    public string AuthentikUserUuid { get; set; } = string.Empty;
-    public string ExternalId { get; set; } = string.Empty;
-    public string AuthentikLogin { get; set; } = string.Empty;
+    public string Login { get; set; } = string.Empty;
     public string DisplayedName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public bool IsSystem { get; set; }

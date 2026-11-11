@@ -1,5 +1,4 @@
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
-using BusinessEntity.Services;
 using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using Microsoft.AspNetCore.Mvc;

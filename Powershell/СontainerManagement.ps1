@@ -1,4 +1,4 @@
-# Управление Docker-контейнерами
+﻿# Управление Docker-контейнерами
 # 
 # ВАЖНО: Пункт 30 и специализированные функции (31, 32, 33) используют БЕЗОПАСНУЮ пересборку
 # которая НЕ нарушает сети других контейнеров. Это решает проблему с отвалом логгера
@@ -651,71 +651,6 @@ function Action378 {
     }
 }
 
-# Функция для запуска сервиса Authentik
-function Action37 {
-  
-}
-
-# Функция для генерации .env файла для Authentik
-function Action371 {
-  Write-Host "=== Генерация Authentic\\.env для Authentik ===" -ForegroundColor Cyan
-  $root = Split-Path $PSScriptRoot -Parent
-  $envPath = Join-Path -Path $root -ChildPath "Authentic\.env"
-
-  if (Test-Path -Path $envPath) {
-    $ans = Read-Host "Файл уже существует. Перезаписать? (y/N)"
-    if ($ans -notin @('y','Y')) { Write-Host "Отмена." -ForegroundColor Yellow; return }
-  }
-
-  # Генерация безопасных значений (PowerShell 5.1 совместимо)
-  $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
-  try {
-    $bytes = New-Object byte[] 32
-    $rng.GetBytes($bytes)
-    $authSecret = [Convert]::ToBase64String($bytes)
-
-    $bytes2 = New-Object byte[] 16
-    $rng.GetBytes($bytes2)
-    $pgPass = ([Convert]::ToBase64String($bytes2)).TrimEnd('=')
-  } finally {
-    if ($rng) { $rng.Dispose() }
-  }
-
-  $content = @(
-    "# Generated at $(Get-Date -Format s)",
-    "# Authentik core",
-    "AUTHENTIK_SECRET_KEY=$authSecret",
-    "",
-    "# Internal Postgres used by Authentik",
-    "PG_USER=authentik",
-    "PG_DB=authentik",
-    "PG_PASS=$pgPass",
-    "",
-    "# Host ports for Authentik UI",
-    "COMPOSE_PORT_HTTP=9000",
-    "COMPOSE_PORT_HTTPS=9443"
-  )
-
-  $dir = Split-Path -Parent $envPath
-  if (-not (Test-Path -Path $dir)) {
-    New-Item -ItemType Directory -Path $dir -Force | Out-Null
-  }
-  $content | Set-Content -Path $envPath -Encoding ASCII -Force
-  Write-Host "✓ Файл создан: $envPath" -ForegroundColor Green
-
-  # Дополнительно: создадим/обновим корневой .env для интерполяции compose
-  $rootEnvPath = Join-Path -Path $root -ChildPath ".env"
-  $rootVars = Read-DotEnvAsHashtable -Path $rootEnvPath
-  $rootVars["AUTHENTIK_SECRET_KEY"] = $authSecret
-  $rootVars["PG_PASS"] = $pgPass
-  if (-not $rootVars.ContainsKey("PG_USER")) { $rootVars["PG_USER"] = "authentik" }
-  if (-not $rootVars.ContainsKey("PG_DB"))   { $rootVars["PG_DB"]   = "authentik" }
-  if (-not $rootVars.ContainsKey("COMPOSE_PORT_HTTP"))  { $rootVars["COMPOSE_PORT_HTTP"]  = "9000" }
-  if (-not $rootVars.ContainsKey("COMPOSE_PORT_HTTPS")) { $rootVars["COMPOSE_PORT_HTTPS"] = "9443" }
-  Write-DotEnvFromHashtable -Path $rootEnvPath -Data $rootVars
-  Write-Host "✓ Обновлён корневой .env для compose: $rootEnvPath" -ForegroundColor Green
-}
-
 function Action50 {
   Write-Host "=== Запуск root docker-compose (весь стек) ===" -ForegroundColor Cyan
   $root = Split-Path $PSScriptRoot -Parent
@@ -726,8 +661,9 @@ function Action50 {
     return
   }
 
-  # Сохраняет существующие секреты и добавляет недостающую конфигурацию первого запуска.
-  & (Join-Path $PSScriptRoot "Initialize-AuthentikEnv.ps1") -RepositoryRoot $root
+  if (-not (Test-Path (Join-Path $root ".env"))) {
+    throw "Подготовьте .env по .env.example и укажите внешний OIDC/User Hub. Authentik устанавливается отдельно."
+  }
   Ensure-Network -NetworkName "docker-business-entity-common-bridge"
   docker compose -f $composePath config --quiet
   if ($LASTEXITCODE -ne 0) {
@@ -828,17 +764,6 @@ function Action53 {
       try { docker network rm $bridgeNetwork 2>$null | Out-Null } catch {}
     }
   
-    # Чистим папку media
-    $mediaDir = Join-Path $root "Authentic\media"
-    if (Test-Path -Path $mediaDir) {
-      try {
-        Get-ChildItem -Path $mediaDir -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "✓ Папка Authentic\\media очищена." -ForegroundColor DarkGray
-      } catch {
-        Write-Host "⚠ Не удалось очистить Authentic\\media: $_" -ForegroundColor DarkYellow
-      }
-    }
-  
     Write-Host "✓ Полный снос завершён. Следующий запуск создаст пустую систему." -ForegroundColor Green
   }
   
@@ -854,8 +779,6 @@ function Show-Menu {
     Write-Host "32   -- Безопасная пересборка ТОЛЬКО web-logger"
     Write-Host "33   -- Безопасная пересборка ТОЛЬКО admin-node"
     Write-Host "35   -- Сбилдить и запустить production_db контейнер"
-    Write-Host "37   -- Запустить сервис Authentik"
-    Write-Host "371  -- Сгенерировать .env для Authentik"
     Write-Host "378  -- Очистить кеш докера"
     Write-Host "38   -- Запушить ветку basic_add_elements_and_tree_mechanism как есть"
     Write-Host "40   -- Сбилдить и запустить бизнес-логику"
@@ -881,16 +804,12 @@ do {
         "32"  { Rebuild-WebLogger-Safe }
         "33"  { Rebuild-AdminNode-Safe }
         "35"  { BuildAndRunPostgresContainer }
-        "37"  { Action37 }
-        "371" { Action371 }
         "378" { Action378 }
         "38"  { git push --force-with-lease origin basic_add_elements_and_tree_mechanism }
         "40"  { BuildAndRunBusinessLogicContainers }
         "50"  { Action50 }
         "51"  { Action51 }
         "53"  { Action53 }
-        "54"  { Action53 -
-        "53"  { Action53 - }
         "80"  { Clear-Host }
         "99"  { break }
         default {

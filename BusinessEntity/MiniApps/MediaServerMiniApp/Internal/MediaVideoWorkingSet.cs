@@ -31,9 +31,7 @@ public sealed class MediaVideoWorkingSet(MiniAppSaveContext context, MediaServer
         var captured = _payloads.Capture(operationId, editSessionId, revision);
         foreach (var payload in captured.Payloads)
         {
-            var data = (MediaVideo)payload.Data; var name = data.DisplayName.Trim();
-            if (name.Length == 0) throw new ArgumentException("Отображаемое имя видео не должно быть пустым.");
-            data.Name = data.DisplayName = name;
+            MediaServerService.NormalizeMetadata((MediaVideo)payload.Data);
         }
         return captured;
     }

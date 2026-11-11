@@ -16,6 +16,7 @@ public static class SpacesMiniAppRegistration
     // Регистрирует логическую ответственность типа в общем движке.
     public static IServiceCollection AddSpacesMiniApp(this IServiceCollection services)
     {
+            services.AddSpaceApi();
         // Владелец объявляет тип; общий Core не перечисляет предметные классы.
         services.AddScoped<BusinessEntity.MiniApps.SpacesMiniApp.Internal.SpacesMessageHandler>();
         services.AddScoped<BusinessEntity.MiniApps.SpacesMiniApp.Contracts.ISpacesConnector, BusinessEntity.MiniApps.SpacesMiniApp.Connectors.SpacesConnector>();

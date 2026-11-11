@@ -1,0 +1,158 @@
+@namespace BusinessEntity.MiniApps.UserMiniApp.Components
+@inherits global::BusinessEntity.Infrastructure.Modularity.ModuleComponentBase
+@using System.Text.Json
+@using BusinessEntity.Infrastructure.Identity
+@using BusinessEntity.MiniApps.UserMiniApp.Internal
+@using BusinessEntity.MiniApps.UserMiniApp.Storage
+@inject IdentityProviderAdministration Administration
+@inject IdentitySwitchPreparation Preparation
+@inject IdentitySwitchActivation Activation
+@inject IIdentityProviderRegistry Identity
+@inject NavigationManager Navigation
+
+<PageTitle>Провайдеры идентификации</PageTitle>
+<h1>Провайдеры идентификации</h1>
+<p>Активен: <strong>@Identity.Current.Profile.Name</strong>. Сохранение настроек не переключает вход.</p>
+@if(Error!=null){<div class="alert alert-danger" role="alert">@Error</div>}
+@if(Message!=null){<div class="alert alert-info" role="status">@Message</div>}
+<div class="table-responsive">
+<table class="table">
+    <thead><tr><th>Название</th><th>Адрес</th><th>Проверка</th><th>Действия</th></tr></thead>
+    <tbody>
+    @foreach(var row in Profiles)
+    {
+        var profile=JsonSerializer.Deserialize<IdentityProviderProfile>(row.Json,IdentityStateStore.Json)!;
+        <tr data-provider-id="@profile.Id"><td>@profile.Name @(Identity.Current.Profile.Id==profile.Id?"(активен)":"")</td><td>@profile.Issuer</td>
+            <td>@(row.ValidatedRevision==row.Revision?"Проверен":"Нужна проверка")</td>
+            <td>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@Busy" @onclick="()=>Edit(profile)">Настроить</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@Busy" @onclick="()=>Run(async()=>{await Administration.ValidateAsync(profile.Id);await Reload();})">Проверить</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@Busy" @onclick="()=>Run(async()=>Message=await Administration.SecretStatusAsync(profile.Id))">Наличие секретов</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" disabled="@(Busy||row.ValidatedRevision!=row.Revision)" @onclick="()=>Build(profile.Id)">Подготовить переключение</button>
+                @if(Identity.Current.Profile.Id!=profile.Id)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@Busy" @onclick="()=>Run(async()=>{await Administration.DisableAsync(profile.Id);await Reload();})">Отключить</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" disabled="@Busy" @onclick="()=>Run(async()=>{await Administration.DeleteAsync(profile.Id);await Reload();})">Удалить неиспользованный профиль</button>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+</div>
+<button type="button" class="btn btn-secondary mb-3" disabled="@Busy" @onclick="NewProfile">Добавить провайдера</button>
+<EditForm Model="@Form" OnValidSubmit="Save">
+    <fieldset disabled="@Busy">
+        <p>Идентификатор профиля: <code data-identity-profile-id="@Form.Id">@Form.Id</code></p>
+        <p>Адрес возврата для регистрации у провайдера: <code>@(Navigation.BaseUri.TrimEnd('/')+ $"/auth/callback/{Form.Id:N}/{Form.Revision}")</code>.
+            При изменении настроек сохранится следующая ревизия; её адрес нужно разрешить у провайдера перед активацией.</p>
+        <div class="row g-3">
+            <label class="col-md-6">Название<InputText class="form-control" @bind-Value="Form.Name" @bind-Value:after="Changed" /></label>
+            <label class="col-md-6"><InputCheckbox @bind-Value="Form.ManagedLocal" @bind-Value:after="Changed" /> Провайдер развёрнут вместе с системой</label>
+            <label class="col-md-6">Адрес издателя (issuer)<InputText class="form-control" @bind-Value="Form.Issuer" @bind-Value:after="Changed" /></label>
+            <label class="col-md-6">Адрес параметров OpenID<InputText class="form-control" @bind-Value="Form.MetadataAddress" @bind-Value:after="Changed" /></label>
+            <label class="col-md-6">Идентификатор приложения<InputText class="form-control" @bind-Value="Form.ClientId" @bind-Value:after="Changed" /></label>
+            <label class="col-md-6">Ссылка на секрет приложения<InputText class="form-control" @bind-Value="Form.ClientSecretRef" @bind-Value:after="Changed" /></label>
+            <label class="col-md-6">Внутренний адрес сервера (необязательно)<InputText class="form-control" @bind-Value="Form.Backchannel" @bind-Value:after="Changed" /></label>
+            <label class="col-md-6">Управление учётными записями
+                <InputSelect class="form-select" @bind-Value="Form.ProvisioningKind" @bind-Value:after="Changed"><option value="None">Только вход</option><option value="Authentik">Authentik</option></InputSelect>
+            </label>
+            @if(Form.ProvisioningKind=="Authentik")
+            {
+                <label class="col-md-6">Адрес управления аккаунтами<InputText class="form-control" @bind-Value="Form.ManagementEndpoint" @bind-Value:after="Changed" /></label>
+                <label class="col-md-6">Ссылка на секрет управления<InputText class="form-control" @bind-Value="Form.ManagementSecretRef" @bind-Value:after="Changed" /></label>
+                <label class="col-12"><InputCheckbox @bind-Value="Form.PasswordResetFlowVerified" @bind-Value:after="Changed" /> Настроена обязательная смена временного пароля</label>
+            }
+        </div>
+        <details class="my-3"><summary>Сопоставление профиля пользователя</summary>
+            <label>Claim логина<InputText class="form-control" @bind-Value="Form.LoginClaim" @bind-Value:after="Changed" /></label>
+            <label>Claim отображаемого имени<InputText class="form-control" @bind-Value="Form.NameClaim" @bind-Value:after="Changed" /></label>
+            <label>Claim электронной почты<InputText class="form-control" @bind-Value="Form.EmailClaim" @bind-Value:after="Changed" /></label>
+        </details>
+        <details class="my-3"><summary>Параметры доступа программ</summary>
+            <p>Профили доверенных API-токенов: issuer, metadataAddress, audience, allowedClientIds, clientClaim и requiredScope.</p>
+            <InputTextArea class="form-control" rows="5" @bind-Value="Form.ApiProfilesJson" @bind-Value:after="Changed" />
+        </details>
+        <p>Значения секретов задаются оператором в настройках установки; эта страница хранит только ссылки.</p>
+        <button class="btn btn-primary" type="submit">Сохранить настройки</button>
+        <button class="btn btn-outline-secondary" type="button" @onclick="Discard">Отменить правки</button>
+    </fieldset>
+</EditForm>
+@if(History.Length>0)
+{
+    <details class="my-3"><summary>Предыдущие планы</summary><ul>
+        @foreach(var item in History){<li><a href="@($"/administration/identity-providers?planId={item.Id}")">@item.CreatedAt.ToString("g") — @item.State</a></li>}
+    </ul></details>
+}
+@if(Plan!=null)
+{
+    <section class="mt-4">
+        <h2>План переключения</h2><p>Состояние: @Plan.State</p>
+        <table class="table"><thead><tr><th>Пользователь</th><th>Результат</th><th>Причина</th></tr></thead><tbody>
+            @foreach(var item in Entries){<tr><td>@item.Login</td><td>@EntryLabel(item.Status)</td><td>@item.Error</td></tr>}
+        </tbody></table>
+        <button type="button" class="btn btn-outline-primary" disabled="@(Busy||Plan.State is not ("Validated" or "NeedsReconciliation"))" @onclick="Provision">Создать недостающие аккаунты</button>
+        <button type="button" class="btn btn-outline-secondary" disabled="@(Busy||Plan.State!="Ready")" @onclick="Reissue">Повторная выдача учётных данных</button>
+        @if(Credentials.Count>0)
+        {
+            <div class="alert alert-warning"><p>Сохраните учётные данные. Они показаны только здесь и не записываются в журнал. Человеку нужно сменить временный пароль; сервис использует отдельный app password.</p>
+                <ul>@foreach(var credential in Credentials){<li data-credential-kind="@credential.Kind"><strong>@credential.Login</strong>: <code>@credential.Secret</code></li>}</ul>
+            </div>
+        }
+        @if(Plan.State=="Ready")
+        {
+            <p><a class="btn btn-outline-primary" href="@($"/auth/probe/{Plan.Id}")">Проверить вход администратора в целевой системе</a></p>
+            <button type="button" class="btn btn-outline-secondary" disabled="@Busy" @onclick="RefreshPlan">Обновить результат проверки</button>
+            <p>@(Plan.VerifiedAt.HasValue?"Пробный вход подтверждён.":"Нужен пробный вход администратора.")</p>
+            <label><InputCheckbox @bind-Value="ConfirmActivation" /> Завершить текущие сессии. Несохранённые правки других пользователей могут быть потеряны.</label>
+            <p><button type="button" class="btn btn-danger" disabled="@(Busy||!ConfirmActivation||!Plan.VerifiedAt.HasValue)" @onclick="Activate">Переключить провайдера</button></p>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid? InitialPlanId {get;set;}
+    private IdentityProfileRow[] Profiles=[];
+    private IdentitySwitchPlanRow[] History=[];
+    private IdentitySwitchPlanRow? Plan;
+    private Guid? LoadedPlanId;
+    private IReadOnlyList<IdentityProvisioningCredential> Credentials=[];
+    private bool Busy,ConfirmActivation;
+    private string? Error,Message;
+    private IdentityProfileWorkingSet Working=>Module!.SaveContext!.GetOrCreateParticipant(()=>new IdentityProfileWorkingSet(Module.SaveContext,Administration));
+    private IdentityProfileForm Form=>Working.Form;
+    private IdentitySwitchEntry[] Entries=>Plan==null?[]:JsonSerializer.Deserialize<IdentitySwitchEntry[]>(Plan.Json,IdentityStateStore.Json)!;
+    // Открытие страницы не создаёт новую копию уже существующего черновика владельца.
+    protected override async Task OnInitializedAsync(){await Reload();if(!Module!.IsDirty)Working.Load(Identity.Current.Profile);}
+    // Query-ссылка позволяет открыть сохранённый план без создания нового page-модуля.
+    protected override async Task OnParametersSetAsync()
+    {if(InitialPlanId.HasValue&&InitialPlanId!=LoadedPlanId){Plan=await Preparation.ReadAsync(InitialPlanId.Value);LoadedPlanId=InitialPlanId;Credentials=[];}}
+    // Каталог перечитывается после завершённой операции, а не из неподтверждённой формы.
+    private async Task Reload(){Profiles=await Administration.ListAsync();History=await Preparation.ListAsync();}
+    // Один event отмечает одну ревизию общего контекста.
+    private void Changed()=>Working.Changed();
+    // Новый профиль не заменяет действующий способ входа.
+    private Task NewProfile()=>Edit(new IdentityProviderProfile {Name="Новый провайдер"});
+    // Переключение редактируемой формы не уничтожает незаписанные правки.
+    private Task Edit(IdentityProviderProfile profile)=>Run(()=>{Working.Load(profile);return Task.CompletedTask;});
+    // Prepare/commit/ack выполняются стандартным MiniAppSaveContext.
+    private Task Save()=>Run(async()=>{var result=await Module!.SaveContext!.SaveAsync(Module.ModuleId);if(!result.Success)throw new InvalidOperationException(result.Error);await Reload();Message="Настройки сохранены. Активный вход не изменён.";});
+    // Discard касается только локальной формы.
+    private Task Discard()=>Run(async()=>await Module!.SaveContext!.DiscardAsync());
+    // План фиксирует target и снимок пользователей отдельно от текущего editor draft.
+    private Task Build(Guid id)=>Run(async()=>{RequireClean();Plan=await Preparation.BuildAsync(id);Credentials=[];ConfirmActivation=false;});
+    // Только это действие имеет внешний эффект создания аккаунтов.
+    private Task Provision()=>Run(async()=>{Credentials=await Preparation.ProvisionAsync(Plan!.Id);Plan=await Preparation.ReadAsync(Plan.Id);});
+    // После потери выдачи секрет не читается из БД, а создаётся новый для ещё не активированного аккаунта.
+    private Task Reissue()=>Run(async()=>Credentials=await Preparation.ReissueAsync(Plan!.Id));
+    // Успех probe фиксируется сервером, а не данным checkbox или параметром URL.
+    private Task RefreshPlan()=>Run(async()=>Plan=await Preparation.ReadAsync(Plan!.Id));
+    // После активации требуется новый cookie-login; старое состояние circuit не используется.
+    private Task Activate()=>Run(async()=>{RequireClean();if(!ConfirmActivation)throw new InvalidOperationException("Подтвердите завершение сессий.");await Activation.ActivateAsync(Plan!.Id);Navigation.NavigateTo("/auth/login",true);});
+    // Подготовка конфигурации и активация не отправляются поверх неготовых локальных правок.
+    private void RequireClean(){if(Module!.IsDirty)throw new InvalidOperationException("Сначала сохраните или отмените правки настроек.");}
+    // Предметная ошибка остаётся видимой на странице и не закрывает circuit.
+    private async Task Run(Func<Task> action){Busy=true;Error=null;Message=null;try{await action();}catch(Exception ex){Error=ex.Message;}finally{Busy=false;}}
+    // Служебные состояния отображаются понятными подписями.
+    private static string EntryLabel(string value)=>value switch{"Linked"=>"Связан","Missing"=>"Будет создан","Created"=>"Создан","Conflict"=>"Конфликт","Blocked"=>"Недоступно","Creating"=>"Нужна проверка результата",_=>value};
+}

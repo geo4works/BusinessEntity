@@ -1,7 +1,6 @@
 using BusinessEntity.Infrastructure.Selection;
 using BusinessEntity.MiniApps.TreeMiniApp.Internal;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
-using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Bus;
 using Microsoft.AspNetCore.Components;

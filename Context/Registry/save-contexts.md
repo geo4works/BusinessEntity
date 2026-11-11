@@ -34,3 +34,18 @@ Unknown удерживает пакет/OperationId; Discard до выяснен
 отдельные немедленные транзакции согласно политике владельца.
 
 [Модули](modules-and-routes.md), [механика Save](../Policy/MiniApps/miniapp-saving-policy.md).
+
+
+## API_002
+
+HTTP-запрос не заводит UI SaveContext, вкладку, browser SpaceId или общий draft.
+Каждый предметный command вызывает типизированный сценарий владельца и один
+EntitySaveBatch. Для импорта/видео предварительные uploads и job не являются
+готовой сущностью/версией. Только финальный canonical commit публикует результат.
+
+Job хранит исходный OperationId и проверенный API authorization snapshot, не
+пользовательский working set и не токен. Отмена до commit оставляет достоверный
+Cancelled/NeedsReauthorization; после commit возвращает Succeeded с тем же outcome.
+Изменение IdP требует новой session и явного reauthorize того же user/client.
+User preferences захватываются UserMutationCapture в owned DTO и коммитятся
+DataProvider вместе с receipt; формы UI и API используют общие нормализаторы.

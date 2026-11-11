@@ -7,7 +7,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Storage;
 // Создаёт текущие собственные таблицы User только при первичной установке общей БД.
 internal static class UserMiniAppStorageSchema
 {
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
     // Существующая несовместимая схема даёт отказ; миграции и backfill отсутствуют.
     public static async Task InitializeAsync(UserMiniAppDbContext context, bool freshDatabase, CancellationToken ct)
     {

@@ -1,31 +1,69 @@
-# Браузерный smoke
+# Smoke AUTH_001 / API_001 / API_002
 
-browser-smoke.cjs проверяет локальный стек через Playwright и установленный Edge:
-вход, пространство, дерево, создание/сохранение/повторное открытие документа
-и статьи, комментарий, профиль, изоляцию уведомлений двух окон одного пользователя,
-два независимых профиля admin/akadmin, раздел пользователей и HTTP веб-логгера.
+Текущие проверки используют настоящий OIDC/Authentik и отдельные явно подготовленные
+служебные QA accounts. Секреты читаются из игнорируемого `.env`, в вывод не попадают.
+Команды выполняются из корня репозитория; нужен Node.js, Playwright и Edge.
+`BE_PLAYWRIGHT_MODULE` указывает на установленный модуль Playwright.
 
-Нужен Node.js и установленный пакет playwright. При стандартной установке
-пакета рядом со скриптом достаточно node browser-smoke.cjs.
-BE_PLAYWRIGHT_MODULE задаёт путь к пакету, если он установлен в другом каталоге.
-
-Параметры окружения:
-
-| Имя | Значение по умолчанию |
+| Проверка | Что проверяет |
 |---|---|
-| BE_SMOKE_URL | http://localhost:7000 |
-| BE_SMOKE_USER | admin, тестовый стартовый пользователь |
-| BE_SMOKE_PASSWORD | пароль стартовой dev-установки; для другой учётки задаётся окружением |
-| BE_SMOKE_LABEL | stage0 |
-| BE_SMOKE_RESULT_FILE | отсутствует; путь JSON результата для storage-smoke |
-| BE_SMOKE_OUTPUT | отсутствует; при задании сохраняет screenshot только при отказе |
+| `api-framework-smoke.cjs` | Реальный M2M, Bearer/session, typed self, scope isolation, filtered catalog, отзыв допуска, close |
+| `api-crud-smoke.cjs` | Явные локальные роли/grants; Space/Folder/Document CRUD, authored snapshots, retries/restart, scopes, plans |
+| `api-rich-smoke.cjs` | Два автора от старой базы, exact chunks/порядок, restore, publication, published-only reader |
+| `api-upload-smoke.cjs` | Parts/restart/digest/ownership, image+версия, Media deferred create/CRUD/Range, внешний file reference |
+| `api-job-smoke.cjs` | TXT/Markdown/HTML/emoji, append/replace, jobs, outcome после поздней отмены |
+| `api-job-large-smoke.cjs` | Реальные 100 MiB и 1 GiB, session/restart/cancel, последовательность, RSS процесса, Range |
+| `api-provider-switch-smoke.cjs --jobs` | A→B→A, доказанные identity, B при выключенном A, durable session, приостановка/reauthorize jobs, книга 100 MiB |
+| `api-settings-smoke.cjs` | Общие UI/API settings, права system/space/self, отсутствие config/secrets, limits+1 |
+| `api-ui-regression-smoke.cjs` | Создаёт собственное QA Space, запускает актуальные browser/navigation tests, удаляет только свои fixtures |
+| `api-cleanup-owned-qa.cjs` | Удаляет только Space с точным ApiQA_ именем и автором QA service, через owner deletion plan |
 
-Скрипт выводит подтверждённые шаги и URL созданных тестовых сущностей.
-Токены и пароль не выводятся. Тестовые документы сохраняются для проверки
-данных после RSTT. Скрипты поддерживают актуальный интерфейс миниаппов; при переносе
-страниц селекторы обновляются вместе с проверяемым сценарием.
+Рекомендуемая последовательность: provider proof после полного CRUD grant;
+затем framework → crud → rich → upload → job → settings → UI → owned cleanup.
+Framework сознательно сужает QA grant до `user.self.read`; CRUD восстанавливает
+полный QA grant. Helper ожидает загрузку формы перед выбором существующей записи.
+Бизнес-вызовы используют plain fetch без browser cookie; UI нужен для явной
+подготовки допуска/локальной роли и отдельно для browser regression.
 
-Эта проверка дополняет dotnet test и не запускается автоматически без Docker.
+`api-client-fixture.cjs` обновляет короткий access token, но не продлевает закрытую
+session и не выполняет неявный job reauthorize. Parts передаются ограниченными
+буферами; full SHA считается постепенно. `api-job-large-smoke` video — fixture
+хранения original bytes: воспроизведение/кодек/транскодирование не проверяются.
+Замер RSS отделён от cgroup page cache; точные выполненные результаты и старый/
+новый размер чанка указаны в `Context/Tasks/TASK_AUTH_API_execution-log.md`.
+
+Провайдерный smoke требует отдельного QA B из `identity-provider-b.compose.yml`.
+Target users создаёт план BusinessEntity; совпадение имени не используется для
+присвоения внешнего аккаунта. При прерывании перед возвратом A его контейнеры
+возобновляются, но active provider нужно проверить: `--return-a` предназначен
+только для явного возврата из уже активного B. Никаких volumes/reset не выполняется.
+`provision-api-service-fixture --b --renew-plan-owned` допустим только для известных
+QA service accounts с provisioning marker; сохраняет user/intent при PATCH.
+
+## Браузерный редактор и навигация
+
+`browser-smoke.cjs` использует OIDC A и `BE_SMOKE_SPACE` — имя заранее созданного
+собственного QA Space. Проверяет дерево, оба редактора, сохранение/reload,
+комментарий, изоляцию профильных уведомлений двух окон, administration и logger.
+`BE_SMOKE_RESULT_FILE` сохраняет только идентификаторы/URL, не credentials.
+
+`navigation-save-smoke.cjs` читает тот же JSON: Stay/Discard/Save, ошибка валидации,
+независимые drafts двух окон, отмена beforeunload reload/close и forceLoad смены
+пространства. Проще запускать оба через `api-ui-regression-smoke.cjs`, который
+создаёт/удаляет QA Space и передаёт временный JSON результата.
+
+## PostgreSQL tests
+
+`dotnet test BusinessEntity.sln -c Release` с `BE_TEST_POSTGRES` на отдельный
+тестовый кластер. Каждый test создаёт/удаляет только `be_test_<guid>` и свой
+временный каталог. Без переменной реальные SQL checks явно skipped; это не
+считается приёмкой. Не направлять runner на пользовательскую БД.
+
+## Исторические smoke TASK_ARCH_001
+
+Остальные scripts ниже документируют старую приёмку ARCH и её fixtures/login.
+Их login/fixtures не адаптированы к AUTH_001; они не объявлены запущенной текущей
+приёмкой. Текущие scenario evidence — таблица выше и execution log.
 
 ## Отказ БД на изолированном экземпляре
 

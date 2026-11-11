@@ -35,8 +35,7 @@ public sealed class DocumentsWorkingSet(MiniAppSaveContext context, EntityTypeRe
         var payloads = _current.Values.Where(data => data.Name.Trim() != _saved[data.Id].Name || data.Text != _saved[data.Id].Text)
             .Select(data =>
             {
-                var copy = Copy(data); _sentNames[data.Id] = data.Name; copy.Name = copy.Name.Trim();
-                if (copy.Name.Length == 0) throw new ArgumentException("Название документа обязательно.");
+                var copy = DocumentEditRules.Freeze(data,types); _sentNames[data.Id] = data.Name;
                 return new EntityPayloadChange(copy.Id, copy.Version, copy);
             }).ToArray();
         return new(operationId, "DocumentsMiniApp", editSessionId) { Payloads = payloads };

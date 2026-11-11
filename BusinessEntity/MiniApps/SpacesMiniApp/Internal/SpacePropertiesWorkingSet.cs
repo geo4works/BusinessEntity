@@ -47,7 +47,7 @@ public sealed class SpacePropertiesWorkingSet(MiniAppSaveContext context, SpaceH
         {
             var user = await users.GetCurrentUserAsync(ct);
             var permissions = await users.GetCurrentUserPermissionsForSpaceAsync(id, ct);
-            if (user?.IsAkadmin != true && user?.IsGeneralAdmin != true && !permissions.CanAdminSpace && !permissions.CanGlobalAdmin)
+            if (user?.IsGlobalAdmin != true && !permissions.CanAdminSpace && !permissions.CanGlobalAdmin)
                 throw new UnauthorizedAccessException();
             properties.Add(await spaces.PrepareGenericSpacePropertiesAsync(id, JsonSerializer.Deserialize<GenericSpaceProperties>(json)!, ct));
         }
@@ -56,7 +56,7 @@ public sealed class SpacePropertiesWorkingSet(MiniAppSaveContext context, SpaceH
         {
             var permissions = await users.GetCurrentUserPermissionsForSpaceAsync(id, ct);
             var user = await users.GetCurrentUserAsync(ct);
-            if (user?.IsAkadmin != true && user?.IsGeneralAdmin != true && !permissions.CanAdminSpace && !permissions.CanGlobalAdmin) throw new UnauthorizedAccessException();
+            if (user?.IsGlobalAdmin != true && !permissions.CanAdminSpace && !permissions.CanGlobalAdmin) throw new UnauthorizedAccessException();
             var space = await spaces.GetSpaceByIdAsync(id) ?? throw new KeyNotFoundException("Пространство удалено.");
             space.Name = SpaceHelper.NormalizeName(name); entities.Add(space);
         }

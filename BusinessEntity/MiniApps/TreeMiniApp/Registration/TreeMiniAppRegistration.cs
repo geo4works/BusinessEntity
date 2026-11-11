@@ -19,6 +19,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Registration
     {
         public static IServiceCollection AddTreeMiniApp(this IServiceCollection services)
         {
+            services.AddTreeApi();
             services.AddScoped<TreeRevealService>();
             services.AddScoped<TreeRevealMessageHandler>();
             services.AddBusEndpoint<TreeRevealMessageHandler>(typeof(RevealTreeEntityRequest));

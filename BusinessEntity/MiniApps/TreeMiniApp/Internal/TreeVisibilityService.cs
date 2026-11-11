@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Navigation;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
@@ -24,7 +23,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             Guid? currentUserId,
             bool isAccessAdmin,
             UserEffectivePermissions permissions,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,bool includeEmptyFolders=false)
         {
             var entities = projection.Entities.ToDictionary(entity => entity.Id);
             var children = projection.Relations.Where(relation => relation.RelationType == "Contains")
@@ -41,7 +40,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
                     var child = entities[id]; var descendants = Build(id);
                     if (IsFolderEntity(child.EntityType))
                     {
-                        if (descendants.Count > 0 || (ShowFoldersWithoutVisibleContent && ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin)))
+                        if (descendants.Count > 0 || ((ShowFoldersWithoutVisibleContent||includeEmptyFolders) && ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin)))
                             result.Add(new(child, descendants));
                     }
                     else if (CanDisplayTreeEntity(child, currentUserId, isAccessAdmin, permissions))

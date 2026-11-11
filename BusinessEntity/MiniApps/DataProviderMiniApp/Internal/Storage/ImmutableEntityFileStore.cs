@@ -11,13 +11,15 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 internal sealed class ImmutableEntityFileStore
 {
     private readonly string _root;
+    public ApiStagingStore ApiStaging {get;}
     private readonly IStorageFaults _faults;
     private readonly ILogger<ImmutableEntityFileStore> _logger;
     // Постоянный storage задаётся явно; случайная папка внутри контейнера не используется.
-    public ImmutableEntityFileStore(IConfiguration configuration, IStorageFaults faults, ILogger<ImmutableEntityFileStore> logger)
+    public ImmutableEntityFileStore(IConfiguration configuration, IStorageFaults faults, ILogger<ImmutableEntityFileStore> logger,ApiStagingStore? staging=null)
     {
         var root = configuration["Storage:RootPath"];
         if (string.IsNullOrWhiteSpace(root)) throw new InvalidOperationException("Storage:RootPath обязателен.");
+        ApiStaging=staging??new ApiStagingStore(configuration,new BusinessEntity.Infrastructure.Api.ApiHeavyWorkGate());
         _root = Path.GetFullPath(root); _faults = faults; _logger = logger;
     }
 
@@ -27,15 +29,17 @@ internal sealed class ImmutableEntityFileStore
         if (change.EntityId == Guid.Empty || string.IsNullOrWhiteSpace(change.FileId) || string.IsNullOrWhiteSpace(change.Variant))
             throw new ArgumentException("Не задан логический адрес файла.");
         byte[] digest; long length;
-        if (change.TemporaryFilePath != null)
+        if(change.UploadId.HasValue&&(change.TemporaryFilePath!=null||change.Content.Length!=0))throw new ArgumentException("Допустим один источник файла.");
+        var source=change.UploadId is {} upload?ApiStaging.ReadyPath(upload):change.TemporaryFilePath;
+        if (source != null)
         {
-            if (change.Content.Length != 0 || !Path.IsPathFullyQualified(change.TemporaryFilePath))
+            if (change.Content.Length != 0 || !Path.IsPathFullyQualified(source))
                 throw new ArgumentException("Допустим только один явно заданный источник файла.");
-            using var stream = File.OpenRead(change.TemporaryFilePath);
+            using var stream = File.OpenRead(source);
             length = stream.Length; digest = SHA256.HashData(stream);
         }
         else { length = change.Content.LongLength; digest = SHA256.HashData(change.Content); }
-        return new(change, Convert.ToHexString(digest), length);
+        return new(change, Convert.ToHexString(digest), length,source);
     }
 
     // Сначала публикует проверенные bytes на диске, затем добавляет метаданные в ещё незакоммиченный DbContext.
@@ -69,9 +73,9 @@ internal sealed class ImmutableEntityFileStore
                     await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                         128 * 1024, FileOptions.Asynchronous | FileOptions.WriteThrough))
                     {
-                        if (change.TemporaryFilePath != null)
+                        if (file.SourcePath != null)
                         {
-                            await using var input = File.OpenRead(change.TemporaryFilePath);
+                            await using var input = File.OpenRead(file.SourcePath);
                             await input.CopyToAsync(output, ct);
                         }
                         else await output.WriteAsync(change.Content, ct);
@@ -143,4 +147,4 @@ internal sealed class ImmutableEntityFileStore
 }
 
 // Digest и замороженный источник подготовленного файла.
-internal sealed record PreparedEntityFile(EntityFileChange Change, string Hash, long Length);
+internal sealed record PreparedEntityFile(EntityFileChange Change, string Hash, long Length,string? SourcePath=null);

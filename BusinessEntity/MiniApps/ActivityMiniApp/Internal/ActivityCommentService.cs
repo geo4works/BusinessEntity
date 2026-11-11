@@ -261,7 +261,7 @@ internal sealed class ActivityCommentService
         if (string.IsNullOrWhiteSpace(user.Payload)) throw new InvalidDataException("Отсутствует payload пользователя.");
         var data = JsonSerializer.Deserialize<UserData>(user.Payload, ActivityJsonOptions.Default)
             ?? throw new InvalidDataException("Пустой payload пользователя.");
-        return FirstNonEmpty(data.DisplayedName, data.AuthentikLogin, data.ExtId, user.ExternalId);
+        return FirstNonEmpty(data.DisplayedName, user.Login);
     }
 
     // Возвращает первое непустое значение из списка.

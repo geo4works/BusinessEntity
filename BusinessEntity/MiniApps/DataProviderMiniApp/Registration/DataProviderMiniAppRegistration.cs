@@ -42,7 +42,11 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.AddSingleton<EntityDataStorageCodec>();
             services.AddSingleton<DataProviderMessageHandler>();
             services.AddSingleton<IStorageFaults, NoStorageFaults>();
+            services.TryAddSingleton<BusinessEntity.Infrastructure.Api.ApiHeavyWorkGate>();
+            services.AddSingleton<ApiStagingStore>();
+            services.AddSingleton<BusinessEntity.Infrastructure.Api.IApiStagingDataPlane>(p=>p.GetRequiredService<ApiStagingStore>());
             services.AddSingleton<ImmutableEntityFileStore>();
+            services.AddDataProviderApiUploads();services.AddDataProviderApiJobs();
             services.AddSingleton<DataProviderSchema>();
             services.AddSingleton<DataProviderReadService>();
             services.AddSingleton<DataProviderCommitPublisher>();
@@ -50,6 +54,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.AddSingleton<CommittedGraphCoordinator>();
             services.AddSingleton<DataProviderTransactionService>();
             services.AddSingleton<DataProviderTransactionHandler>();
+            services.AddBusEndpoint<DataProviderTransactionHandler>(typeof(BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.PrepareApiDeletionPlanRequest));
+            services.AddBusEndpoint<DataProviderTransactionHandler>(typeof(BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.BeginApiOperationRequest),typeof(BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions.ReadApiOperationRequest));
             services.AddBusEndpoint<DataProviderTransactionHandler>(typeof(ExportSubgraphRequest), typeof(ReleaseExportRequest), typeof(SaveEntityBatchRequest), typeof(GetOperationOutcomeRequest), typeof(GetStoredCommentsRequest), typeof(GetStoredPropertiesRequest), typeof(GetVersionChunkWindowRequest), typeof(GetStoredFileRequest), typeof(GetVersionChunkMembershipRequest));
             services.AddScoped<IDataProviderConnector, DataProviderConnector>();
 
@@ -66,6 +72,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             var fresh = await services.GetRequiredService<DataProviderSchema>().InitializeAsync(ct);
             await services.GetRequiredService<ImmutableEntityFileStore>().RecoverAsync(
                 services.GetRequiredService<DbContextOptions<KmsBusinessEntityDbContext>>(), ct);
+            services.GetRequiredService<ApiStagingStore>().RecoverTemporary();
             services.GetRequiredService<ExportFileLeases>().RecoverAfterRestart();
             await services.GetRequiredService<DataProviderGraphCache>().InitializeAsync(ct);
             return fresh;

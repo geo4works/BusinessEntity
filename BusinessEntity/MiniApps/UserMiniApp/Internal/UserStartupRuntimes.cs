@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
@@ -8,15 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Internal;
 
-// Обеспечивает OIDC bootstrap до синхронизации локальных пользователей.
-internal sealed class IdentityStartupRuntime : IModuleRuntime
+// Инициализирует общий протокол из сохранённых профилей после готовности локальной схемы User.
+internal sealed class IdentityStartupRuntime(IdentityStateStore store, BusinessEntity.Infrastructure.Identity.IdentityRuntime runtime,
+    IConfiguration configuration, BusinessEntity.Infrastructure.Identity.IdentityProfileValidation validation) : IModuleRuntime
 {
-    private readonly AuthentikBootstrapService _bootstrap;
-    // Единственная зависимость — инфраструктура identity.
-    public IdentityStartupRuntime(AuthentikBootstrapService bootstrap) => _bootstrap = bootstrap;
-    // Ошибка обязательной конфигурации прерывает startup.
-    public Task StartAsync(CancellationToken ct) => _bootstrap.EnsureAsync(ct);
-    // Внешний identity server не останавливается вместе с приложением.
+    public async Task StartAsync(CancellationToken ct)
+    { await store.InitializeAsync(configuration,runtime,validation,ct); await validation.ValidateAsync(runtime.Current.Profile,ct); }
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
 }
 // User владеет своей схемой и defaults, каталог задаёт только порядок.
@@ -74,7 +70,7 @@ internal sealed class UserModuleAccessPolicy : IModuleAccessPolicy
         }
         if (identity?.IsAuthenticated != true) return false;
         if (definition.RequiredPermission == "Authenticated") return true;
-        if (identity.IsAkadmin || identity.IsGeneralAdmin) return true;
+        if (identity.IsGlobalAdmin) return true;
         if (definition.RequiredPermission == "AdminItems")
         {
             var itemRights = contextId.HasValue ? await UserAccessService.GetCurrentUserPermissionsForEntityAsync(contextId.Value, ct)

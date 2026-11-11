@@ -1,6 +1,5 @@
 using BusinessEntity.Infrastructure.Selection;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
-using BusinessEntity.Services;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;

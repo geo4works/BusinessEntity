@@ -10,10 +10,10 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(BusinessEntity.Shared.MainLayout)">
                 <Authorizing>
-                    <AuthentikLoginGate IsCheckingSession="true" />
+                    <LoginGate IsCheckingSession="true" />
                 </Authorizing>
                 <NotAuthorized>
-                    <AuthentikLoginGate />
+                    <LoginGate />
                 </NotAuthorized>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />

@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.MiniApps.SpacesMiniApp.Internal;
 using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using BusinessEntity.Core.Classes;

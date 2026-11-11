@@ -4,7 +4,6 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 public sealed class UserProfileDto
 {
     public Guid UserId { get; set; }
-    public string ExternalId { get; set; } = string.Empty;
-    public string AuthentikLogin { get; set; } = string.Empty;
+    public string Login { get; set; } = string.Empty;
     public string DisplayedName { get; set; } = string.Empty;
 }

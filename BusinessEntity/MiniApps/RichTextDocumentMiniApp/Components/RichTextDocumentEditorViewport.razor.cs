@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal;
 using BusinessEntity.Core.Chunks;
 using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.RichText;

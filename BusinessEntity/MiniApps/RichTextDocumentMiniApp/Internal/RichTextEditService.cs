@@ -55,9 +55,25 @@ public sealed class RichTextEditService
                     SortOrder = original.SortOrder, Blocks = blocks.ToList() });
                 files.AddRange(converted.Files.Select(file => RichTextFileChanges.FileChange(entityId, file)));
             }
-            return new EntitySaveBatch(operationId, "RichTextDocumentMiniApp", editSessionId)
-                { Payloads = [new(entityId, baseVersion, manifest, changed, VersionDescription: description)], Files = files };
+            return AssembleSnapshot(operationId,editSessionId,entityId,baseVersion,manifest,normalizedTitle,description,changed,null,files);
 
+        }
+
+        // API full order/delta и UI editor используют один owner snapshot assembler и базу автора.
+        internal async Task<EntitySaveBatch> PrepareSnapshotBatchAsync(Guid operationId,Guid entityId,int baseVersion,string title,string description,
+            IReadOnlyList<BusinessEntityDataChunk> changed,IReadOnlyList<Guid> order,CancellationToken ct)
+        {
+            if(!(await _users.GetEntityContentAccessAsync(entityId,ct)).CanEditDraft)throw new UnauthorizedAccessException();
+            if(baseVersion<1)throw new ArgumentException("BaseVersion обязателен.");
+            var manifest=await _dataProviderConnector.GetDataVersionAsync<RichTextDocument>(entityId,baseVersion,ct)??throw new KeyNotFoundException();
+            return AssembleSnapshot(operationId,null,entityId,baseVersion,manifest,title,description,changed,order,[]);
+        }
+        // Не читает latest другого автора и не сливает его чанки в присланный полный порядок.
+        private static EntitySaveBatch AssembleSnapshot(Guid operationId,Guid? editSessionId,Guid entityId,int baseVersion,RichTextDocument manifest,string title,string description,
+            IReadOnlyList<BusinessEntityDataChunk> changed,IReadOnlyList<Guid>? order,IReadOnlyList<EntityFileChange> files)
+        {
+            manifest.Name=RichTextTitleRules.NormalizeRichTextDocumentTitle(title);
+            return new(operationId,"RichTextDocumentMiniApp",editSessionId){Payloads=[new(entityId,baseVersion,manifest,changed,order,description)],Files=files};
         }
 
         // Готовит и сохраняет полный авторский набор правок.

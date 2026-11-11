@@ -1,6 +1,7 @@
 // Проверяет реальные диалоги ухода и browser beforeunload на одном сохранённом документе.
 const {chromium}=require(process.env.BE_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('node:fs'); const assert=require('node:assert/strict');
+process.env.BE_SMOKE_LIBRARY='1';const setup=require('./api-crud-smoke.cjs');delete process.env.BE_SMOKE_LIBRARY;
 async function run(){
  const fixture=JSON.parse(fs.readFileSync(process.env.BE_SMOKE_RESULT_FILE,'utf8'));const base=process.env.BE_SMOKE_URL||'http://localhost:7000';
  const browser=await chromium.launch({channel:'msedge',headless:true});const context=await browser.newContext({viewport:{width:1700,height:1100}});
@@ -10,9 +11,8 @@ async function run(){
  const navigate=()=>page.locator('nav a[href="/multimedia"]').click();
  async function edit(text){await page.getByRole('button',{name:'Edit',exact:true}).click();await body().fill(text);await page.locator('.miniapp-save-state[data-dirty="true"]').waitFor();}
  try {
-  await page.goto(base+'/login',{waitUntil:'networkidle'});await page.locator('#auth-login').fill('admin');await page.locator('#auth-password').fill('admin');
-  await Promise.all([page.waitForNavigation({waitUntil:'networkidle'}),page.getByRole('button',{name:'Логин',exact:true}).click()]);
-  await page.goto(base+'/space-selection',{waitUntil:'networkidle'});await page.locator('li.list-group-item').filter({hasText:'Документы'}).getByRole('button',{name:'Выбрать',exact:true}).click();await page.waitForURL(base+'/');
+  await setup.login(page);
+  await page.goto(base+'/space-selection',{waitUntil:'networkidle'});await page.locator('li.list-group-item').filter({hasText:fixture.spaceName}).getByRole('button',{name:'Выбрать',exact:true}).click();await page.waitForURL(base+'/');
   await page.goto(fixture.documents.document,{waitUntil:'networkidle'});const original=await page.locator('.document-layout__content').innerText();
   const draft='Navigation draft '+Date.now();await edit(draft);await navigate();await dialog().waitFor();
   await dialog().getByRole('button',{name:'Остаться',exact:true}).click();await dialog().waitFor({state:'detached'});

@@ -1,4 +1,6 @@
-using BusinessEntity.Services;
+using BusinessEntity.Infrastructure.Identity;
+using BusinessEntity.Infrastructure.Api;
+using BusinessEntity.MiniApps.ExternalApiMiniApp.Registration;
 using BusinessEntity.MiniApps.NavigationMiniApp.Registration;
 using BusinessEntity.MiniApps.AdministrationMiniApp.Registration;
 using BusinessEntity.MiniApps.DiagnosticsMiniApp.Registration;
@@ -39,7 +41,10 @@ namespace BusinessEntity
 	{
 		public static async Task Main(string[] args)
 		{
-			var builder = WebApplication.CreateBuilder(args);
+			var builder = WebApplication.CreateBuilder(args.FirstOrDefault() == "identity-recover" ? [] : args);
+            // Операторский файл задаёт metadata bootstrap; сохранённый выбор в БД остаётся авторитетным.
+            if (builder.Configuration["IdentityConfigurationFile"] is { Length: > 0 } identityFile)
+                builder.Configuration.AddJsonFile(identityFile, optional: false, reloadOnChange: false).AddEnvironmentVariables();
 
 			// Включает базовый консольный логгер для всего приложения.
 			builder.Logging.AddConsole();
@@ -77,58 +82,8 @@ namespace BusinessEntity
             // Подключает UI-компоненты Radzen.
             builder.Services.AddRadzenComponents();
 
-            // Настраивает HTTP-клиент для интеграции с Authentik.
-            var akBaseUrl = (
-                Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL")
-                ?? builder.Configuration["AuthentikAuth:BaseUrl"]
-                ?? "http://localhost:9000").TrimEnd('/') + "/";
-            var akBrowserBaseUrl = (
-                Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL_FOR_BROWSER")
-                ?? builder.Configuration["AuthentikAuth:BaseUrlForBrowser"]
-                ?? builder.Configuration["AuthentikAuth:BaseUrl"]
-                ?? "http://localhost:9000").TrimEnd('/');
-            var akHostHeader = new Uri(akBrowserBaseUrl).Authority;
-
-            builder.Services.AddHttpClient("AuthentikAuth", client =>
-            {
-                client.BaseAddress = new Uri(akBaseUrl);
-                client.Timeout = TimeSpan.FromSeconds(30);
-                client.DefaultRequestHeaders.Host = akHostHeader;
-            });
-
-			// Подключает cookie-аутентификацию приложения.
-			builder.Services.AddAuthentication(options =>
-			{
-				options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-				options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-				options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-			})
-			.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
-			{
-				options.LoginPath = "/auth/login";
-				options.LogoutPath = "/auth/logout";
-				options.AccessDeniedPath = "/auth/access-denied";
-				options.ExpireTimeSpan = TimeSpan.FromHours(8);
-				options.SlidingExpiration = false;
-				options.Cookie.HttpOnly = true;
-				options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-				options.Cookie.SameSite = SameSiteMode.Lax;
-				options.Cookie.Name = "be.auth";
-				options.Events = new CookieAuthenticationEvents
-				{
-					OnValidatePrincipal = context =>
-					{
-						var sessionManager = context.HttpContext.RequestServices.GetRequiredService<AuthentikSessionManager>();
-						return sessionManager.RefreshSessionAsync(context);
-					}
-				};
-			});
-
-            // Регистрирует авторизацию и веб-контекст запроса.
-            builder.Services.AddAuthorization();
-            builder.Services.AddHttpContextAccessor();
-            builder.Services.AddScoped<AuthentikSessionManager>();
-            builder.Services.AddSingleton<AuthentikBootstrapService>();
+            // Подключает общий OIDC/cookie протокол; профили и их выбор принадлежат UserMiniApp.
+            builder.Services.AddPluggableIdentity(builder.Configuration);
 
             // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddModularity();
@@ -144,6 +99,18 @@ namespace BusinessEntity
             builder.Services.AddSampleDataMiniApp();
             builder.Services.AddTreeMiniApp();
             builder.Services.AddUserMiniApp();
+            builder.Services.AddExternalApiMiniApp();
+            builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options=>
+            {
+                var previous=options.InvalidModelStateResponseFactory;
+                options.InvalidModelStateResponseFactory=context=>
+                {
+                    if(!context.HttpContext.Request.Path.StartsWithSegments("/api/v1"))return previous(context);
+                    var problem=new Microsoft.AspNetCore.Mvc.ProblemDetails {Status=400,Title="Неверный формат запроса.",Type="about:blank"};
+                    problem.Extensions["code"]="validation.failed";problem.Extensions["requestId"]=context.HttpContext.TraceIdentifier;
+                    return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(problem);
+                };
+            });
             builder.Services.AddUserMessagesMiniApp();
 
             // Регистрирует прикладные сервисы и message bus.
@@ -151,9 +118,32 @@ namespace BusinessEntity
             builder.Services.AddBackupRestoreMiniApp();
 
 			// Подключает Swagger для диагностики API.
-			builder.Services.AddSwaggerGen();
+			builder.Services.AddSwaggerGen(options=>
+            {
+                options.SwaggerDoc("v1",new(){Title="BusinessEntity",Version="v1"});
+                options.SwaggerDoc("api-v1",new(){Title="BusinessEntity External API",Version="v1"});
+                options.DocInclusionPredicate((doc,description)=>doc!="api-v1"||description.RelativePath?.StartsWith("api/v1/",StringComparison.Ordinal)==true);
+                options.AddSecurityDefinition("Bearer",new(){Type=Microsoft.OpenApi.Models.SecuritySchemeType.Http,Scheme="bearer",BearerFormat="JWT"});
+                options.OperationFilter<ApiOpenApiFilter>();
+            });
 
 			var app = builder.Build();
+
+            // Offline команда не запускает каталог runtime и не требует доступности прежнего IdP.
+            await app.Services.AcquireIdentityHostLeaseAsync(CancellationToken.None);
+            if (args.Length > 0 && args[0] == "identity-recover")
+            {
+                if (args.Length != 3 || !Guid.TryParse(args[1], out var providerId) || !int.TryParse(args[2], out var revision) || revision < 1)
+                    throw new ArgumentException("Использование: identity-recover <ProviderId> <Revision>");
+                await using var commandScope = app.Services.CreateAsyncScope();
+                await commandScope.ServiceProvider.InitializeUserStorageAsync(false, CancellationToken.None);
+                if (await commandScope.ServiceProvider.InitializeDataProviderStorageAsync(CancellationToken.None))
+                    throw new InvalidOperationException("Recovery нельзя выполнять на пустой БД.");
+                var epoch = await commandScope.ServiceProvider.RecoverIdentityAsync(providerId, revision, CancellationToken.None);
+                app.Logger.LogInformation("Identity recovery завершён: профиль {ProviderId}, ревизия {Revision}, epoch {Epoch}", providerId, revision, epoch);
+                await app.DisposeAsync();
+                return;
+            }
 
 			// Подключает production-only обработчик ошибок.
 			if (!app.Environment.IsDevelopment())
@@ -163,14 +153,19 @@ namespace BusinessEntity
 
 			// Собирает HTTP pipeline приложения.
 			app.UseSwagger();
-			app.UseSwaggerUI();
+			app.UseSwaggerUI(options=>{options.SwaggerEndpoint("/swagger/api-v1/swagger.json","External API v1");options.SwaggerEndpoint("/swagger/v1/swagger.json","BusinessEntity controllers");});
 			app.UseStaticFiles();
 			app.UseRouting();
+            app.UseMiddleware<ApiErrorMiddleware>();
 			app.UseAuthentication();
 			app.UseAuthorization();
+            app.UseRateLimiter();
 
 			app.UseMiddleware<BusinessEntity.Middleware.SpaceSelectionMiddleware>();
 			app.MapControllers();
+            app.MapExternalApi();
+            app.Map("/api/v1/{**unmatched}",(HttpContext context)=>ApiProblems.WriteAsync(context,404,"api.route_not_found","Маршрут API не найден."))
+                .RequireAuthorization("ExternalApi").RequireRateLimiting("external-api");
 			app.MapRazorPages();
 			app.MapBlazorHub();
 			app.MapFallbackToPage("/_Host");

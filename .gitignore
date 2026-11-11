@@ -348,3 +348,9 @@ $RECYCLE.BIN/
 
 # Local experimental restore cache is not source code.
 **/.objtmp/
+
+# Identity rollout keeps the previous canonical store and uses an isolated new installation.
+BusinessEntityIdentityStorage/
+.identity-keys/
+identity-secrets.env
+identity.initial.json

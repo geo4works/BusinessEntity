@@ -20,7 +20,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
         // Возвращает локальных пользователей для страницы администрирования.
         Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default);
         // Читает пользователей приложения из Authentik и сохраняет их в локальную таблицу Users.
-        Task<IReadOnlyList<UserAdministrationRecord>> ReadAdministrationUsersFromAuthentikAsync(
+        Task<IReadOnlyList<UserAdministrationRecord>> RefreshAdministrationUsersAsync(
             CancellationToken cancellationToken = default);
         // Создает пользователя приложения в Authentik через user mini-app.
         Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default);

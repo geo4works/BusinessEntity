@@ -44,10 +44,14 @@ Powershell/Initialize-AuthentikEnv.ps1 сохраняет существующи
 Compose environment перекрывает env_file; изменение ENV не меняет пароль уже
 инициализированного PostgreSQL volume. Недоступную БД не «чинить» удалением volume.
 
-Стартовые dev-пользователи `admin` и `akadmin` обслуживаются bootstrap владельца
-User. Это dev-учётные записи, production настройки описаны в deployment policy.
-EnsureAuthentikOnStartup управляет подготовкой приложения/групп/OIDC. Неверная
-конфигурация должна завершить startup явной ошибкой, а не пустым рабочим UI.
+Identity использует сохранённые OIDC profiles; Authentik — необязательный adapter.
+Группы/роли приложения локальные. Фиксированные admin/akadmin и startup reset
+удалены. Первый GlobalAdmin определяется однократно по pinned issuer/subject.
+SecretRef разрешает только Identity:Secrets. Начальный профиль валидируется до
+сохранения; последующие старты читают committed выбор БД, без env fallback.
+Собственный Authentik включается COMPOSE_PROFILES=identity-local; приложение не
+зависит от его compose service. Production template: Deployment/identity.initial.example.json
+и identity-secrets.example.env; собственные значения в отдельном игнорируемом файле.
 
 ## Первый запуск
 
@@ -108,7 +112,7 @@ Smoke-документы и restore-пространства остаются д
 
 ## Схема и восстановление
 
-DataProvider schema 2, User schema 1, backup format 2. Старые схемы/архивы
+DataProvider schema 3, User schema 2, backup format 2. Старые схемы/архивы
 не мигрируются и не читаются через adapters. Пользователь разрешил пересоздать
 business_entity и очистить BusinessEntityStorage при этапе 2; это выполнено.
 Authentik, logger и Docker volumes не удалялись. Это не разрешение повторять
@@ -139,3 +143,25 @@ CMMTP n = версия + CHANGELOG (время до секунд) + русски
 Поставка на другую машину: Deployment/, Powershell/Build-ReleaseBundle.ps1,
 артефакты в artifacts/dist. Инструкции install/update/rollback и ограничения —
 [deployment policy](Policy/Deployment/deployment-policy.md).
+
+## Текущая раскатка AUTH/API
+
+Первый ввод AUTH_001 использует business_entity_identity и BusinessEntityIdentityStorage;
+исходные business_entity/BusinessEntityStorage сохранены. Секреты и DataProtection keys
+сохраняются отдельно. Текущий выполненный объём и реальные проверки — в
+Tasks/TASK_AUTH_API_execution-log.md. Старое разрешение CMMTP для ARCH_001 не относится
+к этому пакету; коммит/push требуют новой команды.
+Операторское восстановление: Identity-recovery.md. Одновременно поддерживается один
+процесс приложения на БД; PostgreSQL advisory lock исключает параллельный recovery.
+
+## BusinessEntity на 192.168.55.15, 2026-11-04
+
+Установлен через BotFactory/client001, Job01408 (09:02 МСК):
+`https://192.168.55.15:7070`, Compose `businessentity`, `/srv/businessentity`.
+Подключён к существующему User Hub9440, IID15f176e4-dbe7-44b6-a3f2-9d66c73ba2b7;
+собственный Authentik не устанавливался. Первый администратор при OIDC-входе —
+существующий admin, UUID a6458c2a-a512-4a53-89ed-11b393d14405.
+HTTPS200 и OIDC302/PKCE проверены; настоящий вход admin и UI ещё не проверены.
+Рабочая копия AUTH/API доставлена без commit/push. Сценарии и точный SHA пакета:
+[Deployment/botfactory/verification.md](../Deployment/botfactory/verification.md).
+Транспорт восстановлен штатно; HyperVDirect отключён, обмен идёт через Node.

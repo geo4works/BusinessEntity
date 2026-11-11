@@ -88,44 +88,32 @@ Requirements:
 
 - Docker-compatible runtime;
 - Docker Compose plugin;
-- .NET SDK 6.0 if the application is built or run outside Docker.
+- .NET SDK 9.0 if the application is built or run outside Docker.
 
-For a local development stack:
+Authentik and its user console are installed separately as the User Hub stack.
+BusinessEntity authenticates against an external OIDC provider and owns its local
+roles, groups and access rights.
 
 ```powershell
-./Powershell/Initialize-AuthentikEnv.ps1
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# Configure issuer, client ID/secret, verified bootstrap administrator subject,
+# and USER_HUB_URL. Register the application in the external identity service.
 docker network create docker-business-entity-common-bridge
 docker compose up -d --build
 ```
 
-The environment initializer preserves existing credentials and generates missing bootstrap
-and OIDC client secrets. The Authentik worker creates the initial administrator and API
-token. Before initializing users, the application waits for Authentik and configures the
-`BusinessEntity` application/catalog group, `be-oidc` provider, callback URLs and group claims.
-Initial logins are `akadmin` / `akadmin` and `admin` / `admin`. Existing `admin` passwords
-and profiles are preserved. Re-running the initializer and restarting the stack reuses the
-same credentials and Authentik objects.
+New installations use `IDENTITY_INITIAL_PROVISIONING=None` and
+`IDENTITY_MANAGED_LOCAL=false`. `USER_HUB_URL` enables links from profile/user
+administration to the shared console. Trust the identity service's private CA
+on clients and inside the application container; do not disable HTTPS validation.
 
-Local `.env` files, including `Authentic/.env`, are ignored by Git. Track configuration
-examples in [.env.example](.env.example), [Authentic/.env.example](Authentic/.env.example)
-and [Deployment/.env.example](Deployment/.env.example). On a fresh checkout, run the
-initializer above to create local files and generate credentials. Each installation
-keeps its own credentials across code updates; store an access-controlled backup of its
-environment files alongside database backups. Cloud development environments use their
-own local configuration.
+Local `.env` files are ignored by Git. Configuration examples are in
+[.env.example](.env.example) and [Deployment/.env.example](Deployment/.env.example).
+Existing identity databases, files and credentials are never migrated or deleted
+automatically. Changing the issuer requires an explicit account binding plan.
 
-When changing the application or Authentik ports, set `AUTHENTIK_REDIRECT_URIS` (first URL
-is the application's callback) and `AUTHENTIK_BASE_URL_FOR_BROWSER` to the corresponding
-public URLs. `ENSURE_AUTHENTIK_ON_STARTUP=false` disables OIDC provisioning for installations
-managed externally; their Admin API token can be supplied as `AUTHENTIK_API_TOKEN`.
-
-Default local endpoints:
-
-- Business Entity: `http://localhost:7000`
-- Authentik: `http://localhost:9000`
-- Web Logger: `http://localhost:5080`
-
-The root `docker-compose.yml` is development-oriented. Before public deployment, replace development secrets, review ports, review Authentik settings and use deployment assets from [Deployment](Deployment/README.md).
+Local endpoints: BusinessEntity `http://localhost:7000`, Web Logger
+`http://localhost:5080`. See [Deployment](Deployment/README.md) for release installation.
 
 ## Contributing
 

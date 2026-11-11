@@ -19,15 +19,15 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal
     public class RichTextDocumentImportService
     {
         private readonly BusinessEntityHelper _businessEntityHelper;
-        private readonly IRichDocFormatConverterFactory _converterFactory;
+        private readonly HtmlToRichTextBlocksConverter _html;
 
         // Получает настройки движка и владельцев преобразования входных форматов.
         public RichTextDocumentImportService(
             BusinessEntityHelper businessEntityHelper,
-            IRichDocFormatConverterFactory converterFactory)
+            HtmlToRichTextBlocksConverter html)
         {
             _businessEntityHelper = businessEntityHelper;
-            _converterFactory = converterFactory;
+            _html = html;
         }
 
         // Читает загруженный файл и строит manifest + chunks + embedded-файлы.
@@ -41,13 +41,10 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal
                 throw new InvalidOperationException("File name is empty.");
             }
 
-            using var memoryStream = new MemoryStream();
-            await contentStream.CopyToAsync(memoryStream, cancellationToken);
-            var fileBytes = memoryStream.ToArray();
-            var extension = Path.GetExtension(fileName).ToLowerInvariant();
-
-            var converter = _converterFactory.GetRequiredConverter(extension);
-            var convertedContent = await converter.ConvertAsync(fileName, fileBytes, cancellationToken);
+            var blocks=new List<BusinessEntityDataBlock>();var files=new List<RichTextEmbeddedFile>();
+            await foreach(var fragment in RichBookFragments.ReadAsync(fileName,contentStream,cancellationToken))
+            {var converted=await _html.ConvertHtmlAsync(fragment,cancellationToken);blocks.AddRange(converted.Blocks);files.AddRange(converted.Files);}
+            var convertedContent=new RichTextImportContent{Blocks=blocks,Files=files};
 
             var richTextChunkCharLimit = await ResolveRichTextChunkCharLimitAsync(cancellationToken);
             var chunks = BuildChunks(convertedContent.Blocks, richTextChunkCharLimit);
@@ -115,7 +112,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal
         }
 
         // Читает глобальную настройку размера rich-text чанка из системных параметров.
-        private async Task<int> ResolveRichTextChunkCharLimitAsync(CancellationToken cancellationToken)
+        internal async Task<int> ResolveRichTextChunkCharLimitAsync(CancellationToken cancellationToken)
         {
             var sysParametersEntity = await _businessEntityHelper.GetRequiredSingletonEntityAsync<SysParameters>(
                 global::BusinessEntity.MiniApps.SysParametersMiniApp.Contracts.SysParametersTpType.Id,

@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Repositories;
@@ -36,11 +35,11 @@ internal sealed class UserAccountsServiceMessageHandler : ScopedBusEndpoint
             var result = await _service.GetAdministrationUsersAsync();
             return new GetAdministrationUsersResponse(request.RequestId, result);
         }, static (id, error) => new GetAdministrationUsersResponse(id, default, error));
-        Subscribe<ReadAdministrationUsersFromAuthentikRequest, ReadAdministrationUsersFromAuthentikResponse>(async request =>
+        Subscribe<RefreshAdministrationUsersRequest, RefreshAdministrationUsersResponse>(async request =>
         {
-            var result = await _service.ReadAdministrationUsersFromAuthentikAsync();
-            return new ReadAdministrationUsersFromAuthentikResponse(request.RequestId, result);
-        }, static (id, error) => new ReadAdministrationUsersFromAuthentikResponse(id, default, error));
+            var result = await _service.RefreshAdministrationUsersAsync();
+            return new RefreshAdministrationUsersResponse(request.RequestId, result);
+        }, static (id, error) => new RefreshAdministrationUsersResponse(id, default, error));
         Subscribe<CreateAdministrationUserRequest, CreateAdministrationUserResponse>(async request =>
         {
             var result = await _service.CreateAdministrationUserAsync();

@@ -43,12 +43,18 @@ namespace BusinessEntity.Core.Services
         // Создает простую сущность и сохраняет ее в хранилище
         public async Task<Classes.BusinessEntity> CreateBusinessEntity(BusinessEntityTypeEnum type, string name)
         {
-            var entity = _businessEntityFactory.Create(type, name);
-            var initial = _types.Get(type).CreateInitial(entity.Id, name, null);
+            var plan=PrepareCreate(type,name);
+            await _dataProviderConnector.SaveAsync(plan.Batch);return plan.Entity;
+        }
+        // Pure подготовка общего initial payload; stable ID предоставляет владелец принятой операции.
+        public EntityWritePlan PrepareCreate(BusinessEntityTypeEnum type,string name,Guid? entityId=null,string? initialContent=null)
+        {
+            if(string.IsNullOrWhiteSpace(name))throw new ArgumentException("Название обязательно.");name=name.Trim();
+            var entity = _businessEntityFactory.Create(type, name);if(entityId.HasValue)entity.Id=entityId.Value;
+            var initial = _types.Get(type).CreateInitial(entity.Id, name, initialContent);
             var payloads = initial.Data == null ? Array.Empty<EntityPayloadChange>()
                 : new[] { new EntityPayloadChange(entity.Id, 0, initial.Data, initial.Chunks, initial.ChunkOrder) };
-            await _dataProviderConnector.SaveAsync(_batches.Create(type) with { Entities = [entity], Payloads = payloads });
-            return entity;
+            return new(entity,_batches.Create(type) with {Entities=[entity],Payloads=payloads});
         }
 
         // Удаляет сущность вместе со всеми ее связями
@@ -176,15 +182,18 @@ namespace BusinessEntity.Core.Services
         public async Task<Classes.BusinessEntity> CreateChildAsync(Classes.BusinessEntity parent, BusinessEntityTypeEnum type,
             string? initialContent = null, CancellationToken ct = default)
         {
+            var plan=await PrepareChildAsync(parent,type,initialContent:initialContent,ct:ct);
+            await _dataProviderConnector.SaveAsync(plan.Batch,ct);return plan.Entity;
+        }
+        // UI и headless владелец используют одинаковые правила допустимого родителя/начального payload.
+        public async Task<EntityWritePlan> PrepareChildAsync(Classes.BusinessEntity parent,BusinessEntityTypeEnum type,
+            string? name=null,Guid? entityId=null,Guid? relationId=null,string? initialContent=null,CancellationToken ct=default)
+        {
             var descriptor = _types.Get(type);
             if (!descriptor.AllowedParentTypes.Contains(parent.EntityType)) throw new ArgumentException("Тип нельзя вложить в выбранного родителя.");
-            var name = await GetNewItemNameAsync(parent, type, ct); var entity = _businessEntityFactory.Create(type, name);
-            var initial = descriptor.CreateInitial(entity.Id, name, initialContent);
-            var payloads = initial.Data == null ? Array.Empty<EntityPayloadChange>()
-                : new[] { new EntityPayloadChange(entity.Id, 0, initial.Data, initial.Chunks, initial.ChunkOrder) };
-            var relation = new BusinessEntityRelation { ObjectAId = parent.Id, ObjectBId = entity.Id, RelationType = "Contains" };
-            await _dataProviderConnector.SaveAsync(_batches.Create(type) with { Entities = [entity], Payloads = payloads, Relations = [relation] }, ct);
-            return entity;
+            name??=await GetNewItemNameAsync(parent,type,ct);var plan=PrepareCreate(type,name,entityId,initialContent);
+            var relation = new BusinessEntityRelation {Id=relationId??Guid.NewGuid(), ObjectAId = parent.Id, ObjectBId = plan.Entity.Id, RelationType = "Contains" };
+            return plan with {Batch=plan.Batch with {Relations=[relation]}};
         }
 
         // Меняет родителя элемента в дереве по связи Contains
@@ -203,6 +212,11 @@ namespace BusinessEntity.Core.Services
         // Перемещение всего набора готовит связи заранее и отправляет одну транзакцию от владельца сценария.
         public async Task MoveEntitiesAsync(IReadOnlyList<Guid> ids, Guid parentId, string miniAppId, CancellationToken ct)
         {
+            await _dataProviderConnector.SaveAsync(await PrepareMoveAsync(ids,parentId,miniAppId,Guid.NewGuid(),ct),ct);
+        }
+        // Один общий алгоритм подготовки Move используется UI и API; IDs связей принадлежат операции.
+        public async Task<EntitySaveBatch> PrepareMoveAsync(IReadOnlyList<Guid> ids,Guid parentId,string miniAppId,Guid operationId,CancellationToken ct)
+        {
             var all = await _dataProviderConnector.QueryGraphAsync(GraphQueryKind.All, cancellationToken: ct);
             var parent = all.Entities.Single(x => x.Id == parentId);
             var children = ids.Distinct().Select(id => all.Entities.Single(x => x.Id == id)).ToArray();
@@ -213,8 +227,8 @@ namespace BusinessEntity.Core.Services
             }
             var selected = children.Select(x => x.Id).ToHashSet();
             var removed = all.Relations.Where(x => selected.Contains(x.ObjectBId) && x.RelationType == "Contains").Select(x => x.Id).ToArray();
-            var added = children.Select(child => new BusinessEntityRelation { ObjectAId = parentId, ObjectBId = child.Id, RelationType = "Contains" }).ToArray();
-            await _dataProviderConnector.SaveAsync(new EntitySaveBatch(Guid.NewGuid(), miniAppId, null) { DeleteRelations = removed, Relations = added }, ct);
+            var added = children.Select(child => new BusinessEntityRelation {Id=StableOperationIdentity.Create(operationId,"move:"+child.Id.ToString("N")), ObjectAId = parentId, ObjectBId = child.Id, RelationType = "Contains" }).ToArray();
+            return new EntitySaveBatch(operationId,miniAppId,null){DeleteRelations=removed,Relations=added};
         }
         // Удаляет весь выбранный набор одной транзакцией, включая зависимые поддеревья на стороне DataProvider.
         public Task RemoveEntitiesAsync(IReadOnlyList<Guid> ids, string miniAppId, CancellationToken ct) =>
@@ -234,6 +248,12 @@ namespace BusinessEntity.Core.Services
         // Переименовывает сущность и сохраняет изменение
         public async Task<Classes.BusinessEntity?> RenameEntity(Guid entityId, string newName, CancellationToken ct = default)
         {
+            var plan=await PrepareRenameAsync(entityId,newName,ct);if(plan==null)return null;
+            await _dataProviderConnector.SaveAsync(plan.Batch,ct);return plan.Entity;
+        }
+        // Описатель/codec дают полный payload имени, поэтому rename не обходит историю конкретного типа.
+        public async Task<EntityWritePlan?> PrepareRenameAsync(Guid entityId,string newName,CancellationToken ct=default)
+        {
             if (string.IsNullOrWhiteSpace(newName)) throw new ArgumentException("Название обязательно.", nameof(newName));
             var entity = await _dataProviderConnector.GetByIdAsync(entityId, ct);
             if (entity == null) return null;
@@ -241,8 +261,7 @@ namespace BusinessEntity.Core.Services
             entity.Name = newName.Trim();
             var payloads = Array.Empty<EntityPayloadChange>();
             if (data != null) { data.Name = entity.Name; payloads = [new(entityId, data.Version, data)]; }
-            await _dataProviderConnector.SaveAsync(_batches.Create(entity.EntityType) with { Entities = [entity], Payloads = payloads }, ct);
-            return entity;
+            return new(entity,_batches.Create(entity.EntityType) with {Entities=[entity],Payloads=payloads});
         }
 
         // Проверяет, создаст ли перенос циклическую зависимость

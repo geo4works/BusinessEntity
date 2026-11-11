@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.RichTextDocumentMiniApp.Contracts.Printing;
@@ -63,12 +62,12 @@ public sealed class UserConnector : IUserConnector
         return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
     }
 
-    // Выполняет ReadAdministrationUsersFromAuthentik через адресный request/response.
-    public async Task<IReadOnlyList<UserAdministrationRecord>> ReadAdministrationUsersFromAuthentikAsync(CancellationToken cancellationToken = default)
+    // Выполняет RefreshAdministrationUsers через адресный request/response.
+    public async Task<IReadOnlyList<UserAdministrationRecord>> RefreshAdministrationUsersAsync(CancellationToken cancellationToken = default)
     {
         if (!_scope.UserId.HasValue) await EnsureCurrentUserAsync(cancellationToken);
-        var response = await _client.SendAsync<ReadAdministrationUsersFromAuthentikRequest, ReadAdministrationUsersFromAuthentikResponse>(
-            new ReadAdministrationUsersFromAuthentikRequest(Guid.NewGuid()), cancellationToken);
+        var response = await _client.SendAsync<RefreshAdministrationUsersRequest, RefreshAdministrationUsersResponse>(
+            new RefreshAdministrationUsersRequest(Guid.NewGuid()), cancellationToken);
         return response.Result ?? throw new BusRequestFailedException(new BusError("bus.invalid_response", "Обработчик не вернул обязательный результат."));
     }
 

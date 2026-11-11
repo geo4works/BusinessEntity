@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
@@ -10,7 +9,6 @@ namespace BusinessEntity.MiniApps.DiagnosticsMiniApp.Components
     // Предоставляет административные команды веб-журнала.
     public partial class LoggingContent
     {
-        [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<LoggingContent> Logger { get; set; } = default!;
@@ -102,7 +100,7 @@ namespace BusinessEntity.MiniApps.DiagnosticsMiniApp.Components
         {
             try
             {
-                var loginUrl = AuthService.GetLoginUrl("/logging");
+                var loginUrl = "/auth/login?returnUrl=%2Flogging";
                 Logger.LogInformation("Redirecting user to Authentik login url={LoginUrl}", loginUrl);
                 Navigation.NavigateTo(loginUrl, forceLoad: true);
             }

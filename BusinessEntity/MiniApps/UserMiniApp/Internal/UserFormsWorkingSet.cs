@@ -93,12 +93,7 @@ internal sealed class UserFormsWorkingSet(MiniAppSaveContext context, UserAccoun
     private static void ClearConfirmedPasswords(object live, object sent)
     {
         if (live is UserAdministrationSaveRequest account && sent is UserAdministrationSaveRequest savedAccount && account.Password == savedAccount.Password) account.Password = string.Empty;
-        if (live is UserProfileUpdateRequest profile && sent is UserProfileUpdateRequest saved)
-        {
-            if (profile.OldPassword == saved.OldPassword) profile.OldPassword = string.Empty;
-            if (profile.NewPassword == saved.NewPassword) profile.NewPassword = string.Empty;
-            if (profile.RepeatPassword == saved.RepeatPassword) profile.RepeatPassword = string.Empty;
-        }
+
     }
     // Только внутренний владелец содержит изменяемые формы и строки со временными секретами.
     private sealed class Entry(object model, Type type, string current, string saved)

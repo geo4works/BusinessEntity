@@ -49,7 +49,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextImpor
         {
             if (node.NodeType == HtmlNodeType.Text)
             {
-                var text = HtmlEntity.DeEntitize(node.InnerText ?? string.Empty).Trim();
+                var text = WebUtility.HtmlDecode(node.InnerText ?? string.Empty).Trim();
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     blocks.Add(new BusinessEntityDataBlock
@@ -213,7 +213,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextImpor
         private static string SanitizeCodeBlockHtml(HtmlNode preNode)
         {
             var codeNode = preNode.Descendants("code").FirstOrDefault();
-            var rawText = HtmlEntity.DeEntitize((codeNode ?? preNode).InnerText ?? string.Empty)
+            var rawText = WebUtility.HtmlDecode((codeNode ?? preNode).InnerText ?? string.Empty)
                 .TrimEnd('\r', '\n');
 
             return WebUtility.HtmlEncode(rawText);
@@ -237,7 +237,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextImpor
         {
             if (node.NodeType == HtmlNodeType.Text)
             {
-                builder.Append(WebUtility.HtmlEncode(HtmlEntity.DeEntitize(node.InnerText ?? string.Empty)));
+                builder.Append(WebUtility.HtmlEncode(WebUtility.HtmlDecode(node.InnerText ?? string.Empty)));
                 return;
             }
 
@@ -344,7 +344,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextImpor
         {
             if (node.NodeType == HtmlNodeType.Text)
             {
-                builder.Append(WebUtility.HtmlEncode(HtmlEntity.DeEntitize(node.InnerText ?? string.Empty)));
+                builder.Append(WebUtility.HtmlEncode(WebUtility.HtmlDecode(node.InnerText ?? string.Empty)));
                 return;
             }
 
@@ -764,7 +764,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextImpor
         {
             if (node.NodeType == HtmlNodeType.Text)
             {
-                builder.Append(WebUtility.HtmlEncode(HtmlEntity.DeEntitize(node.InnerText ?? string.Empty)));
+                builder.Append(WebUtility.HtmlEncode(WebUtility.HtmlDecode(node.InnerText ?? string.Empty)));
                 return;
             }
 
@@ -1006,7 +1006,7 @@ namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Internal.RichTextImpor
         // Читает HTML-атрибут с de-entity нормализацией.
         private static string ReadAttribute(HtmlNode node, string name)
         {
-            return HtmlEntity.DeEntitize(node.GetAttributeValue(name, string.Empty)).Trim();
+            return WebUtility.HtmlDecode(node.GetAttributeValue(name, string.Empty)).Trim();
         }
 
         // Проверяет наличие CSS-класса у HTML-узла.

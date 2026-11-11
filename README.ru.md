@@ -68,34 +68,30 @@ MIT License относится к коду и документации. Она �
 
 ## Первый запуск из репозитория
 
+Authentik и кабинет пользователей устанавливаются отдельно комплектом User Hub.
+BusinessEntity использует внешний OIDC и сохраняет собственные роли, группы и права.
+
 ```powershell
-./Powershell/Initialize-AuthentikEnv.ps1
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# Укажите issuer, client ID/secret, проверенный subject первого администратора
+# и USER_HUB_URL. Секрет OIDC выдаётся при регистрации приложения в Authentik.
 docker network create docker-business-entity-common-bridge
 docker compose up -d --build
 ```
 
-Скрипт сохраняет существующие настройки `.env` и генерирует недостающие bootstrap-токен
-и секрет OIDC-клиента. Worker Authentik создает начального администратора и API-токен.
-Приложение дожидается готовности Authentik, создает приложение и группу каталога
-`BusinessEntity`, OIDC-провайдер `be-oidc`, callback URL и claims групп. После этого
-`UserMiniApp` создает стартовых пользователей `akadmin/akadmin`, `admin/admin`, группы
-и локальные права. Повторный запуск сохраняет идентификаторы объектов и пароль
-существующего `admin`. Техническому `akadmin` восстанавливается пароль `akadmin`
-согласно политике стартовых администраторов.
+Новые установки используют `IDENTITY_INITIAL_PROVISIONING=None` и
+`IDENTITY_MANAGED_LOCAL=false`. При заданном `USER_HUB_URL` профиль и управление
+пользователями предлагают переход в общий кабинет. Локальные права приложения
+остаются в BusinessEntity. Для частного CA настройте доверие сертификату на клиенте
+и в контейнере приложения; проверку HTTPS отключать нельзя.
 
-Локальные `.env`, включая `Authentic/.env`, исключены из Git. Примеры настроек хранятся
-в [.env.example](.env.example), [Authentic/.env.example](Authentic/.env.example)
-и [Deployment/.env.example](Deployment/.env.example). После нового клонирования запустите
-скрипт выше: он создаст локальные файлы и сгенерирует секреты. Каждая установка сохраняет
-свои настройки при обновлении кода. Храните защищённую резервную копию `.env` вместе
-с резервными копиями базы данных. Для облачной разработки используйте собственные
-локальные настройки окружения.
+Локальная `.env` исключена из Git. Примеры: [.env.example](.env.example) и
+[Deployment/.env.example](Deployment/.env.example). Существующие настройки, база
+Authentik и его файловые данные автоматически не переносятся и не удаляются.
+Смена issuer требует отдельного плана привязки существующих пользователей.
 
-Адреса по умолчанию: приложение `http://localhost:7000`, Authentik `http://localhost:9000`,
-логгер `http://localhost:5080`. При смене портов задайте соответствующие
-`AUTHENTIK_BASE_URL_FOR_BROWSER` и `AUTHENTIK_REDIRECT_URIS` в `.env`; первый callback
-используется приложением для обмена authorization code. Для готового release bundle
-используйте [Deployment/install.ps1](Deployment/install.ps1).
+Локальные адреса приложения и логгера: `http://localhost:7000` и
+`http://localhost:5080`. Установка готовой поставки: [Deployment](Deployment/README.md).
 
 ## Участие
 

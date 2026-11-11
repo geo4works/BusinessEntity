@@ -3,6 +3,7 @@ const { chromium } = require(process.env.BE_PLAYWRIGHT_MODULE || "playwright");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+process.env.BE_SMOKE_LIBRARY="1";const setup=require("./api-crud-smoke.cjs");delete process.env.BE_SMOKE_LIBRARY;
 
 // Проверяет вход, дерево и запись обоих видов документа через интерфейс.
 async function run() {
@@ -11,32 +12,25 @@ async function run() {
   const page = await mainContext.newPage();
   page.setDefaultTimeout(30000);
   const base = process.env.BE_SMOKE_URL || "http://localhost:7000";
-  const label = process.env.BE_SMOKE_LABEL || "stage0";
+  const label = process.env.BE_SMOKE_LABEL || "oidc-regression";
+  const spaceName=process.env.BE_SMOKE_SPACE;assert(spaceName,"BE_SMOKE_SPACE must identify an owned QA space");
   const suffix = Date.now();
-  const result = { label, steps: [], documents: {} };
+  const result = { label, spaceName, steps: [], documents: {} };
   // Добавляет подтверждённый шаг без вывода токенов и пароля.
   const passed = name => { result.steps.push(name); console.log(JSON.stringify({ passed: name })); };
   try {
-    const response = await page.goto(base + "/login", { waitUntil: "networkidle" });
-    assert.equal(response.status(), 200);
-    await page.locator("#auth-login").fill(process.env.BE_SMOKE_USER || "admin");
-    await page.locator("#auth-password").fill(process.env.BE_SMOKE_PASSWORD || "admin");
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: "networkidle" }),
-      page.getByRole("button", { name: "Логин", exact: true }).click()
-    ]);
-    assert(!page.url().includes("loginError"));
+    await setup.login(page);
     passed("login");
     await page.goto(base + "/space-selection", { waitUntil: "networkidle" });
-    const space = page.locator("li.list-group-item").filter({ hasText: "Документы" });
+    const space = page.locator("li.list-group-item").filter({ hasText: spaceName });
     await space.getByRole("button", { name: "Выбрать", exact: true }).click();
     await page.waitForURL(base + "/");
     const tree = page.locator("#main-tree-container");
-    await tree.getByText("Документы", { exact: true }).waitFor();
+    await tree.getByText(spaceName, { exact: true }).waitFor();
     passed("space-and-tree");
 
     const before = await tree.locator(".tree-node-title").allTextContents();
-    await tree.getByText("Документы", { exact: true }).click({ button: "right" });
+    await tree.getByText(spaceName, { exact: true }).click({ button: "right" });
     await page.getByText("Создать документ", { exact: true }).click();
     await page.waitForFunction(previous => [...document.querySelectorAll("#main-tree-container .tree-node-title")]
       .some(x => !previous.includes(x.textContent)), before);
@@ -58,7 +52,7 @@ async function run() {
     assert((await page.locator(".document-layout__content").innerText()).includes(body));
     passed("document-create-save-reload");
 
-    await tree.getByText("Документы", { exact: true }).click({ button: "right" });
+    await tree.getByText(spaceName, { exact: true }).click({ button: "right" });
     await page.getByText("Создать рич-документ", { exact: true }).click();
     await page.waitForURL(/\/rich-document\/[a-f0-9-]+/);
     result.documents.article = page.url().split("?")[0];
@@ -88,32 +82,24 @@ async function run() {
     secondWindow.setDefaultTimeout(30000);
     await page.goto(base + "/profile", { waitUntil: "networkidle" });
     await secondWindow.goto(base + "/profile", { waitUntil: "networkidle" });
-    await secondWindow.locator(".profile-page input").first().waitFor();
-    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-    await page.locator(".user-message-item__text").getByText("Профиль сохранен.", { exact: true }).waitFor();
-    assert.equal(await secondWindow.locator(".user-message-item__text").getByText("Профиль сохранен.", { exact: true }).count(), 0);
-    await secondWindow.getByRole("button", { name: "Сохранить", exact: true }).click();
-    await secondWindow.locator(".user-message-item__text").getByText("Профиль сохранен.", { exact: true }).waitFor();
-    assert.equal(await page.locator(".user-message-item__text").getByText("Профиль сохранен.", { exact: true }).count(), 1);
-    await secondWindow.close();
-    passed("profile-save-two-windows-messages-isolated");
-
-    const otherContext = await browser.newContext();
-    const otherUser = await otherContext.newPage();
-    await otherUser.goto(base + "/login", { waitUntil: "networkidle" });
-    await otherUser.locator("#auth-login").fill("akadmin");
-    await otherUser.locator("#auth-password").fill("akadmin");
-    await Promise.all([
-      otherUser.waitForNavigation({ waitUntil: "networkidle" }),
-      otherUser.getByRole("button", { name: "Логин", exact: true }).click()
-    ]);
-    assert(!otherUser.url().includes("loginError"));
-    await otherUser.goto(base + "/profile", { waitUntil: "networkidle" });
-    const technicalName = await otherUser.locator(".profile-page input").first().inputValue();
-    const mainName = await page.locator(".profile-page input").first().inputValue();
-    assert.notEqual(technicalName, mainName, "Две независимые identity возвращают свои профили");
-    await otherContext.close();
-    passed("two-users-profiles-isolated");
+    const profileInput=p=>p.getByLabel("Отображаемое имя",{exact:true});
+    const savedState=p=>p.locator('.miniapp-save-state[data-dirty="false"]').getByText("Рабочий набор сохранён.",{exact:true});
+    const originalName=await profileInput(page).inputValue();
+    const firstName=originalName+' QA '+suffix,secondName=originalName+' QA2 '+suffix;
+    async function saveProfile(p,name){await profileInput(p).fill(name);await profileInput(p).press('Tab');await p.locator('.miniapp-save-state[data-dirty="true"]').waitFor();await p.getByRole("button",{name:"Сохранить",exact:true}).click();await savedState(p).waitFor();}
+    try{
+      await saveProfile(page,firstName);
+      assert.equal(await secondWindow.locator('.miniapp-save-state[data-dirty="true"]').count(),0);
+      assert.equal(await savedState(secondWindow).count(),0);
+      assert.equal(await profileInput(secondWindow).inputValue(),originalName);
+      await saveProfile(secondWindow,secondName);
+      assert.equal(await profileInput(page).inputValue(),firstName);
+      assert.equal(await savedState(page).count(),1);
+      passed("profile-save-two-windows-state-isolated");
+    }finally{
+      await saveProfile(page,originalName);
+      await secondWindow.close();
+    }
 
     await page.goto(base + "/administration", { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Администрирование", exact: true }).waitFor();
@@ -131,7 +117,7 @@ async function run() {
       fs.mkdirSync(output, { recursive: true });
       await page.screenshot({ path: path.join(output, label + "-failure.png"), fullPage: true });
     }
-    console.error(JSON.stringify({ label, failedAt: page.url(), completed: result.steps, error: error.message }));
+    console.error(JSON.stringify({ label, failedAt: page.url(), completed: result.steps, error: error.message, alerts:await page.getByRole("alert").allTextContents(),saveState:await page.locator(".miniapp-save-state").allTextContents() }));
     process.exitCode = 1;
   } finally {
     await browser.close();

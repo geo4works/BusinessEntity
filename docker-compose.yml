@@ -1,91 +1,7 @@
 name: businessentity-stack
 
 services:
-
-  # ── Authentik PostgreSQL ──────────────────────────────────────────────────
-  authentic_postgresql:
-    image: docker.io/library/postgres:16-alpine
-    env_file:
-      - ./Authentic/.env
-    environment:
-      POSTGRES_DB: ${PG_DB:-authentik}
-      POSTGRES_PASSWORD: ${PG_PASS:?database password required}
-      POSTGRES_USER: ${PG_USER:-authentik}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    restart: unless-stopped
-    volumes:
-      - authentic_database:/var/lib/postgresql/data
-    networks:
-      - common
-
-  # ── Authentik Server ──────────────────────────────────────────────────────
-  authentic_server:
-    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.1}
-    command: server
-    depends_on:
-      authentic_postgresql:
-        condition: service_healthy
-    env_file:
-      - ./Authentic/.env
-    environment:
-      AUTHENTIK_POSTGRESQL__HOST: authentic_postgresql
-      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
-      AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
-      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?secret key required}
-      AUTHENTIK_DEFAULT_LOCALE: en
-    ports:
-      - ${COMPOSE_PORT_HTTP:-9000}:9000
-      - ${COMPOSE_PORT_HTTPS:-9443}:9443
-    restart: unless-stopped
-    shm_size: 512mb
-    volumes:
-      - ./Authentic/data:/data
-      - ./Authentic/custom-templates:/templates
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/-/health/live/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-    networks:
-      - common
-
-  # ── Authentik Worker ──────────────────────────────────────────────────────
-  authentic_worker:
-    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.1}
-    command: worker
-    depends_on:
-      authentic_postgresql:
-        condition: service_healthy
-    env_file:
-      - ./Authentic/.env
-    environment:
-      AUTHENTIK_POSTGRESQL__HOST: authentic_postgresql
-      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
-      AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
-      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?secret key required}
-      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:?bootstrap token required; initialize the environment first}
-      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-akadmin}
-      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-akadmin@businessentity.local}
-    restart: unless-stopped
-    shm_size: 512mb
-    user: root
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./Authentic/data:/data
-      - ./Authentic/certs:/certs
-      - ./Authentic/custom-templates:/templates
-    networks:
-      - common
-
-  # ── BusinessEntity PostgreSQL ─────────────────────────────────────────────
+  # Identity is provided by the separately installed User Hub / external OIDC.
   postgres-production-db:
     container_name: postgres-production-db
     build:
@@ -119,32 +35,43 @@ services:
       ASPNETCORE_URLS: http://*:80
       ASPNETCORE_ENVIRONMENT: Development
       IS_DOCKER: "true"
-      ConnectionStrings__DockerConnection: Host=postgres-production-db;Port=5432;Database=business_entity;Username=adm01;Password=adm01pwd
-      # Inside the common Docker network, talk to the Authentik service directly via DNS name
-      AUTHENTIK_BASE_URL: http://authentic_server:9000
-      # What browsers should use to reach Authentik
-      AUTHENTIK_BASE_URL_FOR_BROWSER: ${AUTHENTIK_BASE_URL_FOR_BROWSER:-http://localhost:9000}
-      # The worker creates this token before application bootstrap uses the Admin API.
-      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-${AUTHENTIK_BOOTSTRAP_TOKEN:?bootstrap token required}}
-      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_CLIENT_ID:-business-entity}
-      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:?OIDC client secret required; initialize the environment first}
-      AUTHENTIK_APPLICATION_NAME: ${AUTHENTIK_APPLICATION_NAME:-BusinessEntity}
-      AUTHENTIK_APPLICATION_USERS_GROUP: ${AUTHENTIK_APPLICATION_USERS_GROUP:-GeoUsers}
-      AUTHENTIK_GENERAL_ADMINS_GROUP: ${AUTHENTIK_GENERAL_ADMINS_GROUP:-BusinessEntityAdmins}
-      # Redirect URIs for our app (signin-oidc will be auto-added per host)
-      AUTHENTIK_REDIRECT_URIS: ${AUTHENTIK_REDIRECT_URIS:-http://localhost:7000/auth/callback}
-      EnsureAuthentikOnStartup: ${ENSURE_AUTHENTIK_ON_STARTUP:-true}
+      ConnectionStrings__DockerConnection: ${BUSINESS_ENTITY_CONNECTION:?configure the selected application database}
       Storage__RootPath: /app/storage
-      Storage__HostRootPath: "C:\\Develop\\BusinessEntityProduct\\BusinessEntity\\BusinessEntityStorage"
+      Storage__HostRootPath: ${BUSINESS_ENTITY_STORAGE_HOST_ROOT:?configure the selected storage directory}
+      Identity__KeyDirectory: /app/identity-keys
+      UserHub__Url: ${USER_HUB_URL:-}
+      Identity__InitialProvider__Id: ${IDENTITY_INITIAL_PROVIDER_ID:?configure initial provider}
+      Identity__InitialProvider__Name: ${IDENTITY_INITIAL_PROVIDER_NAME:-OIDC provider}
+      Identity__InitialProvider__Issuer: ${IDENTITY_INITIAL_ISSUER:?configure identity issuer}
+      Identity__InitialProvider__MetadataAddress: ${IDENTITY_INITIAL_METADATA:?configure OpenID metadata}
+      Identity__InitialProvider__ClientId: ${IDENTITY_INITIAL_CLIENT_ID:?configure identity client}
+      Identity__InitialProvider__ClientSecretRef: client-a
+      Identity__InitialProvider__BackchannelBaseAddress: ${IDENTITY_INITIAL_BACKCHANNEL:-}
+      Identity__InitialProvider__ProvisioningKind: ${IDENTITY_INITIAL_PROVISIONING:-None}
+      Identity__InitialProvider__ManagementEndpoint: ${IDENTITY_INITIAL_MANAGEMENT:-}
+      Identity__InitialProvider__ManagementSecretRef: management-a
+      Identity__InitialProvider__SubjectMode: user_uuid
+      Identity__InitialProvider__PasswordResetAttribute: be_password_reset
+      Identity__InitialProvider__PasswordResetFlowVerified: ${IDENTITY_PASSWORD_RESET_FLOW_VERIFIED:-false}
+      Identity__InitialProvider__ManagedLocal: ${IDENTITY_MANAGED_LOCAL:-false}
+      Identity__InitialProvider__ApiTokenProfiles__0__Issuer: ${IDENTITY_API_ISSUER:?configure API token issuer}
+      Identity__InitialProvider__ApiTokenProfiles__0__MetadataAddress: ${IDENTITY_API_METADATA:?configure API metadata}
+      Identity__InitialProvider__ApiTokenProfiles__0__Audience: ${IDENTITY_API_AUDIENCE:?configure API audience}
+      Identity__InitialProvider__ApiTokenProfiles__0__AllowedClientIds__0: ${IDENTITY_API_AUDIENCE}
+      Identity__InitialProvider__ApiTokenProfiles__0__ClientClaim: azp
+      Identity__InitialProvider__ApiTokenProfiles__0__RequiredScope: be.api
+      Identity__Secrets__client-a: ${IDENTITY_CLIENT_SECRET_A:?configure identity secret}
+      Identity__Secrets__management-a: ${AUTHENTIK_API_TOKEN:-${AUTHENTIK_BOOTSTRAP_TOKEN}}
+      Identity__Secrets__client-b: ${IDENTITY_CLIENT_SECRET_B:-}
+      Identity__Secrets__management-b: ${IDENTITY_B_MANAGEMENT_TOKEN:-}
+      Identity__Bootstrap__AdministratorIssuer: ${IDENTITY_BOOTSTRAP_ADMIN_ISSUER:?pin initial administrator issuer}
+      Identity__Bootstrap__AdministratorSubject: ${IDENTITY_BOOTSTRAP_ADMIN_SUBJECT:?pin initial administrator subject}
     volumes:
-      - ./BusinessEntityStorage:/app/storage
+      - ${BUSINESS_ENTITY_STORAGE_PATH:?select a separate storage directory}:/app/storage
+      - ./.identity-keys:/app/identity-keys
     depends_on:
       postgres-production-db:
         condition: service_healthy
-      authentic_server:
-        condition: service_healthy
-      authentic_worker:
-        condition: service_started
     networks:
       - common
 
@@ -175,6 +102,4 @@ networks:
 
 volumes:
   pgdata:
-    driver: local
-  authentic_database:
     driver: local

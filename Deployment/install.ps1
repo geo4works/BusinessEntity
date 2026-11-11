@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$NoStart,
     [switch]$SkipImageLoad,
     [switch]$SkipHealthWait
@@ -95,21 +95,11 @@ function Initialize-EnvFile {
     }
 
     $envMap = Read-DotEnv -Path $EnvPath
-    foreach ($key in @("BE_DB_PASSWORD", "AUTHENTIK_PG_PASS", "AUTHENTIK_SECRET_KEY", "AUTHENTIK_BOOTSTRAP_TOKEN", "AUTHENTIK_CLIENT_SECRET")) {
+    foreach ($key in @("BE_DB_PASSWORD")) {
         if (-not $envMap.Contains($key) -or [string]::IsNullOrWhiteSpace($envMap[$key]) -or $envMap[$key] -eq "__GENERATE__") {
             $envMap[$key] = Get-RandomHex -ByteCount 32
             Write-Host "Generated $key" -ForegroundColor DarkGreen
         }
-    }
-
-    if (-not $envMap.Contains("AUTHENTIK_REDIRECT_URIS") -or [string]::IsNullOrWhiteSpace($envMap["AUTHENTIK_REDIRECT_URIS"])) {
-        $port = if ($envMap.Contains("BUSINESSENTITY_HTTP_PORT")) { $envMap["BUSINESSENTITY_HTTP_PORT"] } else { "7000" }
-        $envMap["AUTHENTIK_REDIRECT_URIS"] = "http://localhost:$port/auth/callback"
-    }
-
-    if (-not $envMap.Contains("AUTHENTIK_BASE_URL_FOR_BROWSER") -or [string]::IsNullOrWhiteSpace($envMap["AUTHENTIK_BASE_URL_FOR_BROWSER"])) {
-        $port = if ($envMap.Contains("AUTHENTIK_HTTP_PORT")) { $envMap["AUTHENTIK_HTTP_PORT"] } else { "9000" }
-        $envMap["AUTHENTIK_BASE_URL_FOR_BROWSER"] = "http://localhost:$port"
     }
 
     Write-DotEnv -Path $EnvPath -Map $envMap
@@ -120,10 +110,7 @@ function Ensure-Directories {
         "storage",
         "backups",
         "runtime",
-        "runtime/authentik",
-        "runtime/authentik/data",
-        "runtime/authentik/certs",
-        "runtime/authentik/custom-templates"
+        "runtime/identity-keys"
     )) {
         $path = Join-Path $Root $relative
         if (-not (Test-Path $path)) {
@@ -192,6 +179,9 @@ if (-not (Test-Path $ComposePath)) {
 }
 
 Initialize-EnvFile
+foreach ($name in @("identity.initial.json", "identity-secrets.env")) {
+    if (-not (Test-Path (Join-Path $Root $name))) { throw "Configure $name from its example before installation. See README identity setup." }
+}
 Ensure-Directories
 Ensure-DockerNetwork
 Import-OfflineImages
@@ -212,11 +202,9 @@ if (-not $NoStart -and -not $SkipHealthWait) {
     $envMap = Read-DotEnv -Path $EnvPath
     $appPort = if ($envMap.Contains("BUSINESSENTITY_HTTP_PORT")) { $envMap["BUSINESSENTITY_HTTP_PORT"] } else { "7000" }
     $loggerPort = if ($envMap.Contains("WEB_LOGGER_HTTP_PORT")) { $envMap["WEB_LOGGER_HTTP_PORT"] } else { "5080" }
-    $authPort = if ($envMap.Contains("AUTHENTIK_HTTP_PORT")) { $envMap["AUTHENTIK_HTTP_PORT"] } else { "9000" }
 
     Wait-HttpOk -Url "http://localhost:$appPort" -TimeoutSeconds 180
     Wait-HttpOk -Url "http://localhost:$loggerPort" -TimeoutSeconds 120
-    Wait-HttpOk -Url "http://localhost:$authPort/-/health/live/" -TimeoutSeconds 180
 }
 
 if (-not $NoStart -and (Test-Path $InitialDataScript)) {
@@ -227,6 +215,5 @@ Write-Host ""
 Write-Host "BusinessEntity installation script completed." -ForegroundColor Green
 Write-Host "Application: http://localhost:$((Read-DotEnv -Path $EnvPath)["BUSINESSENTITY_HTTP_PORT"])" -ForegroundColor Cyan
 Write-Host "Web logger:  http://localhost:$((Read-DotEnv -Path $EnvPath)["WEB_LOGGER_HTTP_PORT"])" -ForegroundColor Cyan
-Write-Host "Authentik:   http://localhost:$((Read-DotEnv -Path $EnvPath)["AUTHENTIK_HTTP_PORT"])" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Application startup configures Authentik OIDC, groups and initial users. Initial logins: akadmin / akadmin and admin / admin." -ForegroundColor Yellow
+Write-Host "Identity uses the configured OIDC provider. There are no fixed application passwords or recurring external-user resets." -ForegroundColor Cyan

@@ -19,6 +19,7 @@ public abstract class ModuleComponentBase : ComponentBase, IHandleEvent
         if (task.IsCompletedSuccessfully) return;
         try { await task; }
         catch (OperationCanceledException) when (task.IsCanceled) { return; }
+        catch (UnauthorizedAccessException) when (Module != null) { ModuleManager.ReportAccessDenied(Module.ModuleId); }
         StateHasChanged();
     }
     // JS callbacks владельца могут явно открыть тот же адрес, не используя браузерные идентификаторы.

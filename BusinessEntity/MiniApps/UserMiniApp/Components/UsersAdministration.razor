@@ -6,24 +6,34 @@
 <div class="users-admin">
     <div class="users-admin__sidebar">
         <div class="users-admin__sidebar-actions">
+            @if (UserHubUrl is { } hubUrl)
+            {
+                <a class="btn btn-sm btn-primary" href="@hubUrl" target="_blank" rel="noopener noreferrer">Учётные записи в User Hub</a>
+            }
+            else
+            {
             <button type="button"
                     class="btn btn-sm btn-primary"
                     @onclick="CreateUserAsync"
                     disabled="@IsBusy">
                 Создать
             </button>
+            }
             <button type="button"
                     class="btn btn-sm btn-outline-secondary"
                     @onclick="LoadUsersAsync"
                     disabled="@IsBusy">
                 Обновить
             </button>
+            @if (UserHubUrl is null)
+            {
             <button type="button"
                     class="btn btn-sm btn-outline-primary"
-                    @onclick="ReadUsersFromAuthentikAsync"
+                    @onclick="ReadUsersFromпровайдераAsync"
                     disabled="@IsBusy">
                 Прочитать
             </button>
+            }
         </div>
 
         @if (IsLoading)
@@ -41,14 +51,14 @@
                 {
                     <button type="button"
                             class="@GetUserButtonClass(user)"
-                            title="@user.ExternalId"
+                            title="@user.Id"
                             @onclick="@(() => SelectUser(user))">
                         <span class="users-admin__user-name">@GetUserListName(user)</span>
-                        @if (!string.Equals(user.DisplayedName, user.AuthentikLogin, StringComparison.Ordinal))
+                        @if (!string.Equals(user.DisplayedName, user.Login, StringComparison.Ordinal))
                         {
-                            <span class="users-admin__user-subtitle">@user.AuthentikLogin</span>
+                            <span class="users-admin__user-subtitle">@user.Login</span>
                         }
-                        <span class="users-admin__user-code">@user.ExternalId</span>
+                        <span class="users-admin__user-code">@user.Id</span>
                         @if (!user.IsActive)
                         {
                             <span class="users-admin__user-state">неактивен</span>
@@ -76,18 +86,12 @@
             {
                 <EditForm Model="@EditModel" OnValidSubmit="SaveUserAsync">
                     <div class="users-admin__form">
-                        <label class="users-admin__field">
-                            <span>Код в аутентик</span>
-                            <InputText class="form-control"
-                                       @bind-Value="EditModel.ExternalId" @bind-Value:after="AccountChanged"
-                                       disabled="true" />
-                        </label>
 
                         <label class="users-admin__field">
-                            <span>Логин в аутентик</span>
+                            <span>Логин учётной записи</span>
                             <InputText class="form-control"
-                                       @bind-Value="EditModel.AuthentikLogin" @bind-Value:after="AccountChanged"
-                                       disabled="@(IsBusy || SelectedUser?.IsSystem == true)" />
+                                       @bind-Value="EditModel.Login" @bind-Value:after="AccountChanged"
+                                       disabled="@(IsBusy || SelectedUser?.IsSystem == true || UserHubUrl is not null)" />
                         </label>
 
                         <label class="users-admin__field">
@@ -97,6 +101,8 @@
                                        disabled="@(IsBusy || SelectedUser?.IsSystem == true)" />
                         </label>
 
+                        @if (UserHubUrl is null)
+                        {
                         <label class="users-admin__field">
                             <span>Новый пароль</span>
                             <div class="users-admin__password-control">
@@ -116,6 +122,7 @@
                                 </button>
                             </div>
                         </label>
+                        }
                     </div>
 
                     <div class="users-admin__form-actions">
@@ -606,9 +613,9 @@
                                         </td>
                                         <td>
                                             <span class="users-admin__membership-name">@membership.DisplayedName</span>
-                                            <span class="users-admin__membership-code">@membership.ExternalId</span>
+                                            <span class="users-admin__membership-code">@membership.UserId</span>
                                         </td>
-                                        <td>@membership.AuthentikLogin</td>
+                                        <td>@membership.Login</td>
                                     </tr>
                                 }
                             </tbody>

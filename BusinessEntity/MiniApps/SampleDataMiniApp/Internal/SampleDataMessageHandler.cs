@@ -22,7 +22,7 @@ internal sealed class SampleDataMessageHandler : ScopedBusEndpoint
     private async Task<bool> RunAsync()
     {
         var user = await _users.GetCurrentUserAsync();
-        if (user?.IsAkadmin != true && user?.IsGeneralAdmin != true && !string.Equals(user?.UserName, "admin", StringComparison.OrdinalIgnoreCase))
+        if (user?.IsGlobalAdmin != true)
         {
             var permissions = await _users.GetCurrentUserPermissionsForSpaceAsync(Guid.Empty);
             if (!permissions.CanGlobalAdmin) throw new UnauthorizedAccessException();

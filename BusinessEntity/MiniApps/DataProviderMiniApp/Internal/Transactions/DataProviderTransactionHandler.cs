@@ -2,6 +2,7 @@ using BusinessEntity.Infrastructure.Bus;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using ReactiveUI;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Transactions;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Transactions;
 
@@ -17,6 +18,9 @@ internal sealed class DataProviderTransactionHandler : BusEndpoint
     // Подписывает транзакцию и получение исхода с единым контрактом отказов.
     protected override void SubscribeRequests()
     {
+        Subscribe<PrepareApiDeletionPlanRequest,PrepareApiDeletionPlanResponse>(async r=>new(r.RequestId,await _writer.PrepareDeletionPlanAsync(r)),(id,error)=>new(id,null,error));
+        Subscribe<BeginApiOperationRequest,BeginApiOperationResponse>(async r=>new(r.RequestId,await _writer.BeginApiOperationAsync(r.Operation,r.Context)),(id,error)=>new(id,null,error));
+        Subscribe<ReadApiOperationRequest,ReadApiOperationResponse>(async r=>new(r.RequestId,await _writer.ReadApiOperationAsync(r.OperationId,r.Context)),(id,error)=>new(id,null,error));
         Subscribe<ExportSubgraphRequest, ExportSubgraphResponse>(async request => new(request.RequestId,
             await _writer.ExportAsync(request.Scope, request.Context, _leases)), static (id, error) => new(id, null, error));
         Subscribe<ReleaseExportRequest, ReleaseExportResponse>(request =>

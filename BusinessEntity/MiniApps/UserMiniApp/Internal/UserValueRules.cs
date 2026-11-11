@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Repositories;
@@ -23,7 +22,7 @@ internal static class UserValueRules
         internal const string SystemAdminRoleName = "Админ";
         internal const string GuestRoleName = "Гость";
         internal const string ReadersRoleName = "Ридерс";
-        internal const string SystemAnonymousExternalId = "system-anonymous";
+        internal const string SystemAnonymousLogin = "system-anonymous";
         internal const string SystemAnonymousDisplayName = "Анонимус";
         internal const string SystemAnonymousUserIdText = "00000000-0000-0000-0000-000000000002";
         internal const string AllSpacesDisplayName = "[ВсеПространства]";
@@ -35,29 +34,11 @@ internal static class UserValueRules
                 ?? throw new InvalidDataException("Пустой payload пользователя.");
         }
 
-        // Выполняет сценарий BuildAnonymousUserData внутри владельца User.
-        internal static UserData BuildAnonymousUserData()
-        {
-            return new UserData
-            {
-                AuthentikLogin = SystemAnonymousExternalId,
-                DisplayedName = SystemAnonymousDisplayName,
-                ExtId = SystemAnonymousExternalId
-            };
-        }
+        // Системный anonymous имеет только локальные профильные сведения.
+        internal static UserData BuildAnonymousUserData() => new() { DisplayedName = SystemAnonymousDisplayName };
 
-        // Выполняет сценарий IsAnonymousUser внутри владельца User.
-        internal static bool IsAnonymousUser(UserDto user)
-        {
-            if (string.Equals(user.ExternalId, SystemAnonymousExternalId, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var userData = ReadUserData(user);
-            return string.Equals(userData.ExtId, SystemAnonymousExternalId, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(userData.AuthentikLogin, SystemAnonymousExternalId, StringComparison.OrdinalIgnoreCase);
-        }
+        // Системная запись определяется локальным постоянным ID, а не внешним логином.
+        internal static bool IsAnonymousUser(UserDto user) => user.Id == Guid.Parse(SystemAnonymousUserIdText);
 
         // Выполняет сценарий IsSystemUser внутри владельца User.
         internal static bool IsSystemUser(UserDto user)
@@ -76,148 +57,19 @@ internal static class UserValueRules
             IEnumerable<UserAdministrationRecord> records)
         {
             return records
-                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayedName) ? user.AuthentikLogin : user.DisplayedName)
-                .ThenBy(user => user.AuthentikLogin)
-                .ThenBy(user => user.ExternalId)
+                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayedName) ? user.Login : user.DisplayedName)
+                .ThenBy(user => user.Login)
+                .ThenBy(user => user.Login)
                 .ToList();
         }
 
-        // Выполняет сценарий FindAuthentikUser внутри владельца User.
-        internal static AuthentikUserRecord? FindAuthentikUser(
-            UserData userData,
-            string externalId,
-            IEnumerable<AuthentikUserRecord> authentikUsers)
+        // Внешний subject необязателен в локальном списке и не используется как ID пользователя.
+        internal static UserAdministrationRecord MapLocalAdministrationRecord(UserDto user) => new()
         {
-            var authentikUser = authentikUsers.FirstOrDefault(user =>
-                userData.AuthentikUserPk > 0 && user.Pk == userData.AuthentikUserPk);
-
-            authentikUser ??= authentikUsers.FirstOrDefault(user =>
-                !string.IsNullOrWhiteSpace(userData.AuthentikUserUuid) &&
-                string.Equals(user.Uuid, userData.AuthentikUserUuid, StringComparison.OrdinalIgnoreCase));
-            authentikUser ??= authentikUsers.FirstOrDefault(user =>
-                !string.IsNullOrWhiteSpace(userData.ExtId) &&
-                string.Equals(user.Uid, userData.ExtId, StringComparison.OrdinalIgnoreCase));
-            authentikUser ??= authentikUsers.FirstOrDefault(user =>
-                !string.IsNullOrWhiteSpace(externalId) &&
-                string.Equals(user.Uid, externalId, StringComparison.OrdinalIgnoreCase));
-            authentikUser ??= authentikUsers.FirstOrDefault(user =>
-                !string.IsNullOrWhiteSpace(userData.AuthentikLogin) &&
-                string.Equals(user.Username, userData.AuthentikLogin, StringComparison.OrdinalIgnoreCase));
-
-            return authentikUser;
-        }
-
-        // Выполняет сценарий TryBuildStoredAuthentikUser внутри владельца User.
-        internal static AuthentikUserRecord? TryBuildStoredAuthentikUser(UserData userData, string externalId)
-        {
-            if (userData.AuthentikUserPk <= 0)
-            {
-                return null;
-            }
-
-            var uid = NormalizeOptionalText(userData.ExtId);
-            if (string.IsNullOrWhiteSpace(uid))
-            {
-                uid = NormalizeOptionalText(externalId);
-            }
-
-            var username = NormalizeOptionalText(userData.AuthentikLogin);
-            if (string.IsNullOrWhiteSpace(username))
-            {
-                username = uid;
-            }
-
-            if (string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(username))
-            {
-                return null;
-            }
-
-            return new AuthentikUserRecord(
-                userData.AuthentikUserPk,
-                username,
-                username,
-                uid,
-                NormalizeOptionalText(userData.AuthentikUserUuid),
-                true,
-                string.Empty,
-                "internal",
-                string.Empty);
-        }
-
-        // Выполняет сценарий MapAdministrationRecord внутри владельца User.
-        internal static UserAdministrationRecord MapAdministrationRecord(
-            UserDto user,
-            AuthentikUserRecord authentikUser)
-        {
-            var userData = ReadUserData(user);
-            var displayedName = NormalizeOptionalText(userData.DisplayedName);
-
-            return new UserAdministrationRecord
-            {
-                Id = user.Id,
-                AuthentikUserPk = authentikUser.Pk,
-                AuthentikUserUuid = authentikUser.Uuid,
-                ExternalId = authentikUser.Uid,
-                AuthentikLogin = authentikUser.Username,
-                DisplayedName = string.IsNullOrWhiteSpace(displayedName) ? authentikUser.Username : displayedName,
-                IsActive = authentikUser.IsActive,
-                IsSystem = IsSystemUser(user),
-                DateCreated = user.DateCreated,
-                DateLastModified = user.DateLastModified
-            };
-        }
-
-        // Выполняет сценарий MapLocalAdministrationRecord внутри владельца User.
-        internal static UserAdministrationRecord MapLocalAdministrationRecord(UserDto user)
-        {
-            var userData = ReadUserData(user);
-            var externalId = NormalizeOptionalText(userData.ExtId);
-            if (string.IsNullOrWhiteSpace(externalId))
-            {
-                externalId = user.ExternalId;
-            }
-
-            var authentikLogin = NormalizeOptionalText(userData.AuthentikLogin);
-            if (string.IsNullOrWhiteSpace(authentikLogin))
-            {
-                authentikLogin = externalId;
-            }
-
-            var displayedName = NormalizeOptionalText(userData.DisplayedName);
-            if (string.IsNullOrWhiteSpace(displayedName))
-            {
-                displayedName = authentikLogin;
-            }
-
-            return new UserAdministrationRecord
-            {
-                Id = user.Id,
-                AuthentikUserPk = userData.AuthentikUserPk,
-                AuthentikUserUuid = NormalizeOptionalText(userData.AuthentikUserUuid),
-                ExternalId = externalId,
-                AuthentikLogin = authentikLogin,
-                DisplayedName = displayedName,
-                IsActive = true,
-                IsSystem = IsSystemUser(user),
-                DateCreated = user.DateCreated,
-                DateLastModified = user.DateLastModified
-            };
-        }
-
-        // Выполняет сценарий MapProfile внутри владельца User.
-        internal static UserProfileDto MapProfile(UserDto user, AuthentikUserRecord authentikUser)
-        {
-            var userData = ReadUserData(user);
-            var displayedName = NormalizeOptionalText(userData.DisplayedName);
-
-            return new UserProfileDto
-            {
-                UserId = user.Id,
-                ExternalId = authentikUser.Uid,
-                AuthentikLogin = authentikUser.Username,
-                DisplayedName = string.IsNullOrWhiteSpace(displayedName) ? authentikUser.Username : displayedName
-            };
-        }
+            Id = user.Id, Login = user.Login, DisplayedName = ReadUserData(user).DisplayedName,
+            IsActive = user.Enabled, IsSystem = user.Kind == "LocalSystem",
+            DateCreated = user.DateCreated, DateLastModified = user.DateLastModified
+        };
 
         // Выполняет сценарий MapRoleRecord внутри владельца User.
         internal static UserRoleRecord MapRoleRecord(UserRoleDto role)
@@ -260,43 +112,15 @@ internal static class UserValueRules
         {
             return users
                 .Select(user => MapGroupMembershipRecord(user, memberUserIds.Contains(user.Id)))
-                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayedName) ? user.AuthentikLogin : user.DisplayedName)
-                .ThenBy(user => user.AuthentikLogin)
-                .ThenBy(user => user.ExternalId)
+                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayedName) ? user.Login : user.DisplayedName)
+                .ThenBy(user => user.Login)
+                .ThenBy(user => user.Login)
                 .ToList();
         }
 
-        // Выполняет сценарий MapGroupMembershipRecord внутри владельца User.
-        internal static UserGroupMembershipRecord MapGroupMembershipRecord(UserDto user, bool isMember)
-        {
-            var userData = ReadUserData(user);
-            var externalId = NormalizeOptionalText(userData.ExtId);
-            if (string.IsNullOrWhiteSpace(externalId))
-            {
-                externalId = user.ExternalId;
-            }
-
-            var authentikLogin = NormalizeOptionalText(userData.AuthentikLogin);
-            if (string.IsNullOrWhiteSpace(authentikLogin))
-            {
-                authentikLogin = externalId;
-            }
-
-            var displayedName = NormalizeOptionalText(userData.DisplayedName);
-            if (string.IsNullOrWhiteSpace(displayedName))
-            {
-                displayedName = authentikLogin;
-            }
-
-            return new UserGroupMembershipRecord
-            {
-                UserId = user.Id,
-                DisplayedName = displayedName,
-                AuthentikLogin = authentikLogin,
-                ExternalId = externalId,
-                IsMember = isMember
-            };
-        }
+        // Группы и назначения привязаны только к постоянному локальному ID.
+        internal static UserGroupMembershipRecord MapGroupMembershipRecord(UserDto user, bool isMember) => new()
+        { UserId = user.Id, Login = user.Login, DisplayedName = ReadUserData(user).DisplayedName, IsMember = isMember };
 
         // Выполняет сценарий MapRoleAssignmentRecords внутри владельца User.
         internal static IReadOnlyList<UserRoleAssignmentRecord> MapRoleAssignmentRecords(
@@ -402,13 +226,8 @@ internal static class UserValueRules
                    string.Equals(roleName, ReadersRoleName, StringComparison.OrdinalIgnoreCase);
         }
 
-        // Выполняет сценарий IsAccessAdmin внутри владельца User.
-        internal static bool IsAccessAdmin(BusinessEntityUser? user)
-        {
-            return user?.IsAkadmin == true ||
-                   user?.IsGeneralAdmin == true ||
-                   string.Equals(user?.UserName, "admin", StringComparison.OrdinalIgnoreCase);
-        }
+        // Право вычислено по локальным назначениям; имя admin не является полномочием.
+        internal static bool IsAccessAdmin(BusinessEntityUser? user) => user?.IsGlobalAdmin == true;
 
         // Выполняет сценарий IsRoleAssignmentApplicableToUser внутри владельца User.
         internal static bool IsRoleAssignmentApplicableToUser(
@@ -575,64 +394,6 @@ internal static class UserValueRules
             throw new ArgumentException("Тип назначения не поддерживается.", nameof(assignmentType));
         }
 
-        // Выполняет сценарий HasPasswordChange внутри владельца User.
-        internal static bool HasPasswordChange(UserProfileUpdateRequest request)
-        {
-            return !string.IsNullOrWhiteSpace(request.OldPassword) ||
-                   !string.IsNullOrWhiteSpace(request.NewPassword) ||
-                   !string.IsNullOrWhiteSpace(request.RepeatPassword);
-        }
-
-        // Выполняет сценарий FindLocalUser внутри владельца User.
-        internal static UserDto? FindLocalUser(AuthentikUserRecord authentikUser, IEnumerable<UserDto> localUsers)
-        {
-            foreach (var localUser in localUsers)
-            {
-                var userData = ReadUserData(localUser);
-                if (userData.AuthentikUserPk > 0 && userData.AuthentikUserPk == authentikUser.Pk)
-                {
-                    return localUser;
-                }
-
-                if (!string.IsNullOrWhiteSpace(userData.AuthentikUserUuid) &&
-                    string.Equals(userData.AuthentikUserUuid, authentikUser.Uuid, StringComparison.OrdinalIgnoreCase))
-                {
-                    return localUser;
-                }
-
-                if (string.Equals(localUser.ExternalId, authentikUser.Uid, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(userData.ExtId, authentikUser.Uid, StringComparison.OrdinalIgnoreCase))
-                {
-                    return localUser;
-                }
-            }
-
-            return null;
-        }
-
-        // Выполняет сценарий BuildUserData внутри владельца User.
-        internal static UserData BuildUserData(AuthentikUserRecord authentikUser, string displayedName)
-        {
-            return new UserData
-            {
-                AuthentikUserPk = authentikUser.Pk,
-                AuthentikUserUuid = authentikUser.Uuid,
-                AuthentikLogin = authentikUser.Username,
-                DisplayedName = displayedName,
-                ExtId = authentikUser.Uid
-            };
-        }
-
-        // Выполняет сценарий UserDataEquals внутри владельца User.
-        internal static bool UserDataEquals(UserData left, UserData right)
-        {
-            return left.AuthentikUserPk == right.AuthentikUserPk &&
-                   string.Equals(left.AuthentikUserUuid, right.AuthentikUserUuid, StringComparison.Ordinal) &&
-                   string.Equals(left.AuthentikLogin, right.AuthentikLogin, StringComparison.Ordinal) &&
-                   string.Equals(left.DisplayedName, right.DisplayedName, StringComparison.Ordinal) &&
-                   string.Equals(left.ExtId, right.ExtId, StringComparison.Ordinal);
-        }
-
         // Выполняет сценарий NormalizeRequiredText внутри владельца User.
         internal static string NormalizeRequiredText(string? value, string fieldName)
         {
@@ -658,24 +419,8 @@ internal static class UserValueRules
                 value.Split(default(string[]), StringSplitOptions.RemoveEmptyEntries));
         }
 
-        // Выполняет сценарий ResolveExternalId внутри владельца User.
-        internal static string ResolveExternalId(BusinessEntityUser currentUser)
-        {
-            var externalId = currentUser.GetNameIdentifier();
-            if (string.IsNullOrWhiteSpace(externalId))
-            {
-                externalId = currentUser.UserId;
-            }
-
-            return externalId;
-        }
-
-        // Выполняет сценарий ResolveAuthentikUserPk внутри владельца User.
-        internal static int ResolveAuthentikUserPk(BusinessEntityUser currentUser)
-        {
-            var value = currentUser.GetFirstClaimValue("authentik_user_pk");
-            return int.TryParse(value, out var authentikUserPk) ? authentikUserPk : 0;
-        }
+        // Идентичность приложения — локальный UserId, не claim внешнего subject.
+        internal static string ResolveExternalId(BusinessEntityUser currentUser) => currentUser.UserId;
 
         // Выполняет сценарий CloneUserProperty внутри владельца User.
         internal static UserPropertyDto CloneUserProperty(UserPropertyDto property)

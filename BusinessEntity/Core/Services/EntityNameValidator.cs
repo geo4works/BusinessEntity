@@ -18,6 +18,9 @@ namespace BusinessEntity.Core.Services
 
         // Проверяет, подходит ли строка как имя сущности
         public bool IsValidEntityName(string name)
+            =>IsValidName(name);
+        // Чистое общее правило для server/API сценария и прежнего UI validator.
+        public static bool IsValidName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
                 return false;
@@ -40,5 +43,6 @@ namespace BusinessEntity.Core.Services
 
             return true;
         }
+        public static string NormalizeRequired(string name)=>IsValidName(name)?name.Trim():throw new ArgumentException("Имя должно содержать букву и только буквы, цифры, пробелы, _ или -.");
     }
 }

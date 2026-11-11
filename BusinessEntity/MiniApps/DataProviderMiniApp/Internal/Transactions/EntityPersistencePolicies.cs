@@ -13,9 +13,13 @@ internal sealed class EntityPersistencePolicies
     public IReadOnlyDictionary<BusinessEntityTypeEnum, IEntityArchivePolicy> Archives { get; }
     private readonly IReadOnlyDictionary<string, IOwnedServiceStorageWriter> _serviceWriters;
     public TimeSpan OutcomeRetention { get; }
+    public IReadOnlyDictionary<string,IApiUploadPurpose> UploadPurposes {get;}
+    public IReadOnlyDictionary<string,BusinessEntity.Infrastructure.Api.ApiJobDefinition> Jobs{get;}
     // Дубликаты типов и неверный срок durable outcome прерывают запуск.
-    public EntityPersistencePolicies(IEnumerable<IEntityVersionPolicy> versions, IEnumerable<IEntityArchivePolicy> archives, IConfiguration configuration, IEnumerable<IOwnedServiceStorageWriter> serviceWriters)
+    public EntityPersistencePolicies(IEnumerable<IEntityVersionPolicy> versions, IEnumerable<IEntityArchivePolicy> archives, IConfiguration configuration, IEnumerable<IOwnedServiceStorageWriter> serviceWriters,IEnumerable<IApiUploadPurpose>? uploadPurposes=null,IEnumerable<BusinessEntity.Infrastructure.Api.ApiJobDefinition>? jobs=null)
     {
+        Jobs=(jobs??[]).ToDictionary(x=>x.Key,StringComparer.Ordinal);
+        UploadPurposes=(uploadPurposes??[]).ToDictionary(x=>x.Id,StringComparer.Ordinal);
         _serviceWriters = serviceWriters.ToDictionary(x => x.MiniAppId, StringComparer.Ordinal);
         Versions = versions.ToDictionary(x => x.EntityType); Archives = archives.ToDictionary(x => x.EntityType);
         var days = configuration.GetValue("DataProvider:OperationRetentionDays", 7);

@@ -133,7 +133,12 @@ namespace BusinessEntity.MiniApps.SpacesMiniApp.Internal
         {
             await GetRequiredSpaceAsync(spaceId, ct);
             var property = await GetGenericSpacePropertyAsync(spaceId, ct);
-            return new(property?.Id ?? Guid.NewGuid(), spaceId, EntityPropertyOwner.Entity,
+            return CreateGenericSpaceProperty(spaceId,settings,property?.Id??Guid.NewGuid());
+        }
+        // Новый Space и его default settings могут быть частью одного атомарного пакета.
+        internal static EntityPropertyChange CreateGenericSpaceProperty(Guid spaceId,GenericSpaceProperties settings,Guid propertyId)
+        {
+            return new(propertyId, spaceId, EntityPropertyOwner.Entity,
                 (int)BusinessEntityPropertyTypeEnum.GenericSpaceProperties,
                 JsonSerializer.Serialize(NormalizeGenericSpaceProperties(settings), PropertyJsonOptions), nameof(GenericSpaceProperties));
         }

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "host": "192.168.55.15",
+  "hubOrigin": "https://192.168.55.15:9440",
+  "hubInstallationId": "15f176e4-dbe7-44b6-a3f2-9d66c73ba2b7",
+  "applicationOrigin": "https://192.168.55.15:7070",
+  "adminLogin": "admin",
+  "installationName": "businessentity",
+  "hubRoot": "/srv/user-hub"
+}

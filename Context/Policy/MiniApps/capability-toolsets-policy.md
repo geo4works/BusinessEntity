@@ -1,6 +1,7 @@
 # Политика capability toolset-ов
 
-Норма TASK_ARCH_001, этап 9. Конкретные toolset-ы этим пакетом не внедряются.
+Норма TASK_ARCH_001 и TASK_API_001. Реализация API v1 — Infrastructure/Api;
+первый предметный toolset `user.self.read` объявляет UserMiniApp.
 
 Capability — объявленная возможность выполнить предметную операцию владельца
 от доверенного пользователя в определённом контексте. Это поверхность над уже
@@ -55,3 +56,17 @@ capability не расширяет исходно предоставленные
 [Шина](../miniapp-reactivebus-architecture-guide.md),
 [модульность](modularity-policy.md), [сохранение](miniapp-saving-policy.md),
 [явные отказы](../explicit-failure-policy.md).
+
+## API v1
+
+Владелец регистрирует ApiCapability + AddApiBinding<TInput,TRequest,TResponse,TOutput>
+и AddApiToolset(owner). Метаданные GiveMe/HereAre не содержат runtime delegates;
+локальный binding фиксирует конкретные generic типы. Неизвестного универсального
+execute endpoint нет. Дубликаты ID/маршрутов/schema, чужой owner, лишний/missing
+binding и конфликт с framework routes останавливают запуск.
+
+Запись требует Idempotency-Key. ApiWriteContext предоставляет стабильные generated
+IDs и привязывает обычный пакет владельца к зарегистрированной операции. Обход
+receipt голым API EntitySaveBatch запрещён. SQL commit сохраняет общий
+ApiMutationOutcome вместе с бизнес-изменениями; Pending/Unknown не объявляются
+Failed/rollback. Гарантия повторов — 7 дней, затем явный conflict.

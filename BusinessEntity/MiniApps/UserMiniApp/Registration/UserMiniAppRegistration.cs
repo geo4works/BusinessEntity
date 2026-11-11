@@ -1,4 +1,6 @@
-using BusinessEntity.Services;
+using BusinessEntity.Infrastructure.Identity;
+using BusinessEntity.Infrastructure.Api;
+using BusinessEntity.Infrastructure.Identity.Authentik;
 using BusinessEntity.Infrastructure.Commands;
 using BusinessEntity.Infrastructure.Modularity;
 using Microsoft.EntityFrameworkCore;
@@ -25,10 +27,31 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.TryAddSingleton(provider => new DbContextOptionsBuilder<UserMiniAppDbContext>()
                 .UseNpgsql(provider.GetRequiredService<IConfiguration>().GetConnectionString("DockerConnection")
                     ?? throw new InvalidOperationException("ConnectionStrings:DockerConnection обязателен.")).Options);
-            services.AddScoped<UserMiniAppState>();
             services.AddScoped<BusinessEntityUserFactory>();
             services.AddScoped<UserIdentitySession>();
-            services.AddScoped<AuthentikManagementClient>();
+            services.AddSingleton<IdentityMutationCoordinator>();
+            services.AddSingleton<ApiSecuritySettings>();
+            services.AddScoped<UserApiJobAuthorization>();services.AddScoped<UserApiJobAuthorizationHandler>();services.AddBusEndpoint<UserApiJobAuthorizationHandler>(typeof(CaptureApiJobAuthorizationRequest),typeof(RestoreApiJobAuthorizationRequest));
+            services.AddScoped<UserApiSessions>();services.AddScoped<UserApiCommitAuthorizer>();services.AddSingleton<IApiCommitAuthorization,ApiBusCommitAuthorization>();services.AddScoped<UserApiIdentity>();services.AddScoped<IApiIdentityHandler>(p=>p.GetRequiredService<UserApiIdentity>());
+            services.AddScoped<ApiIntegrationAdministration>();services.AddScoped<ApiServiceIdentityLinking>();
+            services.AddScoped<IUserApiConnector,UserApiConnector>();services.AddScoped<UserApiMessageHandler>();
+            services.AddBusEndpoint<UserApiMessageHandler>(typeof(OpenApiSessionRequest),typeof(ValidateApiSessionRequest),typeof(CloseApiSessionRequest),typeof(ReadApiSelfRequest),typeof(AuthorizeApiCommitRequest));
+            services.AddApiBinding<ApiEmptyInput,ReadApiSelfRequest,ReadApiSelfResponse,ApiSelf>(
+                new("user",1,"user.self.read",1,"UserMiniApp","Текущий субъект API","GET","/me","user.self.read.input.v1","user.self.read.output.v1"),
+                static (_,_)=>new(Guid.NewGuid()),static response=>response.Result??throw new InvalidDataException());
+            services.AddUserPreferenceApi();services.AddApiToolset("UserMiniApp");
+            services.AddSingleton<IdentityHostLease>();
+            services.AddScoped<IdentityRecovery>();
+            services.AddScoped<IdentityRecoveryTarget>();
+            services.AddScoped<IdentityProviderAdministration>(); services.AddScoped<IdentitySwitchPreparation>();
+            services.AddScoped<IdentitySwitchActivation>();
+            services.AddScoped<IIdentityProbeAuthorizer>(p=>p.GetRequiredService<IdentitySwitchPreparation>());
+            services.AddScoped<IIdentitySessionValidator>(p=>p.GetRequiredService<UserSecurityAuthority>());
+            services.AddScoped<UserSecurityAuthority>(); services.AddScoped<IdentityDirectory>();
+            services.AddScoped<IdentityStateStore>(); services.AddScoped<UserAccountProvisioning>();
+            services.AddScoped<IIdentitySignInHandler, IdentitySignInService>();
+            services.AddSingleton<IdentityProvisioners>();
+            services.AddSingleton<IIdentityProvisioningAdapter, AuthentikProvisioningAdapter>();
             services.AddScoped<IUserMiniAppRepository<UserDto>, UserDtoEfRepository>();
             services.AddScoped<IUserMiniAppRepository<UserPropertyDto>, UserPropertyDtoEfRepository>();
             services.AddScoped<IUserMiniAppRepository<UserRoleDto>, UserRoleDtoEfRepository>();
@@ -36,8 +59,6 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.AddScoped<IUserMiniAppRepository<UserGroupMemberDto>, UserGroupMemberDtoEfRepository>();
             services.AddScoped<IUserMiniAppRepository<UserRoleAssignmentDto>, UserRoleAssignmentDtoEfRepository>();
             services.AddScoped<UserSpaceContentAccessHelper>();
-            services.AddScoped<UserBootstrapLocalStore>();
-            services.AddScoped<UserMiniAppStartupAdminBootstrapper>();
             services.AddScoped<UserIdentityService>();
             services.AddScoped<UserDefaultsService>();
             services.AddScoped<UserRoleCatalogService>();
@@ -54,7 +75,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.AddScoped<IUserConnector, UserConnector>();
 
             services.AddScoped<UserAccountsServiceMessageHandler>();
-            services.AddBusEndpoint<UserAccountsServiceMessageHandler>(typeof(DeleteCurrentUserRequest), typeof(GetAdministrationUsersRequest), typeof(ReadAdministrationUsersFromAuthentikRequest), typeof(CreateAdministrationUserRequest), typeof(UpdateAdministrationUserRequest), typeof(DeleteAdministrationUserRequest), typeof(GetProfileRequest), typeof(UpdateProfileRequest));
+            services.AddBusEndpoint<UserAccountsServiceMessageHandler>(typeof(DeleteCurrentUserRequest), typeof(GetAdministrationUsersRequest), typeof(RefreshAdministrationUsersRequest), typeof(CreateAdministrationUserRequest), typeof(UpdateAdministrationUserRequest), typeof(DeleteAdministrationUserRequest), typeof(GetProfileRequest), typeof(UpdateProfileRequest));
             services.AddScoped<UserRoleCatalogServiceMessageHandler>();
             services.AddBusEndpoint<UserRoleCatalogServiceMessageHandler>(typeof(GetRolesRequest), typeof(CreateRoleRequest), typeof(UpdateRoleRequest), typeof(DeleteRoleRequest));
             services.AddScoped<UserGroupServiceMessageHandler>();
@@ -73,16 +94,22 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.AddBusEndpoint<UserSessionMessageHandler>(typeof(GetCurrentUserRequest), typeof(EnsureCurrentUserRequest), typeof(GetGroupsRequest), typeof(IsInGroupRequest));
 
             services.AddMiniAppHost("UserMiniApp",
-                new ModuleDefinition("UserMiniApp", "identity-bootstrap", "Identity", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 10, OpenOnStartup: true),
-                new ModuleDefinition("UserMiniApp", "defaults", "Пользователи", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 20, OpenOnStartup: true),
+                new ModuleDefinition("UserMiniApp", "identity-bootstrap", "Identity", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 20, OpenOnStartup: true),
+                new ModuleDefinition("UserMiniApp", "identity-sync", "Сверка identity", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 25, OpenOnStartup: true),
+                new ModuleDefinition("UserMiniApp", "defaults", "Пользователи", null, ModulePlacement.Headless, ModuleInstancePolicy.AppSingleton, Order: 10, OpenOnStartup: true),
+            new ModuleDefinition("UserMiniApp", "User.IdentityProviders", "Провайдеры идентификации", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.identity-providers", RequiredPermission: "GlobalAdmin", HasSaveContext: true),
+            new ModuleDefinition("UserMiniApp", "User.ApiIntegrations", "Интеграции API", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.api-integrations", RequiredPermission: "GlobalAdmin", HasSaveContext: true),
             new ModuleDefinition("UserMiniApp", "User.Profile", "Профиль", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.profile", RequiredPermission: "Authenticated", HasSaveContext: true),
             new ModuleDefinition("UserMiniApp", "User.AuthInfo", "Авторизация", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.authinfo", RequiredPermission: "Authenticated"),
             new ModuleDefinition("UserMiniApp", "User.Administration", "Пользователи", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.administration", RequiredPermission: "GlobalAdmin", HasSaveContext: true),
             new ModuleDefinition("UserMiniApp", "User.Header", "Пользователь", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "user.header", "TopBar", Order: 20, OpenOnStartup: true));
             services.AddModuleRuntime<IdentityStartupRuntime>("UserMiniApp:identity-bootstrap");
+            services.AddModuleRuntime<IdentitySynchronizationRuntime>("UserMiniApp:identity-sync");
             services.AddModuleRuntime<UserStartupRuntime>("UserMiniApp:defaults");
             services.AddScoped<IModuleAccessPolicy, UserModuleAccessPolicy>();
 
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.IdentityProviders>("user.identity-providers");
+        services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.ApiIntegrations>("user.api-integrations");
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UserProfile>("user.profile");
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UserAuthInfo>("user.authinfo");
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UsersAdministration>("user.administration");
@@ -90,6 +117,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
         services.AddMiniAppButtons(
             new ButtonDefinition("UserMiniApp", "nav.authinfo", "Nav.Main", "Авторизация", "oi oi-lock-locked", 10, RequiredPermission: "Authenticated", TargetRoute: "/authinfo"),
             new ButtonDefinition("UserMiniApp", "nav.profile", "Nav.Main", "Профиль", "oi oi-person", 20, RequiredPermission: "Authenticated", TargetRoute: "/profile"),
+            new ButtonDefinition("UserMiniApp", "admin.identity", "Administration.Navigation", "Провайдеры идентификации", null, 35, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/identity-providers"),
+            new ButtonDefinition("UserMiniApp", "admin.api", "Administration.Navigation", "Интеграции API", null, 36, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/api-integrations"),
             new ButtonDefinition("UserMiniApp", "admin.users", "Administration.Navigation", "Пользователи", null, 30, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users"));
 
         services.AddMiniAppButtons(
@@ -105,6 +134,15 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
         {
             await using var context = new UserMiniAppDbContext(services.GetRequiredService<DbContextOptions<UserMiniAppDbContext>>());
             await UserMiniAppStorageSchema.InitializeAsync(context, freshDatabase, ct);
+        }
+        // Один сервер или recovery процесс удерживает установку до завершения host.
+        public static Task AcquireIdentityHostLeaseAsync(this IServiceProvider services, CancellationToken ct)
+            => services.GetRequiredService<IdentityHostLease>().AcquireAsync(ct);
+        // Локальный composition root не получает доступа к внутренним EF моделям владельца.
+        public static async Task<long> RecoverIdentityAsync(this IServiceProvider services, Guid providerId, int revision, CancellationToken ct)
+        {
+            await services.InitializeUserStorageAsync(false, ct);
+            return await services.GetRequiredService<IdentityRecovery>().RunAsync(providerId, revision, ct);
         }
     }
 }

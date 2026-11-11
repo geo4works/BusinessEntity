@@ -9,7 +9,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Storage;
 // Создаёт только актуальную пустую схему и явно отвергает другую установленную схему.
 internal sealed class DataProviderSchema
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     private readonly DbContextOptions<KmsBusinessEntityDbContext> _options;
     // Получает конфигурацию своего storage без подключения к пользовательской сессии.
     public DataProviderSchema(DbContextOptions<KmsBusinessEntityDbContext> options) => _options = options;

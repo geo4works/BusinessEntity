@@ -1,4 +1,3 @@
-using BusinessEntity.Services;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
@@ -25,7 +24,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         }
 
         // Возвращает полный снимок дерева для пространства.
-        public async Task<TreeSpaceSnapshot?> GetTreeForSpaceAsync(Guid spaceId, CancellationToken cancellationToken = default)
+        public async Task<TreeSpaceSnapshot?> GetTreeForSpaceAsync(Guid spaceId, CancellationToken cancellationToken = default,bool includeEmptyFolders=false)
         {
             var projection = await _businessEntityHelper.GetSubgraphAsync(spaceId, cancellationToken);
             var space = projection.Entities.SingleOrDefault(entity => entity.Id == spaceId);
@@ -43,7 +42,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
                 currentUser?.Id,
                 isAccessAdmin,
                 permissions,
-                cancellationToken);
+                cancellationToken,includeEmptyFolders);
             if (children.Count == 0 && !ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin))
             {
                 return null;
@@ -114,7 +113,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         }
 
         // Проверяет право администрирования элементов дерева в пространстве сущности.
-        private async Task EnsureCanAdminItemsAsync(Guid entityId, CancellationToken cancellationToken)
+        internal async Task EnsureCanAdminItemsAsync(Guid entityId, CancellationToken cancellationToken)
         {
             var currentUser = await _userConnector.GetCurrentUserAsync(cancellationToken);
             var permissions = await _userConnector.GetCurrentUserPermissionsForEntityAsync(entityId, cancellationToken);
@@ -131,9 +130,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
 
         private static bool IsAccessAdmin(BusinessEntityUser? user)
         {
-            return user?.IsAkadmin == true ||
-                   user?.IsGeneralAdmin == true ||
-                   string.Equals(user?.UserName, "admin", StringComparison.OrdinalIgnoreCase);
+            return user?.IsGlobalAdmin == true;
         }
     }
 }

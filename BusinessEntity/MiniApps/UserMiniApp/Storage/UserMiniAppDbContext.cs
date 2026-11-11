@@ -17,17 +17,40 @@ public sealed class UserMiniAppDbContext : DbContext
     public DbSet<UserGroupMemberDto> UserGroupMembers => Set<UserGroupMemberDto>();
     public DbSet<UserRoleAssignmentDto> UserRoleAssignments => Set<UserRoleAssignmentDto>();
 
+    internal DbSet<IdentityProfileRevisionRow> IdentityProfileRevisions => Set<IdentityProfileRevisionRow>();
+    internal DbSet<IdentityProfileRow> IdentityProfiles => Set<IdentityProfileRow>();
+    internal DbSet<IdentityInstallationRow> IdentityInstallation => Set<IdentityInstallationRow>();
+    internal DbSet<ExternalIdentityLinkRow> ExternalIdentities => Set<ExternalIdentityLinkRow>();
+    internal DbSet<IdentitySwitchPlanRow> IdentitySwitchPlans => Set<IdentitySwitchPlanRow>();
+    internal DbSet<ApiAccessGrantRow> ApiAccessGrants => Set<ApiAccessGrantRow>();
+    internal DbSet<ApiSessionRow> ApiSessions => Set<ApiSessionRow>();
+
     internal DbSet<UserStorageVersionRow> SchemaMetadata => Set<UserStorageVersionRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<IdentityProfileRevisionRow>().ToTable("IdentityProviderRevisions").HasKey(x => x.Id);
+        modelBuilder.Entity<IdentityProfileRevisionRow>().HasIndex(x => new { x.ProviderId, x.Revision }).IsUnique();
+        modelBuilder.Entity<IdentityProfileRow>().ToTable("IdentityProviders").HasKey(x => x.Id);
+        modelBuilder.Entity<IdentityInstallationRow>().ToTable("IdentityInstallation").HasKey(x => x.Id);
+        modelBuilder.Entity<ExternalIdentityLinkRow>().ToTable("ExternalIdentities").HasKey(x => x.Id);
+        modelBuilder.Entity<ExternalIdentityLinkRow>().HasIndex(x => new { x.Issuer, x.Subject }).IsUnique();
+        modelBuilder.Entity<ExternalIdentityLinkRow>().HasIndex(x => new { x.UserId, x.ProviderId });
+        modelBuilder.Entity<ExternalIdentityLinkRow>().HasOne<UserDto>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<ExternalIdentityLinkRow>().HasOne<IdentityProfileRow>().WithMany().HasForeignKey(x => x.ProviderId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<IdentitySwitchPlanRow>().ToTable("IdentitySwitchPlans").HasKey(x => x.Id);
+        modelBuilder.Entity<ApiAccessGrantRow>().ToTable("ApiAccessGrants").HasKey(x => x.Id);
+        modelBuilder.Entity<ApiAccessGrantRow>().HasIndex(x => new { x.UserId, x.ClientId }).IsUnique();
+        modelBuilder.Entity<ApiSessionRow>().ToTable("ApiSessions").HasKey(x => x.Id);
+        modelBuilder.Entity<ApiSessionRow>().HasIndex(x => new { x.UserId, x.ExpiresAt });
         modelBuilder.Entity<UserStorageVersionRow>().ToTable("UserMiniAppSchema");
         modelBuilder.Entity<UserStorageVersionRow>().HasKey(x => x.Id);
         modelBuilder.Entity<UserDto>().ToTable("Users");
         modelBuilder.Entity<UserDto>().HasKey(x => x.Id);
-        modelBuilder.Entity<UserDto>().Property(x => x.ExternalId).HasColumnType("text");
+        modelBuilder.Entity<UserDto>().Property(x => x.Login).HasColumnType("text");
+        modelBuilder.Entity<UserDto>().Property(x => x.NormalizedLogin).HasColumnType("text");
         modelBuilder.Entity<UserDto>().Property(x => x.Payload).HasColumnType("text");
-        modelBuilder.Entity<UserDto>().HasIndex(x => x.ExternalId).IsUnique();
+        modelBuilder.Entity<UserDto>().HasIndex(x => x.NormalizedLogin).IsUnique();
 
         modelBuilder.Entity<UserPropertyDto>().ToTable("UserProperties");
         modelBuilder.Entity<UserPropertyDto>().HasKey(x => x.Id);
