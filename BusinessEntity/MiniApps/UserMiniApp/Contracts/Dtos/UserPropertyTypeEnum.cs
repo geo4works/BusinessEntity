@@ -6,5 +6,6 @@ public enum UserPropertyTypeEnum
     Undefined = 0,
     RichDocBookmarks = 100,
     RichDocDisplayedLevelProperty = 101,
-    DocPrintPresets = 200
+    DocPrintPresets = 200,
+    ShellLayoutId = 301
 }

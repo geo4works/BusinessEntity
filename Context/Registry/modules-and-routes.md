@@ -2,7 +2,7 @@
 
 Фактическая регистрация итогового пакета TASK_ARCH_001, 0.17.0. ModuleCatalog singleton получает
 декларации host-service; WindowModularityManager scoped создаёт UI-адреса.
-Декларации с AppSingleton — только Headless; внутренних вкладочных placement нет.
+Декларации с AppSingleton — только Headless; AuxiliaryTab используется только справа.
 
 ## Оболочка
 
@@ -13,9 +13,12 @@
 | TopBar | UserMiniApp:User.Header | user.header | публичный |
 | User.HeaderSpaces (в меню пользователя) | SpacesMiniApp:Spaces.Header | spaces.header | публичный, собственные варианты authenticated/anonymous |
 | LeftTree | TreeMiniApp:tree | tree.main | пользовательская проекция с правами |
-| RightPanel | MediaServerMiniApp:MediaServer.Uploads | media.uploads | Authenticated |
-| RightPanel | TreeMiniApp:Tree.SelectionInfo | tree.selection | immutable сведения своего окна по протоколу master/helper |
-| RightPanel | UserMessagesMiniApp:UserMessages.Panel | messages.panel | Authenticated |
+| RightPanel | RightPanelMiniApp:Panel | right.panel | Authenticated; host AuxiliaryTab |
+| AuxiliaryTab/RightPanel | UserMessagesMiniApp:UserMessages.Panel | messages.panel | Authenticated, WindowSingleton, не закрывается |
+| TopBar | ThemeManagerMiniApp:Bootstrap | theme.bootstrap | Authenticated, загрузка своего browser catalog |
+
+UserMessagesService регистрирует IWindowRuntimeInitializer; App запускает scoped
+collector до render Router, независимо от асинхронного открытия shell-модулей.
 
 Политика UI оболочки — WindowSingleton. Постоянная геометрия, CSS frame и @Body
 принадлежат MainLayout; конкретные компоненты оболочка не импортирует.
@@ -30,10 +33,7 @@
 | /rich-document/{id} | RichTextDocumentMiniApp / RichText.Document | richtext.page | PerContext, ReadContent, SaveContext |
 | /print/{id} | RichTextDocumentMiniApp / RichText.Print | richtext.print | PerContext, ReadContent, PrintLayout |
 | /profile | UserMiniApp / User.Profile | user.profile | WindowSingleton, Authenticated |
-| /authinfo | UserMiniApp / User.AuthInfo | user.authinfo | WindowSingleton, Authenticated |
 | /multimedia | MediaServerMiniApp / MediaServer.Library | media.library | WindowSingleton, Authenticated |
-| /diagnostics | DiagnosticsMiniApp / Diagnostics.Page | diagnostics.page | WindowSingleton, GlobalAdmin |
-| /logging | DiagnosticsMiniApp / Diagnostics.Logging | diagnostics.logging | WindowSingleton, GlobalAdmin |
 | /administration | AdministrationMiniApp / Administration.Page | administration.navigation | WindowSingleton, GlobalAdmin или применимый AdminSpace |
 | /administration/general | SampleDataMiniApp / SampleData.Administration | sample.administration | WindowSingleton, GlobalAdmin |
 | /administration/system | SysParametersMiniApp / SysParameters.Administration | sys.administration | WindowSingleton, GlobalAdmin |
@@ -41,8 +41,10 @@
 | /administration/users, /administration/users/{section} | UserMiniApp / User.Administration | user.administration | WindowSingleton, GlobalAdmin |
 
 User sections: general, access, roles, groups, members. Это обычные URL/NavLink,
-не локальные вкладки. Административные разделы показывают навигационный модуль
-Administration отдельно от своего page-модуля и проверяют оба guard.
+не локальные вкладки. Административные разделы размещаются в AdministrationLayout. AdministrationMiniApp
+держит посещённые page-модули смонтированными; навигация и содержимое проверяют guards.
+`/administration/appearance/themes` и `/administration/appearance/layouts` —
+ThemeManagerMiniApp:Themes/Layouts, право Administration, собственные drafts.
 
 Вложенный ActivityMiniApp:Activity.Comments (`activity.comments`) — PerContext,
 ReadContent; host получает EntityId/параметры отображения. Его компоненты вызывают

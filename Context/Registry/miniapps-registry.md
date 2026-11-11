@@ -21,7 +21,8 @@
 | UserMessagesMiniApp | Scoped state/handler/service, singleton flash-store | Post/Clear адресованы пользователю и окну; свой UI вызывает сервис напрямую |
 | NavigationMiniApp | Главное меню и ссылки объявленных владельцами возможностей | LeftNav, WindowSingleton |
 | AdministrationMiniApp | Административные ссылки | Page, WindowSingleton |
-| DiagnosticsMiniApp | Диагностика и просмотр логов | Page, WindowSingleton; чужие сценарии через коннекторы |
+| RightPanelMiniApp | Host вспомогательных модулей | Shell RightPanel; не перечисляет вкладки владельцев |
+| ThemeManagerMiniApp | Локальные темы и персональная standard-компоновка | Scoped drafts, строгий JSON, отдельный browser namespace |
 
 ## Общий движок и типы
 

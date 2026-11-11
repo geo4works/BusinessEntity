@@ -66,12 +66,12 @@
 
         @if (!string.IsNullOrWhiteSpace(StatusMessage))
         {
-            <div class="alert alert-success py-2" role="alert">@StatusMessage</div>
+            <OperationNotice Text="@StatusMessage" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Success" />
         }
 
         @if (!string.IsNullOrWhiteSpace(ErrorMessage))
         {
-            <div class="alert alert-danger py-2" role="alert">@ErrorMessage</div>
+            <OperationNotice Text="@ErrorMessage" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error" />
         }
 
         @if (IsLoading)

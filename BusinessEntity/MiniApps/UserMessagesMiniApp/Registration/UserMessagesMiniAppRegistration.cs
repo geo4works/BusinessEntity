@@ -14,10 +14,11 @@ public static class UserMessagesMiniAppRegistration
         services.AddScoped<UserMessagesMiniAppState>();
         services.AddScoped<UserMessagesMiniAppMessageHandler>();
         services.AddScoped<UserMessagesService>();
+        services.AddScoped<IWindowRuntimeInitializer>(p=>p.GetRequiredService<UserMessagesService>());
 
         services.AddSingleton<IUserMessageFlashStore, UserMessageFlashStore>();
         services.AddMiniAppHost("UserMessagesMiniApp",
-            new ModuleDefinition("UserMessagesMiniApp", "UserMessages.Panel", "Сообщения", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "messages.panel", "RightPanel", Order: 30, OpenOnStartup: true, RequiredPermission: "Authenticated"));
+            new ModuleDefinition("UserMessagesMiniApp", "UserMessages.Panel", "Сообщения", null, ModulePlacement.AuxiliaryTab, ModuleInstancePolicy.WindowSingleton, "messages.panel", "RightPanel", Order: 30, OpenOnStartup: true, RequiredPermission: "Authenticated"));
 
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMessagesMiniApp.Components.UserMessagesPanel>("messages.panel");
 

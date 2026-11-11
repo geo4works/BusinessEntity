@@ -77,6 +77,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         private bool IsGroupDeleting { get; set; }
         private bool IsRoleAssignmentDeleting { get; set; }
         private bool IsPasswordVisible { get; set; }
+        private string? OneTimeCredential;
         private Guid CurrentMessageUserId { get; set; }
         private string? StatusMessage
         {
@@ -539,7 +540,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 }
 
                 var initialPassword = UserAccountsService.ConsumeCreatedPassword();
-                StatusMessage = $"Пользователь {createdUser.Login} создан. Временный пароль (показан один раз): {initialPassword}";
+                StatusMessage = $"Пользователь {createdUser.Login} создан.";
+                OneTimeCredential = initialPassword;
             }
             catch (Exception ex)
             {

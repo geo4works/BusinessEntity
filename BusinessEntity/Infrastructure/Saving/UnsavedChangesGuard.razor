@@ -3,6 +3,7 @@
 @using BusinessEntity.Infrastructure.Modularity
 @inject WindowModularityManager Manager
 @inject WindowSaveGuard Guard
+@inject BusinessEntity.Infrastructure.Settings.SettingsDraftSession Settings
 @inject NavigationManager Navigation
 @inject Microsoft.JSInterop.IJSRuntime JS
 @using Microsoft.JSInterop
@@ -33,7 +34,7 @@
     private bool _browserReady;
     private string BrowserOwner => Manager.LogicalWindowId.ToString("N");
     // Общий guard существует один раз на browser circuit, включая страницы других layout.
-    protected override void OnInitialized() => Manager.Changed += Refresh;
+    protected override void OnInitialized() { Manager.Changed += Refresh; Settings.Changed += Refresh; }
     // Browser runtime уже подключён; prerender не создаёт второй navigation handler.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -44,7 +45,7 @@
                 _navigation = Navigation.RegisterLocationChangingHandler(OnLocationChangingAsync);
                 await JS.InvokeVoidAsync("beUnsavedChanges.attach", BrowserOwner); _browserReady = true;
             }
-            await SetBrowserWarningAsync(Manager.DirtyContexts.Count > 0 || Manager.HasPendingEdits);
+            await SetBrowserWarningAsync(Manager.DirtyContexts.Count > 0 || Manager.HasPendingEdits || Settings.IsDirty);
         }
         catch (Exception error) when (error is JSDisconnectedException or OperationCanceledException) { }
     }
@@ -60,7 +61,8 @@
         if (_disposed) return;
         try { await Manager.WaitForPendingEditsAsync(context.CancellationToken); }
         catch (OperationCanceledException) { context.PreventNavigation(); return; }
-        if (Manager.DirtyContexts.Count == 0) return;
+        if(Settings.CanKeepDraftsForNavigation(new Uri(Navigation.Uri), Navigation.ToAbsoluteUri(context.TargetLocation))) return;
+        if (Manager.DirtyContexts.Count == 0 && !Settings.IsDirty) return;
         var generation = ++_generation; _decision?.TrySetResult(NavigationSaveDecision.Cancel);
         _visible = true; _busy = false; _error = null;
         try
@@ -94,7 +96,7 @@
     // Снимает lock/handler и завершает ожидание при финальном завершении UI.
     public async ValueTask DisposeAsync()
     {
-        _disposed = true; ++_generation; _navigation?.Dispose(); Manager.Changed -= Refresh;
+        _disposed = true; ++_generation; _navigation?.Dispose(); Manager.Changed -= Refresh; Settings.Changed -= Refresh;
         _decision?.TrySetResult(NavigationSaveDecision.Cancel); _decision = null;
         if (_browserReady) await BusinessEntity.Infrastructure.UI.BrowserLifecycle.UnregisterAsync(JS, "beUnsavedChanges.detach", BrowserOwner);
     }

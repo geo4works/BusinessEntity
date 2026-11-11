@@ -1,9 +1,10 @@
+using BusinessEntity.MiniApps.ThemeManagerMiniApp.Registration;
+using BusinessEntity.MiniApps.RightPanelMiniApp.Registration;
 using BusinessEntity.Infrastructure.Identity;
 using BusinessEntity.Infrastructure.Api;
 using BusinessEntity.MiniApps.ExternalApiMiniApp.Registration;
 using BusinessEntity.MiniApps.NavigationMiniApp.Registration;
 using BusinessEntity.MiniApps.AdministrationMiniApp.Registration;
-using BusinessEntity.MiniApps.DiagnosticsMiniApp.Registration;
 using BusinessEntity.Infrastructure.Modularity;
 using BusinessEntity.MiniApps.BackupRestoreMiniApp.Registration;
 using BusinessEntity.Core.Saving;
@@ -87,7 +88,7 @@ namespace BusinessEntity
 
             // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddModularity();
-            builder.Services.AddNavigationMiniApp(); builder.Services.AddAdministrationMiniApp(); builder.Services.AddDiagnosticsMiniApp();
+            builder.Services.AddThemeManagerMiniApp(); builder.Services.AddRightPanelMiniApp(); builder.Services.AddNavigationMiniApp(); builder.Services.AddAdministrationMiniApp();
             builder.Services.AddDataProviderMiniApp();
             builder.Services.AddBusinessEntityCore();
             builder.Services.AddSpacesMiniApp();

@@ -14,12 +14,15 @@ ModuleDefinitionId — объявленный вид модуля, ContextId —
 
 ## Размещение
 
-Поддерживаются Headless, ShellModuleHostArea и Page.
-Внутренние вкладки, WorkspaceTab и TabbedHostArea не используются.
+Поддерживаются Headless, ShellModuleHostArea, Page и AuxiliaryTab.
+AuxiliaryTab допускает вспомогательные вкладки правой области по TASK_UI_001.
+Центральный WorkspaceTab и вкладочный host документов не используются.
 Обычный модальный диалог при необходимости не становится системой вкладок.
 
 Места оболочки: LeftNav, TopBar, LeftTree, @Body и RightPanel.
-RightPanel содержит обычные секции. Администрирование — разделы-страницы.
+RightPanel содержит RightPanelMiniApp и декларативные вкладки владельцев.
+В первой поставке справа только «Сообщения», без resize/сплиттера.
+Администрирование — маршрутизируемые разделы с сохранением смонтированных drafts.
 
 ## Компоненты
 
@@ -59,7 +62,7 @@ WindowModularityManager создаёт ModuleId. PerContext требует Conte
 ## UI
 
 MainLayout содержит LeftNav/TopBar/LeftTree/Body/RightPanel; правая панель —
-обычные секции. User header предоставляет вложенное именованное место
+вспомогательные модули AuxiliaryTab, изолированные LogicalWindowId. User header предоставляет вложенное именованное место
 User.HeaderSpaces владельцу пространств. URL/PrintLayout остаются в Pages,
 предметное содержимое — Components владельцев. Registry перечисляет фактические
 модули/маршруты/доступ. Страница администрирования не импортирует чужие компоненты.

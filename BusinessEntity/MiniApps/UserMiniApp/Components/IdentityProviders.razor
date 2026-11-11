@@ -13,8 +13,8 @@
 <PageTitle>Провайдеры идентификации</PageTitle>
 <h1>Провайдеры идентификации</h1>
 <p>Активен: <strong>@Identity.Current.Profile.Name</strong>. Сохранение настроек не переключает вход.</p>
-@if(Error!=null){<div class="alert alert-danger" role="alert">@Error</div>}
-@if(Message!=null){<div class="alert alert-info" role="status">@Message</div>}
+@if(Error!=null){<OperationNotice Text="@Error" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error" />}
+@if(Message!=null){<OperationNotice Text="@Message" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Info" />}
 <div class="table-responsive">
 <table class="table">
     <thead><tr><th>Название</th><th>Адрес</th><th>Проверка</th><th>Действия</th></tr></thead>

@@ -8,7 +8,7 @@
 @implements IDisposable
 
 <div class="widget user-messages-panel">
-    <div class="widget-title">Сообщения пользователя</div>
+    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="()=>UserMessages.Clear(CurrentUserId)">Очистить</button>
     <div class="widget-body user-messages-panel__body">
         @if (Messages.Count == 0)
         {
@@ -25,6 +25,7 @@
 </div>
 
 @code {
+    private bool Disposed;
     private Guid CurrentUserId { get; set; }
     private IReadOnlyList<UserMessageRecord> Messages => UserMessages.GetMessages(CurrentUserId);
 
@@ -52,12 +53,13 @@
     // Обновляет UI, когда mini-app получает новое пользовательское сообщение.
     private void OnMessagesChanged()
     {
-        InvokeAsync(StateHasChanged);
+        if(!Disposed) _ = InvokeAsync(()=>{if(!Disposed) StateHasChanged();});
     }
 
     // Отписывает компонент от state mini-app при уничтожении circuit-компонента.
     public void Dispose()
     {
+        Disposed=true;
         UserMessages.MessagesChanged -= OnMessagesChanged;
     }
 }

@@ -197,6 +197,8 @@ internal sealed class UserPreferencesService
                 return null;
             }
 
+            if(propertyType==(int)UserPropertyTypeEnum.ShellLayoutId && (data!="standard" || metadata!="Ui.ShellLayout"))
+                throw new InvalidDataException("Неизвестная компоновка пользователя.");
             var now = DateTime.UtcNow;
             UserPropertyDto? property = null;
             if (propertyId.HasValue && propertyId.Value != Guid.Empty)

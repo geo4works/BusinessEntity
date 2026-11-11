@@ -91,7 +91,7 @@ internal sealed class UserOwnedStorageWriter : IOwnedServiceStorageWriter
             existing.Kind == updated.Kind && existing.Enabled == updated.Enabled &&
             UserValueRules.IsSystemUser(existing) == UserValueRules.IsSystemUser(updated);
     }
-    private static bool OwnPreferenceType(int type)=>type is (int)UserPropertyTypeEnum.DocPrintPresets or (int)UserPropertyTypeEnum.RichDocDisplayedLevelProperty;
+    private static bool OwnPreferenceType(int type)=>type is (int)UserPropertyTypeEnum.ShellLayoutId or (int)UserPropertyTypeEnum.DocPrintPresets or (int)UserPropertyTypeEnum.RichDocDisplayedLevelProperty;
     // Проверяет глобальные назначения напрямую в той же SQL-транзакции, без самозапроса User по шине.
     private static async Task<bool> IsGlobalAdminAsync(UserMiniAppDbContext db, Guid? userId, CancellationToken ct)
     {

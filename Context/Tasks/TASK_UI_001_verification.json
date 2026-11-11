@@ -1,0 +1,42 @@
+{
+  "task": "TASK_UI_001",
+  "version": "0.18.0",
+  "baseCommit": "ffd9f00",
+  "implementation": "verified-locally",
+  "tests": {
+    "dotnetPassed": 219,
+    "dotnetFailed": 0,
+    "dotnetSkipped": 0,
+    "javascriptPassed": 6,
+    "installerPythonPassed": 7
+  },
+  "nativeBrowser": {
+    "success": true,
+    "steps": [
+      "real-signed-OIDC-login",
+      "navigation-and-one-messages-tab",
+      "settings-section-switch-retains-draft",
+      "apply-persists-system-setting-and-publishes-on-bus",
+      "theme-copy-save-preview-apply",
+      "theme-survives-reload",
+      "standard-layout-apply",
+      "profile-save-and-reload",
+      "cancel-restores-preview-baseline",
+      "common-apply-does-not-execute-api-grant-command",
+      "native-two-window-message-isolation",
+      "narrow-viewport-no-horizontal-overflow",
+      "removed-routes-unavailable"
+    ],
+    "errors": []
+  },
+  "environment": "isolated local PostgreSQL + signed OIDC fixture + real Blazor/Edge",
+  "productionDeployed": false,
+  "deploymentDecision": "Awaiting user choice: prepare update scenario or supply another existing scenario",
+  "foundScenarios": [
+    "BUSINESSENTITY-INSPECT-USERHUB-V1",
+    "BUSINESSENTITY-INSTALL-USERHUB-V1",
+    "BUSINESSENTITY-STATUS-USERHUB-V1"
+  ],
+  "checkedDeploymentChat": "BE--Установка BE на хост 55.15 под юзер хаб",
+  "authentik": "existing external User Hub; no bootstrap or reinstallation"
+}

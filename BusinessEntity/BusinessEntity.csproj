@@ -5,10 +5,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-    <Version>0.17.0</Version>
-    <AssemblyVersion>0.17.0.0</AssemblyVersion>
-    <FileVersion>0.17.0.0</FileVersion>
-    <InformationalVersion>0.17.0</InformationalVersion>
+    <Version>0.18.0</Version>
+    <AssemblyVersion>0.18.0.0</AssemblyVersion>
+    <FileVersion>0.18.0.0</FileVersion>
+    <InformationalVersion>0.18.0</InformationalVersion>
   </PropertyGroup>
 
 
@@ -32,6 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="MiniApps/ThemeManagerMiniApp/Contracts/theme-schema.json" LogicalName="BusinessEntity.ThemeSchema.json" />
     <Content Include="..\BusinessEntity.Resources\DataFill_01.txt" Link="Resources\DataFill_01.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

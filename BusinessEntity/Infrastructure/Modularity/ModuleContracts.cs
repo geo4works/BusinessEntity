@@ -3,14 +3,14 @@ using BusinessEntity.Infrastructure.Saving;
 namespace BusinessEntity.Infrastructure.Modularity;
 
 // Размещения приложения с переходами между страницами.
-public enum ModulePlacement { Headless, ShellModuleHostArea, Page }
+public enum ModulePlacement { Headless, ShellModuleHostArea, Page, AuxiliaryTab }
 // Области уникальности экземпляров; пользовательский редактор никогда не AppSingleton.
 public enum ModuleInstancePolicy { AppSingleton, WindowSingleton, PerContext, MultiInstance }
 // Декларация владельца не содержит исполняемого UI или предметного состояния.
 public sealed record ModuleDefinition(string MiniAppId, string ModuleDefinitionId, string Title,
     string? Icon, ModulePlacement Placement, ModuleInstancePolicy InstancePolicy,
     string? ComponentKey = null, string? HostArea = null, int Order = 0, bool OpenOnStartup = false,
-    string? RequiredPermission = null, bool HasSaveContext = false)
+    string? RequiredPermission = null, bool HasSaveContext = false, bool CanClose = false)
 {
     public string Key => MiniAppId + ":" + ModuleDefinitionId;
 }

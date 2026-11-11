@@ -8,8 +8,8 @@
 @inject IIdentityProviderRegistry Identity
 
 <h1>Интеграции API</h1>
-@if(Error!=null){<p role="alert">@Error</p>}
-@if(Message!=null){<p role="status">@Message</p>}
+@if(Error!=null){<OperationNotice Text="@Error" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error" />}
+@if(Message!=null){<OperationNotice Text="@Message" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Info" />}
 <table class="table"><thead><tr><th>Пользователь</th><th>OAuth client</th><th>Состояние</th><th></th></tr></thead><tbody>
 @foreach(var grant in Grants){<tr data-grant-id="@grant.Id"><td>@Users.FirstOrDefault(x=>x.Id==grant.UserId)?.Login</td><td>@grant.ClientId</td><td>@(grant.Enabled?"Разрешён":"Отозван")</td>
     <td><button type="button" @onclick="()=>Run(()=>{Working.Load(ApiGrantForm.From(grant));return Task.CompletedTask;})">Настроить</button></td></tr>}

@@ -1,22 +1,20 @@
 @namespace BusinessEntity.MiniApps.AdministrationMiniApp.Components
 @inherits ModuleComponentBase
-@inject ButtonCatalog Buttons
-
-<h3 class="mb-3">Администрирование</h3>
-<nav class="nav nav-pills mb-3" aria-label="Разделы администрирования">
-    @foreach (var link in Links)
-    {
-        <NavLink class="nav-link" href="@link.TargetRoute" Match="NavLinkMatch.All">@link.Title</NavLink>
-    }
-</nav>
-@code {
-    private IReadOnlyList<ButtonDefinition> Links = [];
-    // Каждая ссылка объявлена владельцем; скрытие не заменяет guard её целевого page-модуля.
-    protected override async Task OnParametersSetAsync()
-    {
-        var links = new List<ButtonDefinition>();
-        foreach (var link in Buttons.GetForHost("Administration.Navigation"))
-            if (Module != null && await ModuleManager.CanExecuteAsync(Module.ModuleId, link.RequiredPermission)) links.Add(link);
-        Links = links;
-    }
-}
+@inject IEnumerable<BusinessEntity.Infrastructure.Settings.SettingsPageDefinition> Definitions
+@inject ModuleCatalog Catalog
+@inject NavigationManager Navigation
+@inject BusinessEntity.Infrastructure.Saving.WindowSaveGuard Guard
+@inject BusinessEntity.Infrastructure.Settings.SettingsDraftSession Drafts
+@using Microsoft.AspNetCore.Components.Routing
+@implements IDisposable
+<section class="be-settings">
+ <h1>Настройки программы</h1>
+ <div class="be-settings-body"><nav aria-label="Разделы настроек">
+ @foreach(var entry in Pages){<NavLink href="@entry.Route" Match="NavLinkMatch.Prefix">@entry.Title</NavLink>}
+ </nav><div class="be-settings-content">
+ @foreach(var entry in Pages.Where(p=>Visited.Contains(p.Route))){<div @key="entry.Route" hidden="@(Active?.Route!=entry.Route)"><PageModuleHost DefinitionKey="@entry.DefinitionKey" ContextId="@entry.ContextId" Parameters="@Parameters(entry)" /></div>}
+ @if(Active==null){<p role="alert">Раздел недоступен или не найден.</p>}
+ </div></div>
+ <footer><button type="button" class="btn btn-primary" disabled="@Busy" @onclick="()=>Apply(true)">OK</button> <button type="button" class="btn btn-outline-secondary" disabled="@Busy" @onclick="Cancel">Отмена</button> <button type="button" class="btn btn-outline-primary" disabled="@Busy" @onclick="()=>Apply(false)">Применить</button></footer>
+ <OperationNotice Text="@Notice" Level="@NoticeLevel" />
+</section>

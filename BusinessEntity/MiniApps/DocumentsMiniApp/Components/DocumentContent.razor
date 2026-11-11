@@ -5,7 +5,7 @@
 
 @if (!string.IsNullOrEmpty(Error))
 {
-    <div class="alert alert-danger">@Error</div>
+    <OperationNotice Text="@Error" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error" />
 }
 else if (IsLoading)
 {

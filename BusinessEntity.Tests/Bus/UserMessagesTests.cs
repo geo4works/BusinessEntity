@@ -34,6 +34,23 @@ public sealed class UserMessagesTests
         Assert.Single(firstMessages.GetMessages(user));
     }
 
+    // Журнал принимает первую операцию до появления компонента панели и после материализации identity.
+    [Fact]
+    public void StartupCollectorDoesNotDependOnPanelRendering()
+    {
+        var collection = new ServiceCollection();
+        collection.AddLogging(); collection.AddBusinessEntityBus(); collection.AddUserMessagesMiniApp();
+        collection.AddScoped<BusinessEntity.Infrastructure.Modularity.WindowRuntimeStartup>();
+        using var services = collection.BuildServiceProvider(validateScopes:true);
+        using var window = services.CreateScope();
+        var startup=window.ServiceProvider.GetRequiredService<BusinessEntity.Infrastructure.Modularity.WindowRuntimeStartup>();
+        startup.Start(); startup.Start();
+        var address=window.ServiceProvider.GetRequiredService<BusRequestScope>();var user=Guid.NewGuid();address.SetUser(user);
+        services.GetRequiredService<IMessageBus>().SendMessage(new PostUserMessage(user,address.LogicalWindowId,Guid.NewGuid(),"Первая операция"));
+        var panel=window.ServiceProvider.GetRequiredService<UserMessagesService>();
+        Assert.Single(panel.GetMessages(user));
+    }
+
     // Одноразовый ключ login принадлежит подтверждённому пользователю и новому circuit.
     [Fact]
     public void LoginNotificationCannotBeConsumedByAnotherUserOrTwice()

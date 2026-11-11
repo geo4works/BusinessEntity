@@ -32,6 +32,7 @@ public static class SysParametersMiniAppRegistration
         services.AddMiniAppButtons(
             new ButtonDefinition("SysParametersMiniApp", "admin.sys", "Administration.Navigation", "Параметры системы", null, 10, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/system"));
 
+                services.AddSingleton(new BusinessEntity.Infrastructure.Settings.SettingsPageDefinition("/administration/system","Параметры системы","SysParametersMiniApp:SysParameters.Administration",10,"GlobalAdmin",null,false,ApplyOnCenter:true));
         return services;
     }
 }

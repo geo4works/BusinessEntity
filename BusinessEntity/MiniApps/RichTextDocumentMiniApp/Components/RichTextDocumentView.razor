@@ -1,7 +1,7 @@
 @namespace BusinessEntity.MiniApps.RichTextDocumentMiniApp.Components
 @if (!string.IsNullOrWhiteSpace(SaveError))
 {
-    <div class="alert alert-danger rich-document-save-error" role="alert">@SaveError</div>
+    <OperationNotice Text="@SaveError" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error" />
 }
 
 @using Microsoft.AspNetCore.Components.Forms

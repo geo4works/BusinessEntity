@@ -27,8 +27,9 @@ public sealed class ServiceDependencyBudgetTests
         BusinessEntity.MiniApps.UserMessagesMiniApp.Registration.UserMessagesMiniAppRegistration.AddUserMessagesMiniApp(services);
         BusinessEntity.MiniApps.NavigationMiniApp.Registration.NavigationMiniAppRegistration.AddNavigationMiniApp(services);
         BusinessEntity.MiniApps.AdministrationMiniApp.Registration.AdministrationMiniAppRegistration.AddAdministrationMiniApp(services);
-        BusinessEntity.MiniApps.DiagnosticsMiniApp.Registration.DiagnosticsMiniAppRegistration.AddDiagnosticsMiniApp(services);
         BusinessEntity.MiniApps.ExternalApiMiniApp.Registration.ExternalApiMiniAppRegistration.AddExternalApiMiniApp(services);
+        BusinessEntity.MiniApps.RightPanelMiniApp.Registration.RightPanelMiniAppRegistration.AddRightPanelMiniApp(services);
+        BusinessEntity.MiniApps.ThemeManagerMiniApp.Registration.ThemeManagerMiniAppRegistration.AddThemeManagerMiniApp(services);
         var violations = services.Select(x => x.ImplementationType).OfType<Type>().Distinct()
             .Where(x => x.Assembly == typeof(BusinessEntity.Program).Assembly)
             .SelectMany(type => type.GetConstructors().Where(ctor => ctor.GetParameters().Length > 6)

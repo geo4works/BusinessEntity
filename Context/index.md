@@ -73,7 +73,8 @@ MainLayout предоставляет LeftNav, TopBar, LeftTree, Body и RightPa
 Компоненты выбираются через реестр ComponentKey владельца. Страница содержит
 маршрут, guard и PageModuleHost. Документы и статьи имеют отдельные URL;
 переход открывает другую страницу. Для одновременной работы открывается другое
-окно браузера. Внутренних вкладочных host-ов, часов и тестовых страниц нет.
+окно браузера. Центральных вкладочных host-ов, часов и тестовых страниц нет.
+TASK_UI_001 вводит AuxiliaryTab только для правой вспомогательной области.
 Локальные инструменты статьи не являются системой вкладок приложения.
 
 GiveMeButtons/HereAreButtons передают декларации; ButtonStateSnapshot — адресное
@@ -200,3 +201,11 @@ durable импорт TXT/Markdown/HTML в одну статью и настро�
 DataProvider остаётся единственным canonical writer; jobs не повышают права.
 Отдельная [SECURITY_001](Tasks/TASK_SECURITY_001_file-download-authorization.md) относится
 к старым UI file URL; новые API download endpoints проверяют owner ACL.
+
+## Следующий пакет интерфейса
+
+[TASK_UI_001 — навигация, правая панель, сообщения и настройки](Tasks/TASK_UI_001_navigation-right-panel-settings.md)
+реализован по видео 11.11.2026 моделью SOL 6.1. Цель — BusinessEntity;
+Geo4Web используется как образец. ТЗ вводит вкладки только в правой
+вспомогательной области. Контракт — [механика UI](Mechanics/ui-settings-and-right-panel.md),
+результаты — [журнал реализации](Tasks/TASK_UI_001_execution-log.md).

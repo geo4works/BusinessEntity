@@ -1,0 +1,18 @@
+@namespace BusinessEntity.Infrastructure.Modularity
+@inject ModuleCatalog Catalog
+@inject WindowModularityManager Manager
+@implements IDisposable
+@inject Microsoft.JSInterop.IJSRuntime JS
+@using Microsoft.JSInterop
+<section class="be-auxiliary" aria-label="Вспомогательная панель">
+ <div class="be-auxiliary-tabs" role="tablist">
+ @foreach(var tab in Tabs.Where(x=>!Closed.Contains(x.Key))) {
+  <button type="button" role="tab" id="@TabId(tab)" aria-controls="@PanelId(tab)" aria-selected="@(Selected==tab.Key)" tabindex="@(Selected==tab.Key?0:-1)" class="@(Selected==tab.Key?"is-selected":null)" @onclick="()=>Selected=tab.Key" @onkeydown="e=>Key(tab,e.Key)">@tab.Title</button>
+  @if(tab.CanClose){<button type="button" aria-label="@($"Закрыть {tab.Title}")" @onclick="()=>Close(tab)">×</button>}
+ }
+ </div>
+ @foreach(var tab in Tabs.Where(x=>!Closed.Contains(x.Key))) {
+  <div @key="tab.Key" id="@PanelId(tab)" role="tabpanel" aria-labelledby="@TabId(tab)" hidden="@(Selected!=tab.Key)"><PageModuleHost DefinitionKey="@tab.Key" /></div>
+ }
+ @if(Error!=null){<div role="alert">@Error</div>}
+</section>

@@ -15,9 +15,7 @@
 <div class="card">
     <div class="card-body">
         <h5 class="card-title">Общие параметры системы</h5>
-        <p class="card-text">
-            Настройки сохраняются в отдельный business-объект <code>SysParameters</code> без связей.
-        </p>
+
 
         @if (IsLoading)
         {
@@ -120,12 +118,12 @@
 
         @if (!string.IsNullOrWhiteSpace(StatusMessage))
         {
-            <div class="alert alert-success py-2 mt-3" role="alert">@StatusMessage</div>
+            <OperationNotice Text="@StatusMessage" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Success" />
         }
 
         @if (!string.IsNullOrWhiteSpace(ErrorMessage))
         {
-            <div class="alert alert-danger py-2 mt-3" role="alert">@ErrorMessage</div>
+            <OperationNotice Text="@ErrorMessage" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error" />
         }
     </div>
 </div>

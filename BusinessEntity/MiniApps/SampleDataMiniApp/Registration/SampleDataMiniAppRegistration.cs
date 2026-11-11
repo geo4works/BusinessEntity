@@ -27,6 +27,7 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Registration
         services.AddMiniAppButtons(
             new ButtonDefinition("SampleDataMiniApp", "admin.general", "Administration.Navigation", "Общее", null, 0, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/general"));
 
+                services.AddSingleton(new BusinessEntity.Infrastructure.Settings.SettingsPageDefinition("/administration/general","Общее","SampleDataMiniApp:SampleData.Administration",0,"GlobalAdmin",null,false));
         return services;
         }
     }

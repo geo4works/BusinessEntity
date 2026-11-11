@@ -36,11 +36,9 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Registration
         services.AddSingleton<IEntityDataStorageConverter, FolderEntityDataStorageConverter>();
             services.AddSingleton<IEntityArchivePolicy>(new NoStoredReferencesArchivePolicy(global::BusinessEntity.MiniApps.TreeMiniApp.Contracts.FolderType.Id, false));
             services.AddMiniAppHost("TreeMiniApp", new ModuleDefinition("TreeMiniApp", "tree", "Дерево", "account_tree",
-                ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "tree.main", "LeftTree", OpenOnStartup: true),
-            new ModuleDefinition("TreeMiniApp", "Tree.SelectionInfo", "Информация", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "tree.selection", "RightPanel", Order: 20, OpenOnStartup: true));
+                ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "tree.main", "LeftTree", OpenOnStartup: true));
             services.AddModuleComponent<BusinessEntity.MiniApps.TreeMiniApp.Components.TreeMiniAppComponent>("tree.main");
 
-        services.AddModuleComponent<global::BusinessEntity.MiniApps.TreeMiniApp.Components.SelectionInformation>("tree.selection");
 
         services.AddMiniAppButtons(
                 new ButtonDefinition("TreeMiniApp", "tree.createFolder", "Tree.ContextMenu", "Создать папку", "create_new_folder", 10, RequiredPermission: "AdminItems", EntityTypes: ["Space", "Folder"], Argument: "Folder"),

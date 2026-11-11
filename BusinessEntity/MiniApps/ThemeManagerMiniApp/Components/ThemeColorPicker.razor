@@ -1,0 +1,13 @@
+@namespace BusinessEntity.MiniApps.ThemeManagerMiniApp.Components
+@using BusinessEntity.MiniApps.ThemeManagerMiniApp.Contracts
+<details class="be-color-picker"><summary><span style="background:@Value" class="be-color-swatch"></span> @Value</summary>
+ <label>Цвет <input type="color" @bind="Draft" disabled="@ReadOnly" /></label>
+ <label>HEX <input value="@Draft" maxlength="7" @oninput="e=>Draft=e.Value?.ToString()??string.Empty" disabled="@ReadOnly" /></label>
+ <div class="be-palette" aria-label="Моя палитра">
+ @for(var i=0;i<16;i++){var slot=i;<button type="button" disabled="@ReadOnly" aria-label="@($"Слот {slot+1}")" class="@(Selected==slot?"is-selected":null)" style="background:@(Palette[slot]??"#FFFFFF")" @onclick="()=>Select(slot)" @ondblclick="()=>Use(slot)">@(Palette[slot]==null?"+":"")</button>}
+ </div>
+ <button type="button" disabled="@ReadOnly" @onclick="Store">+ В выбранный слот</button>
+ <button type="button" disabled="@(ReadOnly||Palette[Selected]==null)" @onclick="()=>Use(Selected)">Использовать</button>
+ <button type="button" disabled="@ReadOnly" @onclick="Choose">Выбрать</button>
+ @if(Error!=null){<span role="alert">@Error</span>}
+</details>

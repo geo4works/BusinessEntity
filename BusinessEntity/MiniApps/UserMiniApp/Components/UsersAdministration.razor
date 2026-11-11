@@ -627,3 +627,5 @@
         </div>
     </div>
 </div>
+
+@if(OneTimeCredential!=null){<section class="alert alert-warning" role="status"><p>Временный пароль — сохраните его, он показан один раз:</p><code>@OneTimeCredential</code><button type="button" @onclick="()=>OneTimeCredential=null">Закрыть</button></section>}

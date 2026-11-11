@@ -47,7 +47,7 @@ public sealed class ModuleCatalog : IHostedService, IAsyncDisposable
                     throw new InvalidOperationException("AppSingleton допускается только для фонового модуля без пользовательского черновика.");
                 if (definition.Placement != ModulePlacement.Headless && string.IsNullOrWhiteSpace(definition.ComponentKey))
                     throw new InvalidOperationException("Для UI-модуля обязателен ComponentKey.");
-                if (definition.Placement == ModulePlacement.ShellModuleHostArea && string.IsNullOrWhiteSpace(definition.HostArea))
+                if (definition.Placement is ModulePlacement.ShellModuleHostArea or ModulePlacement.AuxiliaryTab && string.IsNullOrWhiteSpace(definition.HostArea))
                     throw new InvalidOperationException("Для модуля оболочки обязательно именованное место.");
                 if (_definitions.TryGetValue(definition.Key, out var previous) && previous != definition)
                     throw new InvalidOperationException($"Повторное определение модуля '{definition.Key}'.");

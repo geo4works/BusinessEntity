@@ -1,6 +1,2 @@
 @page "/administration/identity-providers"
-<PageModuleHost DefinitionKey="UserMiniApp:User.IdentityProviders" ContextId="@BusinessEntity.MiniApps.UserMiniApp.Contracts.UserConfigurationContexts.IdentityProviders" Parameters="@Parameters" />
-@code {
-    [Parameter,SupplyParameterFromQuery(Name="planId")] public Guid? PlanId {get;set;}
-    private IDictionary<string,object>? Parameters=>PlanId.HasValue?new Dictionary<string,object>{{"InitialPlanId",PlanId.Value}}:null;
-}
+@layout BusinessEntity.Shared.AdministrationLayout

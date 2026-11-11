@@ -27,6 +27,8 @@ namespace BusinessEntity
 
         protected override void OnInitialized()
         {
+            // Подписчики готовы до любых асинхронных компонентов shell и Router.
+            WindowStartup.Start();
             base.OnInitialized();
             Navigation.LocationChanged += OnLocationChanged;
         }

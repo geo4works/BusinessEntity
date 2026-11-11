@@ -30,12 +30,12 @@
 
         @if (!string.IsNullOrWhiteSpace(ReSeedStatus))
         {
-            <div class="mt-2 text-muted">@ReSeedStatus</div>
+            <OperationNotice Text="@ReSeedStatus" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Info" />
         }
 
         @if (!string.IsNullOrWhiteSpace(ReSeedError))
         {
-            <div class="mt-2 text-danger">@ReSeedError</div>
+            <OperationNotice Text="@ReSeedError" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error" />
         }
     </div>
 </div>

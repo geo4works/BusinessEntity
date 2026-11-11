@@ -1,0 +1,11 @@
+@namespace BusinessEntity.MiniApps.ThemeManagerMiniApp.Components
+@inherits ModuleComponentBase
+@implements BusinessEntity.Infrastructure.Settings.ISettingsDraft
+@implements IDisposable
+@inject BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors.IUserConnector Users
+@inject BusinessEntity.Infrastructure.Settings.SettingsDraftSession Drafts
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos
+@using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts
+<h2>Компоновка</h2><p>Расположение основных областей программы.</p>
+<label><input type="radio" name="be-layout" checked @onclick="Select" data-layout-stored="@((Stored!=null).ToString().ToLowerInvariant())" /> <strong>Стандартная</strong><span> Дерево, центральная страница и правая панель сообщений.</span></label>
+<OperationNotice Text="@Error" Level="UserMessageLevel.Error" />

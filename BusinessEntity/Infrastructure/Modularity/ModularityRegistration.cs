@@ -13,6 +13,8 @@ public static class ModularityRegistration
     // Устанавливает каталог приложения и менеджер отдельного circuit.
     public static IServiceCollection AddModularity(this IServiceCollection services)
     {
+        services.AddScoped<BusinessEntity.Infrastructure.Settings.SettingsDraftSession>();
+        services.AddScoped<WindowRuntimeStartup>();
         services.AddSingleton<ButtonCatalog>(); services.AddScoped<ModuleCommandRegistry>();
         services.AddScoped<ModuleCommandEndpoint>(); services.AddBusEndpoint<ModuleCommandEndpoint>(typeof(ButtonCommandInvoked));
         services.AddSingleton<ApplicationStartupState>(); services.AddSingleton<ModuleCatalog>();

@@ -6,7 +6,7 @@ using ReactiveUI;
 namespace BusinessEntity.MiniApps.UserMessagesMiniApp.Internal;
 
 // Фасад mini-app пользовательских сообщений.
-internal sealed class UserMessagesService
+internal sealed class UserMessagesService : BusinessEntity.Infrastructure.Modularity.IWindowRuntimeInitializer
 {
     private readonly UserMessagesMiniAppState _state;
     private readonly BusRequestScope _scope;
@@ -21,6 +21,9 @@ internal sealed class UserMessagesService
         _messageHandler = messageHandler;
         _messageHandler.EnsureSubscribed();
     }
+
+    // App запускает scoped collector до первой операции страниц этого circuit.
+    public void Start()=>_messageHandler.EnsureSubscribed();
 
     // Пробрасывает событие изменения сообщений из state.
     public event Action? MessagesChanged

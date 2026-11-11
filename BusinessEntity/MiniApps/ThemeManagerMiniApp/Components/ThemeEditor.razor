@@ -1,0 +1,34 @@
+@namespace BusinessEntity.MiniApps.ThemeManagerMiniApp.Components
+@inherits ModuleComponentBase
+@implements IDisposable
+@using BusinessEntity.MiniApps.ThemeManagerMiniApp.Contracts
+@using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts
+@inject BusinessEntity.MiniApps.ThemeManagerMiniApp.Internal.ThemeSession Session
+@inject BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors.IUserConnector Users
+@inject IJSRuntime JS
+<h2>Темы оформления</h2>
+@if(!Ready){<p role="status">Загрузка тем…</p>}
+else {
+ <fieldset disabled="@Busy"><div class="be-theme-toolbar"><button type="button" @onclick="()=>Run(()=>{Session.New();return Task.CompletedTask;})">Новая</button><button type="button" @onclick="()=>Run(()=>{Session.Duplicate();return Task.CompletedTask;})">Дублировать</button><button type="button" disabled="@Session.ReadOnly" @onclick="()=>Run(Session.DeleteAsync)">Удалить</button><label class="be-file">Импорт <InputFile OnChange="Import" accept=".betheme" /></label><button type="button" @onclick="()=>Run(Session.ExportAsync)">Экспорт</button></div>
+ <div class="be-theme-layout"><nav aria-label="Каталог тем">
+ @foreach(var item in Session.Themes){<button type="button" class="@(item.Id==Session.Draft.Id?"is-selected":null)" @onclick="()=>Session.Select(item.Id)">@item.Name @(item.Id==ThemeSchema.BuiltInId?"(только чтение)":"")</button>}
+ </nav><div>
+ <label class="be-setting-field">Имя <input @bind="Session.Draft.Name" @bind:event="oninput" @bind:after="Session.Changed" maxlength="100" disabled="@Session.ReadOnly" /></label>
+ <div class="be-theme-tabs" role="tablist">@foreach(var category in Sections){<button type="button" role="tab" aria-selected="@(Section==category)" @onclick="()=>Section=category">@category</button>}</div>
+ @foreach(var field in ThemeSchema.Fields.Colors.Where(x=>x.Section==Section)){<div class="be-setting-field"><span>@field.Label</span><ThemeColorPicker Value="@Session.Draft.Colors[field.Key]" ValueChanged="v=>SetColor(field.Key,v)" ReadOnly="@Session.ReadOnly" Palette="@Session.Palette" PaletteChanged="StorePalette" /></div>}
+ @foreach(var field in ThemeSchema.Fields.Numbers.Where(x=>x.Section==Section)){<label class="be-setting-field">@field.Label <input type="number" min="@field.Min" max="@field.Max" step="@(field.Max<=1?"0.05":"1")" @bind="Session.Draft.Numbers[field.Key]" @bind:after="Session.Changed" disabled="@Session.ReadOnly" /></label>}
+ @if(Section=="Сообщения"){
+ <label class="be-setting-field">Дизайн <select @bind="Session.Draft.MessageDesign" @bind:after="Session.Changed" disabled="@Session.ReadOnly">@foreach(var design in ThemeSchema.Fields.Designs){<option value="@design">@design</option>}</select></label>
+ <div id="@PreviewId" class="be-message-preview" style="@PreviewStyle" data-be-message-design="@Session.Draft.MessageDesign">@foreach(var level in new[]{"info","success","warning","error"}){<article class="user-message-item" style="@($"--be-message-level:var(--be-message-{level})")"><strong>@level</strong><div>Пример пользовательского сообщения</div></article>}</div>
+ }
+ @if(Section=="Таблицы"){
+ <label>Активный стиль <select @bind="Session.Draft.ActiveTableStyleId" @bind:after="Session.Changed" disabled="@Session.ReadOnly">@foreach(var style in Session.Draft.Tables){<option value="@style.Id">@style.Name</option>}</select></label>
+ <button type="button" disabled="@Session.ReadOnly" @onclick="NewStyle">Дублировать стиль</button><button type="button" disabled="@(Session.ReadOnly||Session.Draft.Tables.Count==1)" @onclick="DeleteStyle">Удалить стиль</button>
+ <label class="be-setting-field">Имя стиля <input @bind="Table.Name" @bind:event="oninput" @bind:after="Session.Changed" disabled="@Session.ReadOnly" /></label>
+ @foreach(var property in TableColors){<div class="be-setting-field"><span>@property.Value</span><ThemeColorPicker Value="@GetTableColor(property.Key)" ValueChanged="v=>SetTableColor(property.Key,v)" ReadOnly="@Session.ReadOnly" Palette="@Session.Palette" PaletteChanged="StorePalette" /></div>}
+ <table class="table" style="@TablePreviewStyle"><thead><tr><th>Название</th><th>Значение</th></tr></thead><tbody><tr><td>Строка 1</td><td>Пример</td></tr><tr><td>Строка 2</td><td>Данные</td></tr></tbody></table>
+ }
+ <div class="be-theme-toolbar"><button type="button" @onclick="()=>Run(Session.PreviewAsync)">Предпросмотр</button><button type="button" disabled="@Session.ReadOnly" @onclick="()=>Run(Session.SaveAsync,true)">Сохранить тему</button></div>
+ </div></div></fieldset>
+}
+<OperationNotice Text="@Notice" Level="@Level" />

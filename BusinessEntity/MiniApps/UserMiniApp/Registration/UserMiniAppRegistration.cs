@@ -100,7 +100,6 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             new ModuleDefinition("UserMiniApp", "User.IdentityProviders", "Провайдеры идентификации", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.identity-providers", RequiredPermission: "GlobalAdmin", HasSaveContext: true),
             new ModuleDefinition("UserMiniApp", "User.ApiIntegrations", "Интеграции API", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.api-integrations", RequiredPermission: "GlobalAdmin", HasSaveContext: true),
             new ModuleDefinition("UserMiniApp", "User.Profile", "Профиль", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.profile", RequiredPermission: "Authenticated", HasSaveContext: true),
-            new ModuleDefinition("UserMiniApp", "User.AuthInfo", "Авторизация", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.authinfo", RequiredPermission: "Authenticated"),
             new ModuleDefinition("UserMiniApp", "User.Administration", "Пользователи", null, ModulePlacement.Page, ModuleInstancePolicy.WindowSingleton, "user.administration", RequiredPermission: "GlobalAdmin", HasSaveContext: true),
             new ModuleDefinition("UserMiniApp", "User.Header", "Пользователь", null, ModulePlacement.ShellModuleHostArea, ModuleInstancePolicy.WindowSingleton, "user.header", "TopBar", Order: 20, OpenOnStartup: true));
             services.AddModuleRuntime<IdentityStartupRuntime>("UserMiniApp:identity-bootstrap");
@@ -111,12 +110,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.IdentityProviders>("user.identity-providers");
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.ApiIntegrations>("user.api-integrations");
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UserProfile>("user.profile");
-        services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UserAuthInfo>("user.authinfo");
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UsersAdministration>("user.administration");
         services.AddModuleComponent<global::BusinessEntity.MiniApps.UserMiniApp.Components.UserHeader>("user.header");
         services.AddMiniAppButtons(
-            new ButtonDefinition("UserMiniApp", "nav.authinfo", "Nav.Main", "Авторизация", "oi oi-lock-locked", 10, RequiredPermission: "Authenticated", TargetRoute: "/authinfo"),
-            new ButtonDefinition("UserMiniApp", "nav.profile", "Nav.Main", "Профиль", "oi oi-person", 20, RequiredPermission: "Authenticated", TargetRoute: "/profile"),
             new ButtonDefinition("UserMiniApp", "admin.identity", "Administration.Navigation", "Провайдеры идентификации", null, 35, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/identity-providers"),
             new ButtonDefinition("UserMiniApp", "admin.api", "Administration.Navigation", "Интеграции API", null, 36, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/api-integrations"),
             new ButtonDefinition("UserMiniApp", "admin.users", "Administration.Navigation", "Пользователи", null, 30, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users"));
@@ -127,6 +123,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             new ButtonDefinition("UserMiniApp", "users.roles", "User.Administration.Navigation", "Роли", Order: 2, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users/roles"),
             new ButtonDefinition("UserMiniApp", "users.groups", "User.Administration.Navigation", "Группы", Order: 3, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users/groups"),
             new ButtonDefinition("UserMiniApp", "users.members", "User.Administration.Navigation", "Состав групп", Order: 4, RequiredPermission: "GlobalAdmin", TargetRoute: "/administration/users/members"));
+                services.AddSingleton(new BusinessEntity.Infrastructure.Settings.SettingsPageDefinition("/administration/users","Пользователи","UserMiniApp:User.Administration",30,"GlobalAdmin",null,true,Subroutes:new[]{"general","access","roles","groups","members"}));
+        services.AddSingleton(new BusinessEntity.Infrastructure.Settings.SettingsPageDefinition("/administration/identity-providers","Провайдеры идентификации","UserMiniApp:User.IdentityProviders",40,"GlobalAdmin",BusinessEntity.MiniApps.UserMiniApp.Contracts.UserConfigurationContexts.IdentityProviders,false));
+        services.AddSingleton(new BusinessEntity.Infrastructure.Settings.SettingsPageDefinition("/administration/api-integrations","Интеграции API","UserMiniApp:User.ApiIntegrations",50,"GlobalAdmin",BusinessEntity.MiniApps.UserMiniApp.Contracts.UserConfigurationContexts.ApiIntegrations,false));
         return services;
         }
         // Создаёт собственную схему User после нового DataProvider и проверяет её на последующих стартах.

@@ -8,7 +8,7 @@
         @foreach (var button in Links)
         {
             <div class="nav-item">
-                <NavLink class="nav-link" href="@button.TargetRoute" Match="@(button.TargetRoute == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@button.Title">
+                <NavLink class="nav-link" href="@button.TargetRoute" Match="@(button.TargetRoute == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@button.Title" aria-label="@button.Title">
                     <span class="@button.Icon" aria-hidden="true"></span>
                 </NavLink>
             </div>

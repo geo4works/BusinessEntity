@@ -7,7 +7,7 @@ public enum NavigationSaveDecision { Save, Discard, Cancel }
 // Разрешение ухода отделено от успешности одной из нескольких операций сохранения.
 public sealed record NavigationSaveResolution(bool CanLeave, string? Error = null);
 // Общая механика guard вызывает владельца целого набора и заново проверяет его право.
-public sealed class WindowSaveGuard(WindowModularityManager manager)
+public sealed class WindowSaveGuard(WindowModularityManager manager, BusinessEntity.Infrastructure.Settings.SettingsDraftSession settings)
 {
     // Не подтверждает переход, пока остаётся хотя бы одна новая или неподтверждённая правка.
     public async Task<NavigationSaveResolution> ResolveAsync(NavigationSaveDecision decision, CancellationToken ct = default)
@@ -19,6 +19,7 @@ public sealed class WindowSaveGuard(WindowModularityManager manager)
             return new(false, "Сначала проверьте исход начатого сохранения кнопкой «Сохранить».");
         try
         {
+            if(decision==NavigationSaveDecision.Discard)await settings.CancelAsync(ct);else await settings.ApplyAsync(ct);
             foreach (var context in contexts)
             {
                 if (decision == NavigationSaveDecision.Discard) { await context.DiscardAsync(ct); continue; }
@@ -30,7 +31,7 @@ public sealed class WindowSaveGuard(WindowModularityManager manager)
                 if (result?.Success != true) return new(false, result?.Error ?? "Сохранение не завершено.");
             }
             await manager.WaitForPendingEditsAsync(ct);
-            return manager.DirtyContexts.Count == 0 ? new(true) :
+            return manager.DirtyContexts.Count == 0 && !settings.IsDirty ? new(true) :
                 new(false, "Во время операции появились новые правки. Сохраните их или останьтесь на странице.");
         }
         catch (Exception error) { return new(false, BusError.FromException(error).Message); }

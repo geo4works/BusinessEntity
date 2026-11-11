@@ -43,6 +43,7 @@ public static class SpacesMiniAppRegistration
             new ButtonDefinition("SpacesMiniApp", "nav.home", "Nav.Main", "Home", "oi oi-home", 0, TargetRoute: "/"),
             new ButtonDefinition("SpacesMiniApp", "admin.spaces", "Administration.Navigation", "Пространства", null, 20, RequiredPermission: "AdminSpace", TargetRoute: "/administration/spaces"));
 
+                services.AddSingleton(new BusinessEntity.Infrastructure.Settings.SettingsPageDefinition("/administration/spaces","Пространства","SpacesMiniApp:Spaces.Administration",20,"AdminSpace",null,false));
         return services;
     }
 }

@@ -119,7 +119,7 @@ public sealed class NavigationSaveGuardTests
             var bus = new MessageBus(); _catalog = new(bus, _provider.GetRequiredService<IServiceScopeFactory>(), [], [], NullLogger<ModuleCatalog>.Instance);
             _catalog.Accept(new(Guid.NewGuid(), "owner", [new("owner", "page", "Editor", null, ModulePlacement.Page,
                 ModuleInstancePolicy.PerContext, ComponentKey: "test", RequiredPermission: "Edit", HasSaveContext: true)]));
-            Manager = new(_catalog, new BusRequestScope(), Transport, Access, bus); Guard = new(Manager);
+            Manager = new(_catalog, new BusRequestScope(), Transport, Access, bus); Guard = new(Manager, new BusinessEntity.Infrastructure.Settings.SettingsDraftSession([]));
         }
         // Создаёт новый независимый browser window runtime теста.
         public static Fixture Create() => new();

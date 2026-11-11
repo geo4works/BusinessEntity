@@ -20,13 +20,14 @@
         }
         <button class="btn btn-primary" disabled="@Saving">Сохранить</button>
     </EditForm>
-    @if (Error != null) { <p role="alert">@Error</p> }
+    @if (Error != null) { <OperationNotice Text="@Error" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Error" /> }
+    <OperationNotice Text="@Message" Level="global::BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts.UserMessageLevel.Success" />
 </section>
 
 @code {
     private UserProfileUpdateRequest Model = new();
     private bool Saving;
-    private string? Error;
+    private string? Error,Message;
     private UserFormsWorkingSet Working => WorkingSets.Get(Module!);
     // Форма относится к общему контексту сохранения User, а не к отдельному состоянию компонента.
     protected override async Task OnInitializedAsync()
@@ -39,8 +40,8 @@
     // Подтверждает отправленный снимок стандартным механизмом миниаппа.
     private async Task SaveAsync()
     {
-        Saving = true; Error = null;
-        try { Changed(); var result = await Module!.SaveContext!.SaveAsync(Module.ModuleId); if (!result.Success) Error = result.Error; }
+        Saving = true; Error = null; Message=null;
+        try { Changed(); var result = await Module!.SaveContext!.SaveAsync(Module.ModuleId); if (!result.Success) Error = result.Error; else Message="Профиль сохранён."; }
         catch (Exception exception) { Error = exception.Message; }
         finally { Saving = false; }
     }

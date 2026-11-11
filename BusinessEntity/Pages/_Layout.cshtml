@@ -15,6 +15,10 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
+    <script type="application/json" id="be-theme-schema">@Html.Raw(BusinessEntity.MiniApps.ThemeManagerMiniApp.Contracts.ThemeSchema.Json)</script>
+    <script src="~/js/be-theme.js"></script>
+    <script>beTheme.bootstrap("@(Guid.TryParse(User.FindFirst("be.user")?.Value,out var themeUserId)?themeUserId.ToString("D"):string.Empty)");</script>
+    <link href="~/css/be-ui.css" rel="stylesheet" />
 </head>
 <body>
     @RenderBody()

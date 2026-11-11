@@ -1,3 +1,8 @@
+using System.Reflection;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Template;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using BusinessEntity.MiniApps.SpacesMiniApp.Contracts;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
@@ -8,6 +13,9 @@ namespace BusinessEntity.Middleware
 {
     public class SpaceSelectionMiddleware
     {
+        // Каталог реальных Blazor URL отделяет неизвестный адрес от страницы, требующей пространства.
+        private static readonly TemplateMatcher[] PageRoutes=typeof(App).Assembly.GetTypes()
+            .SelectMany(t=>t.GetCustomAttributes<RouteAttribute>()).Select(a=>new TemplateMatcher(TemplateParser.Parse(a.Template),new RouteValueDictionary())).ToArray();
         private readonly RequestDelegate _next;
         private readonly ILogger<SpaceSelectionMiddleware> _logger;
 
@@ -16,7 +24,6 @@ namespace BusinessEntity.Middleware
             "/space-selection",
             "/profile",
             "/administration",
-            "/diagnostics",
             "/auth",
             "/_blazor",
             "/swagger",
@@ -37,6 +44,10 @@ namespace BusinessEntity.Middleware
         {
             // V1 адресует пространство явно; даже UI context/repositories здесь не создаются.
             if(context.Request.Path.StartsWithSegments("/api/v1")){await _next(context);return;}
+            // Неизвестный Blazor URL должен попасть в Router.NotFound, а не в выбор пространства.
+            if(context.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>()?.ViewEnginePath=="/_Host"
+                && !PageRoutes.Any(m=>m.TryMatch(context.Request.Path,new RouteValueDictionary())))
+            {await _next(context);return;}
             var userContext = context.RequestServices.GetRequiredService<IUserContextService>();
             var spaceHelper = context.RequestServices.GetRequiredService<ISpacesConnector>();
             var webLogger = context.RequestServices.GetService<IWebLoggerService>();
